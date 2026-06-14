@@ -79,9 +79,14 @@ def bbands(symbol: str, interval: str = "daily", time_period: int = 20, series_t
                      "time_period": time_period, "series_type": series_type})
 
 
-# ── Fundamentals ──────────────────────────────────────────────────────────────
+# ── Fundamentals / quote ──────────────────────────────────────────────────────
 def overview(symbol: str) -> dict:
     return _request({"function": "OVERVIEW", "symbol": symbol})
+
+
+def global_quote(symbol: str) -> dict:
+    """Latest price quote — used as a fallback when yfinance has no data."""
+    return _request({"function": "GLOBAL_QUOTE", "symbol": symbol})
 
 
 def is_configured() -> bool:

@@ -368,7 +368,34 @@ function detail(r){
         <span class="k">Size</span><span>${tp.position_size??'—'}</span>
       </div>
     </div>
+    <div style="grid-column:1/-1;border-top:1px solid var(--line);margin-top:8px;padding-top:10px">
+      <button class="ex-btn" onclick="loadEnrich('${r.ticker}', this)">📊 Alpha Vantage — Bollinger Bands + fundamentals</button>
+    </div>
   </div>`;
+}
+
+async function loadEnrich(ticker, btn){
+  const box = btn.parentElement;
+  box.innerHTML = '<span style="color:var(--mut)">Loading Alpha Vantage…</span>';
+  try {
+    const res = await fetch('/api/enrich/' + encodeURIComponent(ticker));
+    const d = await res.json();
+    if(!d.success){ box.innerHTML = `<span style="color:var(--mut)">Alpha Vantage: ${d.error||'unavailable'}</span>`; return; }
+    const bb = d.bollinger||{}, f = d.fundamentals||{};
+    let html = '';
+    if(bb.upper!=null){
+      html += `<h4>Bollinger Bands (20d) · Alpha Vantage</h4><div class="kv">
+        <span class="k">Price</span><span>${bb.price!=null?'$'+bb.price:'—'}</span>
+        <span class="k">Upper / Mid / Lower</span><span>${bb.upper} / ${bb.middle} / ${bb.lower}</span>
+        <span class="k">Position</span><span>${bb.position_label||'—'}${bb.position_pct!=null?` (${bb.position_pct}% of band)`:''}</span>
+      </div>`;
+    }
+    const fr = Object.entries(f).map(([k,v])=>`<span class="k">${k}</span><span>${v}</span>`).join('');
+    if(fr) html += `<h4 style="margin-top:12px">Fundamentals · Alpha Vantage</h4><div class="kv">${fr}</div>`;
+    box.innerHTML = html || '<span style="color:var(--mut)">No Alpha Vantage data.</span>';
+  } catch(e){
+    box.innerHTML = '<span style="color:var(--mut)">Alpha Vantage request failed</span>';
+  }
 }
 
 function toggle(i){

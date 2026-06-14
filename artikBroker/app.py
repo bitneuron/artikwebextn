@@ -34,6 +34,7 @@ warnings.filterwarnings("ignore")
 # (artikAgents/agents/stock_broker_agent — `pip install -e` it into this venv).
 from artik_engine import scoring  # noqa: E402
 import yfinance as yf  # noqa: E402
+import alpha_vantage as av  # noqa: E402  (sibling module; key from env, never exposed)
 from fastapi import FastAPI, Query, UploadFile, File, Request, Form  # noqa: E402
 from fastapi.responses import FileResponse, JSONResponse, Response, HTMLResponse, RedirectResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
@@ -171,6 +172,21 @@ def _status(score: float) -> str:
     return "BUY" if score >= 75 else "HOLD" if score >= 50 else "SELL"
 
 
+def _fallback_row(t: str, reason: str) -> dict:
+    """Graceful error row; if yfinance had no data, try Alpha Vantage for a price."""
+    out = {"ticker": t, "error": reason}
+    try:
+        q = av.global_quote(t)
+        gq = q.get("Global Quote") if isinstance(q, dict) else None
+        px = gq.get("05. price") if isinstance(gq, dict) else None
+        if px:
+            out["price"] = round(float(px), 2)
+            out["error"] = reason + " — price via Alpha Vantage fallback"
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
 def analyze_one(ticker: str) -> dict:
     """Run the engine for one ticker and shape it for the UI."""
     t = ticker.strip().upper()
@@ -181,12 +197,12 @@ def analyze_one(ticker: str) -> dict:
     try:
         r = scoring.score_ticker_live(t)
     except Exception as e:  # noqa: BLE001
-        return {"ticker": t, "error": f"could not analyze ({type(e).__name__})"}
+        return _fallback_row(t, f"could not analyze ({type(e).__name__})")
 
     s = r.get("scores") or {}
     final = s.get("final")
     if final is None:
-        return {"ticker": t, "error": "no data returned"}
+        return _fallback_row(t, "no data returned")
 
     tech = r.get("technicals") or {}
     rsi = tech.get("rsi")
@@ -457,6 +473,88 @@ def api_search(q: str = Query(..., description="natural-language stock search"))
         "count": len(matched),
         "results": matched[:25],
     }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Alpha Vantage enrichment — on-demand single-ticker Bollinger Bands + fundamentals.
+# Fired only when a user clicks "Explain → Load Alpha Vantage" (respects the free
+# 25/day budget); cached once per ticker per day. yfinance stays the engine's source.
+# ──────────────────────────────────────────────────────────────────────────────
+
+_FUND_FIELDS = [
+    ("Sector", "Sector"), ("Industry", "Industry"), ("MarketCapitalization", "Market cap"),
+    ("PERatio", "P/E"), ("ForwardPE", "Forward P/E"), ("PEGRatio", "PEG"),
+    ("PriceToSalesRatioTTM", "P/S"), ("ProfitMargin", "Profit margin"),
+    ("ReturnOnEquityTTM", "ROE"), ("ReturnOnAssetsTTM", "ROA"),
+    ("RevenueTTM", "Revenue TTM"), ("EPS", "EPS"), ("DividendYield", "Div yield"),
+    ("Beta", "Beta"), ("AnalystTargetPrice", "Analyst target"),
+]
+
+
+@app.get("/api/enrich/{ticker}")
+def api_enrich(ticker: str):
+    t = ticker.strip().upper()
+    if not t:
+        return JSONResponse({"success": False, "error": "no ticker"}, status_code=400)
+    if not av.is_configured():
+        return {"success": False, "error": "ALPHA_VANTAGE_API_KEY is not configured"}
+
+    today = dt.date.today().isoformat()
+    cache_dir = HERE / "cache"
+    cache_path = cache_dir / f"enrich_{t}_{today}.json"
+    if cache_path.exists():
+        try:
+            return json.loads(cache_path.read_text())
+        except Exception:  # noqa: BLE001
+            pass
+
+    # Current price from yfinance (free) for the Bollinger position comparison
+    price = None
+    try:
+        fi = yf.Ticker(t).fast_info
+        price = getattr(fi, "last_price", None)
+    except Exception:  # noqa: BLE001
+        price = None
+
+    bb = {}
+    bands = av.bbands(t)
+    ta = bands.get("Technical Analysis: BBANDS") if isinstance(bands, dict) else None
+    if ta:
+        latest = sorted(ta.keys())[-1]
+        v = ta[latest]
+        up, mid, lo = float(v["Real Upper Band"]), float(v["Real Middle Band"]), float(v["Real Lower Band"])
+        bb = {"date": latest, "upper": round(up, 2), "middle": round(mid, 2), "lower": round(lo, 2)}
+        if price is not None:
+            bb["price"] = round(float(price), 2)
+            rng = up - lo
+            pct = ((price - lo) / rng * 100) if rng else None
+            bb["position_pct"] = round(pct) if pct is not None else None
+            bb["position_label"] = (
+                "above upper band — overbought" if price > up else
+                "below lower band — oversold" if price < lo else
+                "upper half of band" if (pct is not None and pct >= 50) else "lower half of band"
+            )
+
+    fund = {}
+    ov = av.overview(t)
+    if isinstance(ov, dict) and ov.get("Symbol"):
+        for key, label in _FUND_FIELDS:
+            val = ov.get(key)
+            if val and val not in ("None", "0", "-", "0.0"):
+                fund[label] = val
+
+    if not bb and not fund:
+        err = (bands.get("error") if isinstance(bands, dict) else None) or \
+              (ov.get("error") if isinstance(ov, dict) else None) or "Alpha Vantage data unavailable"
+        return {"success": False, "error": err}
+
+    out = {"success": True, "ticker": t, "bollinger": bb, "fundamentals": fund}
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps(out))
+    except Exception:  # noqa: BLE001
+        pass
+    return out
 
 
 # ──────────────────────────────────────────────────────────────────────────────
