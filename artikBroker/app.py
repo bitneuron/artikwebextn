@@ -1004,6 +1004,28 @@ def api_index(name: str, refresh: bool = False):
     return payload
 
 
+def _portfolio_enabled() -> bool:
+    """Show the Portfolio tab only where the data exists.
+
+    Explicit override via SHOW_PORTFOLIO (1/true/yes/on or 0/false/...); otherwise
+    auto: enabled when saved snapshots are present. Locally the CSVs exist -> shown;
+    on AWS they're excluded from the image -> hidden. Flip it on later by setting
+    SHOW_PORTFOLIO=1 once portfolio data is available there.
+    """
+    ov = os.environ.get("SHOW_PORTFOLIO")
+    if ov is not None:
+        return ov.strip().lower() in ("1", "true", "yes", "on")
+    try:
+        return bool(_list_portfolio_snapshots())
+    except Exception:  # noqa: BLE001
+        return False
+
+
+@app.get("/api/config")
+def api_config():
+    return {"portfolio": _portfolio_enabled()}
+
+
 @app.get("/")
 def index():
     return FileResponse(HERE / "static" / "index.html")

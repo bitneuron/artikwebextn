@@ -973,6 +973,20 @@ async function explainPf(ticker, btn){
 $('#syms').addEventListener('keydown', e => {
   if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); run(); }
 });
+
+// Show the Portfolio tab only where the backend says portfolio data exists
+// (local now; hidden on AWS until enabled). Hidden by default to avoid a flash.
+$('#tab-portfolio').classList.add('hidden');
+(async function initConfig(){
+  try {
+    const cfg = await (await fetch('/api/config')).json();
+    if(cfg.portfolio){
+      $('#tab-portfolio').classList.remove('hidden');
+    } else if(!$('#view-portfolio').classList.contains('hidden')){
+      showTab('analyze');   // never land on a hidden tab
+    }
+  } catch(e){ /* leave Portfolio hidden if config is unavailable */ }
+})();
 </script>
 </body>
 </html>
