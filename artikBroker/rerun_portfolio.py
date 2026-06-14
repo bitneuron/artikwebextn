@@ -10,7 +10,7 @@ from artik_engine import scoring  # noqa: E402  (installed artik-engine package)
 
 DESTS = [
     Path(__file__).resolve().parent.parent
-    / "artikagents/agents/knowledge_bases/Stock_Portfolio/June-13-2026/combined_portfolio_2026-06-13.csv",
+    / "artikAgents/agents/knowledge_bases/Stock_Portfolio/June-13-2026/combined_portfolio_2026-06-13.csv",
     Path(__file__).resolve().parent.parent / "memory/combined_portfolio_2026-06-13.csv",
 ]
 ETF = {"ARKK", "EWY", "CIBR", "SCHD", "VOO", "QQQ", "SPY", "VTI", "SMH", "IBIT", "DIA", "IWM"}

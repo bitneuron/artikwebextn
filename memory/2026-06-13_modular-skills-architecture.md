@@ -1,7 +1,7 @@
 # Modular Skills Architecture — reorg & entry point (2026-06-13)
 
 Context for the stock-analysis **skill library** under
-`artikagents/agents/knowledge_bases/stock_analysis/`. This is the reference/skills
+`artikAgents/agents/knowledge_bases/stock_analysis/`. This is the reference/skills
 layer that sits *behind* the stock-broker pipeline (see
 [2026-05-31_stock-analysis-dashboard.md](2026-05-31_stock-analysis-dashboard.md)).
 
@@ -56,9 +56,9 @@ stock_analysis/
 ## Code repointed (because docs were load-bearing for the UI)
 The dashboard/API/React read these docs by exact name — moving them required edits:
 - `artikAPIs/app/routers/skill_library.py` — `FOLDER_ORDER` gained `mandate` ("L0 · Mandate"); `TOP_LEVEL_DOCS_ORDER` = `SKILLS_LIBRARY.md` (its base is `…/skills/`, can't reach README one level up).
-- `artikagents/src/components/SkillLibrary.jsx` — `DEFAULT_DOC = 'SKILLS_LIBRARY.md'` (was `Stock_Modular_Architecture.md`).
-- `artikagents/agents/stock_broker_agent/stock_analysis_dashboard/build_dashboard.py` — "Architecture" entry → `README.md`; now also scans `reference/` for Standard/Commercial dropdown docs; `mandate` in `SKILL_FOLDER_ORDER`.
-- `artikagents/agents/stock_broker_agent/run_analysis.py` — `architecture`/`readme` alias → `README.md`; resolves `reference/` docs.
+- `artikAgents/src/components/SkillLibrary.jsx` — `DEFAULT_DOC = 'SKILLS_LIBRARY.md'` (was `Stock_Modular_Architecture.md`).
+- `artikAgents/agents/stock_broker_agent/stock_analysis_dashboard/build_dashboard.py` — "Architecture" entry → `README.md`; now also scans `reference/` for Standard/Commercial dropdown docs; `mandate` in `SKILL_FOLDER_ORDER`.
+- `artikAgents/agents/stock_broker_agent/run_analysis.py` — `architecture`/`readme` alias → `README.md`; resolves `reference/` docs.
 
 ## Gotchas / open items
 - **Not runtime-verified:** the React dashboard render — `fastapi` isn't installed in the plain shell, so could only verify Python `py_compile` + tree logic. To confirm: run the API + `npm run dev`, check the "L0 · Mandate" group shows.

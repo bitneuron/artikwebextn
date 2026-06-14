@@ -16,11 +16,11 @@ Dashboard (static HTML)  ──SSE──►  artikAPIs (FastAPI :8000)  ──su
 ### Key files
 | File | Role |
 |---|---|
-| `artikagents/agents/stock_broker_agent/stock_analysis_dashboard/build_dashboard.py` | Generates `index.html` (the dashboard). All form/JS/CSS lives here as Python strings. Re-run to rebuild. |
-| `artikagents/agents/stock_broker_agent/stock_analysis_dashboard/index.html` | Generated output — DO NOT edit by hand; rebuild from `build_dashboard.py`. |
-| `artikagents/agents/stock_broker_agent/run_analysis.py` | Web-triggered runner. Emits JSON progress lines to stdout for SSE. Parses `--skill=` and `--model=`. |
-| `artikagents/agents/stock_broker_agent/agent.py` | Two-model pipeline. `gather_data()` (OpenAI tool loop) + `synthesize_recommendation()` (selectable model). |
-| `artikagents/agents/stock_broker_agent/chart_analyzer.py` | OpenAI vision analysis of chart PNGs. |
+| `artikAgents/agents/stock_broker_agent/stock_analysis_dashboard/build_dashboard.py` | Generates `index.html` (the dashboard). All form/JS/CSS lives here as Python strings. Re-run to rebuild. |
+| `artikAgents/agents/stock_broker_agent/stock_analysis_dashboard/index.html` | Generated output — DO NOT edit by hand; rebuild from `build_dashboard.py`. |
+| `artikAgents/agents/stock_broker_agent/run_analysis.py` | Web-triggered runner. Emits JSON progress lines to stdout for SSE. Parses `--skill=` and `--model=`. |
+| `artikAgents/agents/stock_broker_agent/agent.py` | Two-model pipeline. `gather_data()` (OpenAI tool loop) + `synthesize_recommendation()` (selectable model). |
+| `artikAgents/agents/stock_broker_agent/chart_analyzer.py` | OpenAI vision analysis of chart PNGs. |
 | `artikAPIs/app/routers/stock_analysis.py` | API: `/api/stock/analyze/{ticker}`, `/api/stock/report/{filename}`, `/api/stock/reports`. |
 | `artikAPIs/app/routers/skill_library.py` | `/api/library/tree`, `/api/library/file/{rel_path}`. |
 
@@ -31,11 +31,11 @@ cd artikAPIs && venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 80
 - venv: `artikAPIs/venv/bin/python` (openai 2.14.0, supports GPT-5).
 - run_analysis runs under the API's `sys.executable` (the artikAPIs venv).
 - uvicorn started WITHOUT `--reload`, so **restart the API after editing any router**.
-- `.env` with `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` lives at `artikagents/agents/.env`.
+- `.env` with `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` lives at `artikAgents/agents/.env`.
 
 ### Rebuild the dashboard
 ```bash
-cd artikagents/agents/stock_broker_agent/stock_analysis_dashboard && python build_dashboard.py
+cd artikAgents/agents/stock_broker_agent/stock_analysis_dashboard && python build_dashboard.py
 ```
 Hits yfinance (network) for live signals; takes ~1 min.
 

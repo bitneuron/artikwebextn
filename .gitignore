@@ -54,4 +54,4 @@ memory/*portfolio-snapshot*.md
 **/*schwab*.csv
 
 # Regenerable engine caches (large, daily)
-artik_broker/cache/
+artikBroker/cache/

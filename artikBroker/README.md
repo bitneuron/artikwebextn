@@ -1,4 +1,4 @@
-# artik_broker
+# artikBroker
 
 A small web app to analyze one or many stock symbols with the live 100-point engine.
 
@@ -23,7 +23,7 @@ Common to both:
 ## Run
 
 ```bash
-cd artik_broker
+cd artikBroker
 ../artikAPIs/venv/bin/python -m uvicorn app:app --reload --port 8100
 # or: ./run.sh
 ```
@@ -40,10 +40,10 @@ Then open **http://localhost:8100**
     consolidates by symbol across accounts, analyzes each, returns rows + totals.
     (Requires `python-multipart`, already in the artikAPIs venv.)
 - Scoring is the shared **`artik-engine`** package at
-  `../artikagents/agents/stock_broker_agent/` (`from artik_engine import scoring`,
+  `../artikAgents/agents/stock_broker_agent/` (`from artik_engine import scoring`,
   `score_ticker_live`) — live yfinance data, no API key. Installed editable into the
   venv (`run.sh` does this automatically; or `pip install -e
-  ../artikagents/agents/stock_broker_agent`). The same package backs the
+  ../artikAgents/agents/stock_broker_agent`). The same package backs the
   stock_broker CLI agent, so the engine has one home and two consumers.
 
 ## Notes / limits

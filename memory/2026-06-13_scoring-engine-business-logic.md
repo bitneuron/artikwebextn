@@ -1,7 +1,7 @@
 # Stock Scoring Engine — Complete Business Logic (2026-06-13)
 
-The authoritative reference for how `artikagents/agents/stock_broker_agent/scoring.py` scores a
-stock. Used by: artik_broker, the stock_broker_agent pipeline, sp500_screen, RUN_STOCK_ANALYSIS.
+The authoritative reference for how `artikAgents/agents/stock_broker_agent/scoring.py` scores a
+stock. Used by: artikBroker, the stock_broker_agent pipeline, sp500_screen, RUN_STOCK_ANALYSIS.
 Pure Python + yfinance (no LLM). Skill docs: `stock_analysis/skills/business_quality/Archetype_Multiplier_Skill.md`
 + `skills/quant/Peer_Normalization_Skill.md`.
 
@@ -79,7 +79,7 @@ fcf_conversion (FCF/NI), debt_reducing, efficiency_ratio (cost/income). All None
 - `percentile_rank(value, peers, higher_better)` (≥5-peer cohort) + `percentile_to_tier` (≥80 elite/≥60 strong/≥40 average/≥20 weak/<20 poor).
 - Fed into the 4 category scorers (path 1 above). **Never fails** — try/except → {} → thresholds (spec item 10).
 
-## Explanation outputs (on `score_ticker_live` result, shown in artik_broker Explain + markdown)
+## Explanation outputs (on `score_ticker_live` result, shown in artikBroker Explain + markdown)
 - `archetype`, `multiplier_reason` (e.g. "elite growth: rev 85%, R40 103, improving profit")
 - `base_metrics_used` / `base_metrics_skipped` (per-sector base substitutions)
 - `peer_normalized` (bool) + `peer_explanation` (["ROE: 18.4%, sector percentile 87", …])

@@ -1,11 +1,11 @@
-# artik_broker — Architecture
+# artikBroker — Architecture
 
-How artik_broker is wired and what it calls. **No LLM** — the scoring is a deterministic Python
+How artikBroker is wired and what it calls. **No LLM** — the scoring is a deterministic Python
 engine over live Yahoo Finance data, with daily-cached peer and index data.
 
 - **Frontend:** `static/index.html` (vanilla JS SPA, 4 tabs)
 - **Backend:** `app.py` (FastAPI, port **8100**) on the `artikAPIs` venv
-- **Engine (reused):** the **`artik-engine`** package at `artikagents/agents/stock_broker_agent/artik_engine/` (`scoring.py` + `peer_universe.py` + `peer_metrics.py`), installed editable & imported as `from artik_engine import scoring`
+- **Engine (reused):** the **`artik-engine`** package at `artikAgents/agents/stock_broker_agent/artik_engine/` (`scoring.py` + `peer_universe.py` + `peer_metrics.py`), installed editable & imported as `from artik_engine import scoring`
 - **Only external service:** Yahoo Finance (via `yfinance`) — no API key
 
 ---
@@ -51,7 +51,7 @@ flowchart TD
     subgraph Data["💾 Data / caches"]
         CSV["data/sp500_constituents.csv"]:::data
         PMC["data/peer_metrics_&lt;date&gt;.json<br/>(daily, per sector)"]:::data
-        IDX["artik_broker/cache/index_&lt;name&gt;_&lt;date&gt;.json<br/>(daily)"]:::data
+        IDX["artikBroker/cache/index_&lt;name&gt;_&lt;date&gt;.json<br/>(daily)"]:::data
         PORT["Stock_Portfolio/&lt;date&gt;/combined_portfolio_*.csv"]:::data
     end
 
@@ -101,7 +101,7 @@ flowchart TD
 
 ---
 
-## 1b. Complete call inventory — everything artik_broker touches
+## 1b. Complete call inventory — everything artikBroker touches
 
 ### Internal modules (in-process imports)
 | From | Imports / calls | Purpose |
@@ -120,8 +120,8 @@ Frontend: **none** — `static/index.html` is pure vanilla JS (no CDN, no framew
 ### Files read / written
 | Path | R/W | By |
 |---|---|---|
-| `artik_broker/static/index.html` | read (served) | `GET /` + StaticFiles |
-| `artik_broker/cache/index_<name>_<date>.json` | read+write | `/api/index/{name}` (daily) |
+| `artikBroker/static/index.html` | read (served) | `GET /` + StaticFiles |
+| `artikBroker/cache/index_<name>_<date>.json` | read+write | `/api/index/{name}` (daily) |
 | `…/stock_broker_agent/artik_engine/data/sp500_constituents.csv` | read (build if missing) | `peer_universe` |
 | `…/stock_broker_agent/artik_engine/data/peer_metrics_<date>.json` | read+write | `peer_metrics` (daily, per sector) |
 | `…/knowledge_bases/Stock_Portfolio/<date>/combined_portfolio_*.csv` | read | `/api/portfolio*` |
@@ -134,13 +134,13 @@ Frontend: **none** — `static/index.html` is pure vanilla JS (no CDN, no framew
 | **Wikipedia** S&P 500 list | only if `sp500_constituents.csv` is missing | once (then cached file) |
 | **GitHub** constituents CSV | only if Wikipedia fetch fails | fallback |
 
-### What artik_broker does **NOT** call (deliberately)
+### What artikBroker does **NOT** call (deliberately)
 - ❌ **No LLM** — no `anthropic`, no `openai`, no `model_config` (deterministic engine only).
 - ❌ **Not the artikAPIs service** (`:8000`) — fully standalone on `:8100`; shares only the `scoring.py` *code* and the same venv.
 - ❌ **No database, no auth, no network egress** beyond Yahoo Finance (+ the one-time Wikipedia/GitHub list build).
 
 ### Sibling utility (not part of the running server)
-`artik_broker/rerun_portfolio.py` — one-off script: imports `scoring`, re-scores the saved portfolio, rewrites `combined_portfolio_<date>.csv`.
+`artikBroker/rerun_portfolio.py` — one-off script: imports `scoring`, re-scores the saved portfolio, rewrites `combined_portfolio_<date>.csv`.
 
 ---
 
@@ -284,5 +284,5 @@ sequenceDiagram
 - **Graceful degradation:** if peer data is unavailable, category scoring falls back to sector-aware
   thresholds; if a ticker/statement fetch fails, that row returns an error but the run never crashes.
 - **Shared engine:** `scoring.py` is the same engine used by `RUN_STOCK_ANALYSIS.md`, `sp500_screen.py`,
-  and the stock_broker_agent pipeline — artik_broker is a thin FastAPI + SPA over it.
-- **Run:** `cd artik_broker && ./run.sh` → http://localhost:8100
+  and the stock_broker_agent pipeline — artikBroker is a thin FastAPI + SPA over it.
+- **Run:** `cd artikBroker && ./run.sh` → http://localhost:8100

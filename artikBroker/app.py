@@ -1,14 +1,14 @@
 """
-artik_broker — a small web app to analyze one or many stock symbols.
+artikBroker — a small web app to analyze one or many stock symbols.
 
 - Enter symbols (single or comma-separated) → runs the live 100-point engine.
 - Results shown in a table (Score / RSI / Status / P-L-agnostic metrics).
 - "Explain" per row reveals the full score breakdown behind the recommendation.
 
-Reuses the scoring engine in artikagents/agents/stock_broker_agent/scoring.py.
+Reuses the scoring engine in artikAgents/agents/stock_broker_agent/scoring.py.
 
 Run:
-    cd artik_broker
+    cd artikBroker
     ../artikAPIs/venv/bin/python -m uvicorn app:app --reload --port 8100
 Then open http://localhost:8100
 """
@@ -26,21 +26,21 @@ from typing import List
 warnings.filterwarnings("ignore")
 
 # The scoring engine is the installed `artik-engine` package
-# (artikagents/agents/stock_broker_agent — `pip install -e` it into this venv).
+# (artikAgents/agents/stock_broker_agent — `pip install -e` it into this venv).
 from artik_engine import scoring  # noqa: E402
 import yfinance as yf  # noqa: E402
 from fastapi import FastAPI, Query, UploadFile, File  # noqa: E402
 from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 
-app = FastAPI(title="artik_broker")
+app = FastAPI(title="artikBroker")
 
 HERE = Path(__file__).resolve().parent
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 
 # Saved portfolio snapshots live under Stock_Portfolio/<dated-folder>/combined_portfolio_*.csv
 PORTFOLIO_DIR = (
-    HERE.parent / "artikagents" / "agents" / "knowledge_bases" / "Stock_Portfolio"
+    HERE.parent / "artikAgents" / "agents" / "knowledge_bases" / "Stock_Portfolio"
 )
 
 # Treat these as funds the 100-pt fundamental engine can't score meaningfully.

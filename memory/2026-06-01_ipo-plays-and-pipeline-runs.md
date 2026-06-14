@@ -14,7 +14,7 @@ ticker / yfinance data for them. Each is backed by a markdown "plays" file that 
 **listed proxy tickers** you can actually trade as IPO-anticipation plays.
 
 ### Source files (one per company)
-`artikagents/agents/knowledge_bases/stock_analysis/insight/ipo-<company>.md`
+`artikAgents/agents/knowledge_bases/stock_analysis/insight/ipo-<company>.md`
 - `ipo-anthropic.md`, `ipo-openai.md`, `ipo-spacex.md`, `ipo-stripe.md`
 - Each has a "Trade Signals" table: Action | Symbol | What it is | Today | Trigger Price |
   Why | Stop | Target | Hold. Plus a "Ranked Short-Term Picks" list and risk notes.
