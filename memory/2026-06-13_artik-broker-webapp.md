@@ -63,6 +63,29 @@ A standalone web app to analyze one/many stock symbols and show BUY/HOLD/SELL wi
   so history survives redeploys + is cross-device. See [[2026-06-13_artikbroker-aws-deploy]].
 - **diagrams.html**: standalone non-technical component + search-sequence diagrams (Mermaid via CDN).
 
+## Artik Broker AI — copilot (`/api/copilot`, deployed 2026-06-14)
+- Embedded AI analyst chat. Body: `{mode, contextType, context, messages}`. **mode** = auto + 5
+  (research·analysis·discovery·comparison·screening); **contextType** = stock|search; **context** =
+  Artik Engine output (the source of truth — model never invents scores). **Structured output via a
+  forced tool** (Anthropic tool / OpenAI function) → returns `{provider, mode, confidence,
+  needs_clarification, clarification_question, clarification_options[], reply}`. Claude→GPT cascade.
+- Auto does intent-detection; if confidence <0.70 it returns a clarification with clickable options
+  instead of guessing. Forced mode (UI dropdown) skips clarification.
+- Frontend: one shared widget (`#copilot`, global, below results) titled "🤖 Artik Broker AI" with a
+  **mode dropdown**, per-answer **mode badge**, suggestion chips, light-markdown. Appears after a
+  search (search ctx) and via **"💬 Ask Copilot about <ticker>"** in every Explain panel (stock ctx,
+  seeded from `/api/analyze`). System prompt = the user's "Artik Broker AI" spec (condensed in `_COPILOT_SYSTEM`).
+- **Not yet wired:** discovery/screening don't run the engine themselves (model proposes candidates +
+  says "run as a search"); the `modify_search` auto-rerun loop is still a TODO.
+
+## Portfolio tab gating + dep fix (2026-06-14)
+- **Portfolio tab shows only where data exists.** `GET /api/config` → `{portfolio: bool}` = env
+  `SHOW_PORTFOLIO` (1/0) else `bool(_list_portfolio_snapshots())`. Local → true (CSVs present);
+  AWS → false (image excludes `knowledge_bases/`). Frontend hides `#tab-portfolio` by default,
+  reveals per config. To reopen on AWS later: host portfolio in S3 + set `SHOW_PORTFOLIO=1`.
+- **Security:** bumped `python-multipart` 0.0.20→0.0.32 (cleared 3 Dependabot alerts). Git remote
+  updated to the renamed `github.com/bitneuron/artikwebextn.git`.
+
 ## Related
 - Scoring formula/thresholds: see [[2026-06-13_portfolio-snapshot]] and scoring.py.
 - Skill methodology behind it: [[2026-06-13_modular-skills-architecture]] (RUN_STOCK_ANALYSIS.md entry point).
