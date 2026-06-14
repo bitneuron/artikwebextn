@@ -18,6 +18,7 @@ memory/
 artikAgents/src/
 artikAgents/agents/knowledge_bases/        # contains private Stock_Portfolio data
 artikBroker/cache/                          # regenerable daily cache
+artikBroker/search_history/                 # local dev history store (S3 used on AWS)
 artikBroker/Dockerfile
 artikBroker/DEPLOY.md
 pokemon_battle.html

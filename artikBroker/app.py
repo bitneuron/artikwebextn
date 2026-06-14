@@ -35,6 +35,7 @@ warnings.filterwarnings("ignore")
 from artik_engine import scoring  # noqa: E402
 import yfinance as yf  # noqa: E402
 import alpha_vantage as av  # noqa: E402  (sibling module; key from env, never exposed)
+import history_store as hist  # noqa: E402  (server-side search history: S3 on AWS, local folder in dev)
 from fastapi import FastAPI, Query, UploadFile, File, Request, Form  # noqa: E402
 from fastapi.responses import FileResponse, JSONResponse, Response, HTMLResponse, RedirectResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
@@ -733,6 +734,127 @@ def api_portfolio(date: str = Query(None), file: str = Query(None)):
         "date": chosen["date"], "folder": chosen["folder"], "file": chosen["file"],
         "as_of": as_of, "count": len(rows), "rows": rows, "totals": totals,
     }
+
+
+@app.get("/api/portfolio/refresh")
+def api_portfolio_refresh(date: str = Query(None), file: str = Query(None)):
+    """Re-score a saved snapshot's holdings against LIVE data.
+
+    Share counts + cost basis come from the broker export (only as fresh as the
+    snapshot); price, score, RSI, status, archetype, value and P/L are recomputed
+    live via the engine. Returns the same shape as /api/portfolio so the same
+    renderer can display it.
+    """
+    snaps = _list_portfolio_snapshots()
+    if not snaps:
+        return JSONResponse({"error": "No saved portfolio snapshots found."}, status_code=404)
+    chosen = None
+    if file:
+        chosen = next((s for s in snaps if s["file"] == file), None)
+    elif date:
+        chosen = next((s for s in snaps if s["date"] == date), None)
+    chosen = chosen or snaps[0]
+
+    # Holdings (ticker -> qty, cost_basis) from the snapshot CSV.
+    path = PORTFOLIO_DIR / chosen["file"]
+    holdings = []  # preserve original order
+    for r in csv.DictReader(path.read_text().splitlines()):
+        tag = (r.get("#") or "").strip()
+        if tag in ("TOTAL", "AS_OF") or not tag:
+            continue
+        t = (r.get("Ticker") or "").strip().upper()
+        if not t:
+            continue
+        holdings.append({"ticker": t, "qty": _num(r.get("Qty")), "cost_basis": _num(r.get("Cost_Basis"))})
+
+    if not holdings:
+        return JSONResponse({"error": "snapshot has no holdings to refresh."}, status_code=404)
+
+    # Score every holding live (NOT _score_many — that caps at 25 for AI Search).
+    tickers = list(dict.fromkeys(h["ticker"] for h in holdings))
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        scored = {r["ticker"]: r for r in ex.map(analyze_one, tickers) if r}
+
+    rows, t_cost, t_val, t_pl = [], 0.0, 0.0, 0.0
+    for i, h in enumerate(holdings, 1):
+        t, qty, cost = h["ticker"], h["qty"], h["cost_basis"]
+        sr = scored.get(t) or {}
+        price = sr.get("price")
+        if price is None:  # ETFs / unscored — still price the position for the totals
+            lp = _live_price(t)
+            price = round(lp, 2) if lp else None
+        value = round(qty * price, 2) if (qty and price is not None) else None
+        pl = round(value - cost, 2) if (value is not None and cost) else None
+        pl_pct = round(pl / cost * 100, 2) if (pl is not None and cost) else None
+        t_cost += cost or 0
+        t_val += value or 0
+        t_pl += pl or 0
+        rows.append({
+            "n": i, "ticker": t, "qty": qty,
+            "archetype": (sr.get("breakdown") or {}).get("archetype", "") or "",
+            "cost_basis": cost, "price": price, "value": value,
+            "score": sr.get("score"), "rating": sr.get("rating"),
+            "rsi": sr.get("rsi"), "status": sr.get("status"),
+            "pl": pl, "pl_pct": pl_pct,
+            "error": sr.get("error"),
+        })
+
+    totals = {
+        "qty": None, "cost": round(t_cost, 2), "value": round(t_val, 2),
+        "pl": round(t_pl, 2), "pl_pct": round(t_pl / t_cost * 100, 2) if t_cost else None,
+    }
+    now = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
+    return {
+        "date": chosen["date"], "folder": chosen["folder"], "file": chosen["file"],
+        "as_of": f"Live refresh {now}", "refreshed": True,
+        "count": len(rows), "rows": rows, "totals": totals,
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Search history — persisted server-side (S3 on AWS, local folder in dev) so it
+# survives browser close / redeploys and is shared across devices.
+# ──────────────────────────────────────────────────────────────────────────────
+@app.post("/api/history")
+async def api_history_save(request: Request):
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"error": "invalid JSON body"}, status_code=400)
+    if not (body.get("query") or "").strip():
+        return JSONResponse({"error": "missing query"}, status_code=400)
+    try:
+        return hist.save(body)
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": f"could not save history: {_err_detail(e)}"}, status_code=500)
+
+
+@app.get("/api/history")
+def api_history_list():
+    try:
+        return {"backend": hist.backend(), "searches": hist.list_meta()}
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": f"could not list history: {_err_detail(e)}"}, status_code=500)
+
+
+@app.get("/api/history/{eid}")
+def api_history_get(eid: str):
+    e = hist.get(eid)
+    if not e:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return e
+
+
+@app.delete("/api/history/{eid}")
+def api_history_delete(eid: str):
+    hist.delete(eid)
+    return {"ok": True}
+
+
+@app.delete("/api/history")
+def api_history_clear():
+    hist.clear()
+    return {"ok": True}
 
 
 # ──────────────────────────────────────────────────────────────────────────────

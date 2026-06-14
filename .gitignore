@@ -55,3 +55,5 @@ memory/*portfolio-snapshot*.md
 
 # Regenerable engine caches (large, daily)
 artikBroker/cache/
+# Local dev search-history store (S3 is used on AWS)
+artikBroker/search_history/

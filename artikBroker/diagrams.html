@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>artikBroker — How It Works (Diagrams)</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1420; --card:#171e2e; --ink:#e7ecf5; --muted:#9fb0cc;
+    --accent:#4f8cff; --accent2:#39d98a; --line:#27324a; --chip:#1f2940;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       background:var(--bg);color:var(--ink);padding:0 0 80px}
+  header{padding:40px 24px 28px;background:linear-gradient(160deg,#16203a,#0f1420);border-bottom:1px solid var(--line)}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  h1{margin:0 0 6px;font-size:30px;letter-spacing:-.02em}
+  h2{font-size:22px;margin:38px 0 10px;letter-spacing:-.01em}
+  h3{font-size:16px;margin:22px 0 8px;color:var(--accent)}
+  .sub{color:var(--muted);font-size:16px;max-width:760px}
+  .tag{display:inline-block;background:var(--chip);color:var(--muted);border:1px solid var(--line);
+       border-radius:999px;padding:3px 12px;font-size:12.5px;margin:2px 6px 2px 0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px 24px;margin:18px 0;
+        box-shadow:0 8px 30px rgba(0,0,0,.25)}
+  .card.plain{border-left:4px solid var(--accent2)}
+  .mermaid{background:#fbfdff;border-radius:12px;padding:18px;overflow-x:auto;text-align:center}
+  ul{margin:8px 0 0;padding-left:22px}
+  li{margin:6px 0}
+  .lead{font-size:17px}
+  .muted{color:var(--muted)}
+  .pill{font-weight:600;color:var(--accent2)}
+  .analogy{background:#101a2e;border:1px dashed var(--line);border-radius:12px;padding:16px 18px;margin-top:14px;color:#cfe0ff}
+  .analogy b{color:#fff}
+  .legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  code{background:#0b1120;border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:13.5px;color:#bcd1ff}
+  footer{color:var(--muted);font-size:13px;margin-top:40px;border-top:1px solid var(--line);padding-top:18px}
+  a{color:var(--accent)}
+  .toc a{display:inline-block;margin-right:16px}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>artikBroker — How It Works</h1>
+    <p class="sub">A visual guide to the stock-analysis web app. The first half is written for <b>everyone</b>;
+    the diagrams underneath are the technical detail for engineers.</p>
+    <div style="margin-top:14px">
+      <span class="tag">FastAPI + vanilla JS</span>
+      <span class="tag">AWS App Runner</span>
+      <span class="tag">Yahoo Finance data</span>
+      <span class="tag">Claude → GPT AI Search</span>
+      <span class="tag">Updated 2026-06-14</span>
+    </div>
+    <p class="toc" style="margin-top:18px"><a href="#plain">① In plain English</a><a href="#components">② Component map</a><a href="#search">③ What happens on a search</a></p>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- PLAIN ENGLISH -->
+  <h2 id="plain">① In plain English</h2>
+  <div class="card plain">
+    <p class="lead">artikBroker is a website where you type in stock symbols (like <code>NVDA</code>) — or just describe
+    what you're looking for in normal words — and it gives each stock a <span class="pill">score from 0 to 100</span>
+    with a clear <b>BUY / HOLD / SELL</b> verdict and the reasons behind it.</p>
+
+    <h3>The two ways to use it</h3>
+    <ul>
+      <li><b>Type stock symbols</b> → it instantly analyzes those exact companies.</li>
+      <li><b>Type a question</b> (e.g. <i>"cheap energy stocks that aren't overbought"</i>) → an <b>AI assistant</b>
+          figures out which companies you might mean, then the app scores them.</li>
+    </ul>
+
+    <h3>Where the numbers come from</h3>
+    <ul>
+      <li>Live company financials are pulled from <b>Yahoo Finance</b> (free, public market data).</li>
+      <li>A consistent <b>scoring engine</b> grades every company the same way — value, quality, growth,
+          financial strength, momentum, and risk — so the verdicts are comparable.</li>
+      <li>The <b>AI only helps interpret your words</b> and suggest companies. It never makes up the scores —
+          the engine always does the math on real data.</li>
+    </ul>
+
+    <div class="analogy">
+      <b>A simple analogy.</b> Think of it like a restaurant. You (the customer) place an order at the counter
+      (the website). A translator (the AI) helps if you describe what you're craving instead of naming a dish.
+      The kitchen (the scoring engine) cooks every dish to the exact same recipe using fresh ingredients
+      (Yahoo Finance data). You always get a consistent, comparable plate back — the verdict and the reasons.
+    </div>
+
+    <h3>Is it secure?</h3>
+    <ul>
+      <li>The site is <b>password-protected</b> — you log in before you can use it.</li>
+      <li>All sensitive keys (AI accounts, passwords) are stored in a locked <b>AWS vault</b>, never in the code.</li>
+    </ul>
+  </div>
+
+  <!-- COMPONENT DIAGRAM -->
+  <h2 id="components">② Component map — the moving parts</h2>
+  <p class="muted">Every box is a piece of the system. Arrows show who talks to whom.
+  Solid arrows are the normal path; dashed arrows are fallbacks or "only-when-needed" calls.</p>
+  <div class="card">
+    <pre class="mermaid">
+flowchart TB
+    subgraph Browser["🌐 Your Browser — the web page"]
+        UI["Search box + Tabs<br/>Analyze · Portfolio · S&P 500 · DOW"]
+        Render["Shows results tables<br/>+ Explain panels"]
+        Login["Login screen"]
+    end
+
+    subgraph AppRunner["☁️ AWS App Runner — the app server (app.py)"]
+        Auth["🔒 Login check<br/>(secure session cookie)"]
+        subgraph Routes["What the app can do (API routes)"]
+            RAnalyze["Analyze symbols<br/>/api/analyze"]
+            RSearch["AI Search<br/>/api/search"]
+            REnrich["Extra detail<br/>/api/enrich"]
+            RPortfolio["Portfolio upload<br/>/api/portfolio"]
+            RIndex["S&P 500 / DOW<br/>/api/index"]
+        end
+        Helpers["Behind the scenes:<br/>score many at once · filter · pick AI provider"]
+    end
+
+    subgraph Engine["📦 Scoring Engine (shared 'artik_engine')"]
+        Scoring["score_ticker_live()<br/>0–100 score + BUY/HOLD/SELL"]
+        Peers["Compares vs industry peers<br/>(daily cache)"]
+    end
+
+    subgraph External["🌍 Outside data & AI services"]
+        YF["Yahoo Finance<br/>(live market data)"]
+        AV["Alpha Vantage<br/>(extra indicators)"]
+        Claude["Claude AI<br/>(reads your question)"]
+        GPT["OpenAI GPT<br/>(backup AI)"]
+    end
+
+    subgraph Secrets["🔐 AWS Secrets Manager (locked vault)"]
+        S["API keys · password · app secret"]
+    end
+
+    UI -->|click / type| Auth
+    Login --> Auth
+    Auth --> Routes
+
+    RAnalyze --> Helpers
+    RSearch --> Helpers
+    RIndex --> Helpers
+    RPortfolio --> Helpers
+    Helpers --> Scoring
+    Scoring --> Peers
+    Scoring --> YF
+    Peers --> YF
+
+    RSearch -->|reads question| Claude
+    RSearch -.->|if Claude fails| GPT
+    REnrich --> AV
+    Helpers -.->|price backup| AV
+
+    Claude -.->|key from| S
+    GPT -.->|key from| S
+    AV -.->|key from| S
+    Auth -.->|password from| S
+
+    Routes -->|results as JSON| Render
+    </pre>
+    <div class="legend">
+      <span class="tag">🌐 What you see</span>
+      <span class="tag">☁️ The app server</span>
+      <span class="tag">📦 The scoring brain</span>
+      <span class="tag">🌍 Outside services</span>
+      <span class="tag">🔐 The vault</span>
+    </div>
+  </div>
+
+  <!-- SEARCH SEQUENCE -->
+  <h2 id="search">③ What happens when you run a search</h2>
+  <p class="muted">This follows one AI Search from top to bottom — the order of events when you type a question
+  instead of exact symbols.</p>
+  <div class="card">
+    <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor U as You
+    participant JS as Web page
+    participant MW as Login check
+    participant API as App server<br/>(/api/search)
+    participant CL as Claude AI
+    participant GP as OpenAI GPT<br/>(backup)
+    participant SM as Score-many<br/>(8 at a time)
+    participant EN as Scoring engine
+    participant YF as Yahoo Finance
+
+    U->>JS: type "cheap energy stocks, not overbought"
+    Note over JS: Not a list of symbols →<br/>send to AI Search
+    JS->>MW: ask /api/search
+    MW->>MW: check you're logged in
+    MW->>API: allow request
+
+    rect rgb(225,238,255)
+    Note over API,GP: Step 1 — understand your words
+    API->>CL: "turn this into a search plan"
+    alt Claude answers
+        CL-->>API: plan: companies + filters + summary
+    else Claude unavailable
+        CL--xAPI: error
+        API->>GP: backup — same request
+        GP-->>API: plan: companies + filters + summary
+    end
+    end
+
+    rect rgb(226,250,235)
+    Note over SM,YF: Step 2 — score each company on REAL data
+    API->>SM: score the suggested companies
+    par many at the same time
+        SM->>EN: analyze one company
+        EN->>YF: get live financials + price
+        YF-->>EN: data
+        EN-->>SM: score + BUY/HOLD/SELL + reasons
+    end
+    SM-->>API: all scored
+    end
+
+    rect rgb(255,243,224)
+    Note over API: Step 3 — filter & rank
+    API->>API: keep ones matching your filters<br/>(price, momentum, sector…)
+    API->>API: sort best-first, attach "why matched"
+    end
+
+    API-->>JS: final ranked list
+    JS-->>U: table with scores, verdicts,<br/>"why" + Explain buttons
+
+    opt You click "Explain → Load extra detail"
+        JS->>API: /api/enrich
+        API->>API: Alpha Vantage (saved for the day)
+        API-->>JS: extra indicators
+    end
+    </pre>
+    <p class="muted" style="margin-top:14px"><b>The one thing to remember:</b> the AI only <i>understands your
+    question and suggests companies</i> (Step 1). The real <b>scores always come from the engine using live data</b>
+    (Step 2). That keeps results consistent and trustworthy, no matter how you phrased the search.</p>
+  </div>
+
+  <footer>
+    artikBroker · generated component &amp; sequence diagrams · open this file in any web browser (no internet needed
+    except to load the diagram renderer). Source of truth: <code>artikBroker/app.py</code> and
+    <code>static/index.html</code>.
+  </footer>
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad:true,
+    theme:'default',
+    themeVariables:{ fontSize:'14px' },
+    flowchart:{ curve:'basis', useMaxWidth:true },
+    sequence:{ useMaxWidth:true, mirrorActors:false }
+  });
+</script>
+</body>
+</html>
