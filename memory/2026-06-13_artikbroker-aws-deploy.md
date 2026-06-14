@@ -40,6 +40,16 @@ User's stated criteria: "easy to deploy and stable."
   revisions. Deploy with an **immutable image tag** (`v<timestamp>`) via update-service,
   not `:latest`.
 
+## Secrets in AWS Secrets Manager (2026-06-14)
+- All 4 sensitive values (ANTHROPIC_API_KEY, OPENAI_API_KEY, APP_PASSWORD_HASH, APP_SECRET)
+  are now **Secrets Manager** entries `artikbroker/<KEY>`, referenced by the App Runner service
+  as `RuntimeEnvironmentSecrets` (ARNs). **No plaintext** in the service config anymore.
+- App Runner reads them via an **instance role** `AppRunnerInstanceRole-artikbroker`
+  (trust: tasks.apprunner.amazonaws.com; inline policy: secretsmanager:GetSecretValue on the 4 ARNs).
+  Distinct from the ECR *access* role (build.apprunner.amazonaws.com) used to pull the image.
+- Re-run migration anytime: `artikAPIs/venv/bin/python artikBroker/migrate_secrets.py` (idempotent).
+- To rotate a value: update the Secrets Manager secret, then start a new App Runner deployment.
+
 ## Scope decisions
 - **One service only** (artikBroker; not artikAPIs). It's self-contained.
 - **Public, no Portfolio:** `.dockerignore` excludes `knowledge_bases/`, so the private
