@@ -24,8 +24,12 @@ A standalone web app to analyze one/many stock symbols and show BUY/HOLD/SELL wi
   - `GET /` serves `static/index.html`;
   - `GET /api/analyze?symbols=...` returns one row per ticker with the full breakdown embedded (Explain expands client-side — no 2nd call);
   - `POST /api/analyze_portfolio` (multipart `files=`) parses e*Trade/Schwab CSVs, consolidates by symbol, scores each, returns rows + totals. Needs `python-multipart` (already in artikAPIs venv).
-- Scoring = shared engine `artikagents/agents/stock_broker_agent/scoring.py::score_ticker_live`,
-  imported via `sys.path.insert`. Same engine as the portfolio table + RUN_STOCK_ANALYSIS.
+- Scoring = the shared **`artik-engine`** package at `artikagents/agents/stock_broker_agent/artik_engine/`
+  (`scoring.py` + `peer_universe.py` + `peer_metrics.py` + `data/`), imported cleanly via
+  `from artik_engine import scoring` (`score_ticker_live`). No more `sys.path` hacks — it's
+  `pip install -e`'d into the artikAPIs venv (run.sh auto-installs on launch). One engine, two
+  consumers: artik_broker (website) + the stock_broker CLI agent. Same engine as the portfolio
+  table + RUN_STOCK_ANALYSIS.
 - `static/index.html` = vanilla JS single page (no build step).
 - ETFs (ARKK/EWY/QQQ/…) and invalid tickers return graceful error rows. Max 40 symbols/request.
 
