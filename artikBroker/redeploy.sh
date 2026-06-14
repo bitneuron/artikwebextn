@@ -18,7 +18,7 @@ docker tag artikbroker:latest "$IMG"
 docker push "$IMG" >/dev/null
 echo "▶ Pushed ${TAG}; updating service (image only, secrets/roles preserved)"
 
-python3 - "$IMG" "$REGION" <<'PY'
+"$(dirname "$0")/../artikAPIs/venv/bin/python" - "$IMG" "$REGION" <<'PY'
 import sys, boto3
 img, region = sys.argv[1], sys.argv[2]
 ar = boto3.client("apprunner", region_name=region)
