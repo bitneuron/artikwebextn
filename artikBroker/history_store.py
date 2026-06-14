@@ -175,6 +175,15 @@ def delete(eid: str) -> None:
     (_s3_delete if _BUCKET else _local_delete)(eid)
 
 
+def delete_many(ids) -> int:
+    n = 0
+    for eid in ids:
+        if eid:
+            delete(str(eid))
+            n += 1
+    return n
+
+
 def clear() -> None:
     for e in _all():
         delete(e["id"])

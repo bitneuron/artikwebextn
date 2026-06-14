@@ -949,6 +949,18 @@ def api_history_get(eid: str):
     return e
 
 
+@app.post("/api/history/delete")
+async def api_history_delete_bulk(request: Request):
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"error": "invalid JSON body"}, status_code=400)
+    ids = body.get("ids") or []
+    if not isinstance(ids, list) or not ids:
+        return JSONResponse({"error": "no ids"}, status_code=400)
+    return {"ok": True, "deleted": hist.delete_many(ids)}
+
+
 @app.delete("/api/history/{eid}")
 def api_history_delete(eid: str):
     hist.delete(eid)

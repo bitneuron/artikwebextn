@@ -187,6 +187,7 @@
     <div class="pf-bar">
       <span class="up-label">🕘 Past Searches</span>
       <input id="hist-search" placeholder="Filter by query…" oninput="renderHistory()" style="width:200px" />
+      <button id="hist-del-sel" class="ghost" onclick="deleteSelectedHistory()" disabled>🗑 Delete selected</button>
       <button class="ghost" onclick="clearHistory()">🗑 Clear all</button>
       <span class="pf-meta">Saved server-side — available on any device.</span>
     </div>
@@ -640,6 +641,7 @@ function showTab(name){
 
 // ── Search history (persisted server-side: S3 on AWS, local folder in dev) ────
 let _histList = [];
+let _histSel = new Set();   // ids selected for mass delete
 async function addHist(entry){
   try { await fetch('/api/history', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(entry)}); }
   catch(e){ /* non-fatal: history is best-effort */ }
@@ -662,20 +664,28 @@ async function renderHistory(){
   }
   const q = ($('#hist-search') && $('#hist-search').value || '').trim().toLowerCase();
   let list = q ? _histList.filter(e => (e.query||'').toLowerCase().includes(q)) : _histList;
+  window._histFiltered = list;
+  // drop selections that are no longer present
+  const ids = new Set(list.map(e => e.id));
+  _histSel.forEach(id => { if(!ids.has(id)) _histSel.delete(id); });
   if(!list.length){
     $('#hist-out').innerHTML = '<div class="hint" style="padding:16px">'+
       (q ? 'No saved searches match that filter.' :
            'No past searches yet. Run a search on the <b>Analyze</b> tab and it will appear here.')+'</div>';
+    updateHistSelUI();
     return;
   }
+  const allOn = list.every(e => _histSel.has(e.id));
   renderPaged('hist-out', {
-    head: '<tr><th>When</th><th>Type</th><th>Query</th><th class="num">Results</th><th>Source</th><th></th></tr>',
+    head: `<tr><th style="width:28px"><input type="checkbox" onclick="histSelectAll(this.checked)" ${allOn?'checked':''} title="Select all"></th>`
+        + '<th>When</th><th>Type</th><th>Query</th><th class="num">Results</th><th>Source</th><th></th></tr>',
     rows: list,
     rowHtml: (e) => {
       const badge = e.type==='ai' ? '🔎 AI' : '🎯 Tickers';
       const src = e.type==='ai' ? (e.provider==='gpt'?'GPT':e.provider==='claude'?'Claude':'—') : '—';
       const qtxt = (e.query||'').replace(/</g,'&lt;');
       return `<tr class="row">
+        <td><input type="checkbox" onclick="histSelToggle('${e.id}',this.checked)" ${_histSel.has(e.id)?'checked':''}></td>
         <td style="white-space:nowrap;color:var(--mut)">${fmtTs(e.ts)}</td>
         <td style="white-space:nowrap">${badge}</td>
         <td style="max-width:380px;white-space:normal">${qtxt}${e.summary?`<div style="font-size:11.5px;color:var(--mut)">${e.summary.replace(/</g,'&lt;')}</div>`:''}</td>
@@ -689,6 +699,7 @@ async function renderHistory(){
       </tr>`;
     },
   });
+  updateHistSelUI();
 }
 
 async function viewHist(id){
@@ -716,6 +727,27 @@ async function deleteHist(id){
 async function clearHistory(){
   if(!confirm('Clear all saved searches?')) return;
   try { await fetch('/api/history', {method:'DELETE'}); } catch(e){}
+  _histSel.clear();
+  renderHistory();
+}
+function histSelToggle(id, on){ if(on) _histSel.add(id); else _histSel.delete(id); updateHistSelUI(); }
+function histSelectAll(on){
+  (window._histFiltered||[]).forEach(e => { if(on) _histSel.add(e.id); else _histSel.delete(e.id); });
+  renderHistory();
+}
+function updateHistSelUI(){
+  const btn = $('#hist-del-sel'); if(!btn) return;
+  const n = _histSel.size;
+  btn.disabled = n === 0;
+  btn.textContent = n ? `🗑 Delete selected (${n})` : '🗑 Delete selected';
+}
+async function deleteSelectedHistory(){
+  const ids = [..._histSel];
+  if(!ids.length) return;
+  if(!confirm(`Delete ${ids.length} selected search${ids.length===1?'':'es'}?`)) return;
+  try { await fetch('/api/history/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ids})}); }
+  catch(e){ alert('Delete failed: '+e); }
+  _histSel.clear();
   renderHistory();
 }
 
