@@ -92,6 +92,8 @@
   .cop-chips { display:flex; flex-wrap:wrap; gap:6px; padding:0 14px 10px; }
   .cop-chips .chip { background:var(--bg); border:1px solid var(--line); color:var(--txt); border-radius:999px; padding:5px 11px; font-size:12px; cursor:pointer; }
   .cop-chips .chip:hover { border-color:var(--acc); }
+  .cop-tag { display:inline-block; text-transform:uppercase; letter-spacing:.04em; font-size:10px; font-weight:700;
+             color:var(--acc); border:1px solid var(--line); border-radius:6px; padding:1px 6px; margin:0 0 6px; }
   .cop-in { display:flex; gap:8px; padding:10px 14px; border-top:1px solid var(--line); }
   .cop-in input { flex:1; background:var(--bg); color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:9px 12px; font-size:14px; }
   .cop-in button { background:var(--acc); color:#fff; border:none; border-radius:8px; padding:9px 16px; font-size:14px; cursor:pointer; }
@@ -488,8 +490,11 @@ function toggle(i){
   d.style.display = d.style.display==='none' ? '' : 'none';
 }
 
-// ── Artik Stock Copilot (chat) ────────────────────────────────────────────────
-window._cop = { mode:'search', ctx:null, msgs:[], busy:false, provider:null };
+// ── Artik Broker AI (chat) ────────────────────────────────────────────────────
+// ctxType = stock|search (what data is attached); uiMode = auto + 5 analysis modes.
+window._cop = { ctxType:'search', ctx:null, uiMode:'auto', msgs:[], busy:false, provider:null };
+const COP_MODES = [['auto','Auto'],['research','Research'],['analysis','Analysis'],
+                   ['discovery','Discovery'],['comparison','Comparison'],['screening','Screening']];
 function escapeHtml(s){ return (s||'').replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 function mdLite(s){            // tiny markdown: bold, code, bullets, line breaks
   let h = escapeHtml(s);
@@ -515,13 +520,13 @@ function copilotSearchContext(){
 }
 function openCopilotSearch(){
   if(!(window._rows||[]).length) return;
-  window._cop = { mode:'search', ctx:copilotSearchContext(), msgs:[], busy:false, provider:null };
+  window._cop = { ctxType:'search', ctx:copilotSearchContext(), uiMode:'auto', msgs:[], busy:false, provider:null };
   $('#copilot').classList.remove('hidden');
   renderCopilot();
 }
 async function askCopilotStock(ticker){
   $('#copilot').classList.remove('hidden');
-  window._cop = { mode:'stock', ctx:{ticker, loading:true}, msgs:[], busy:false, provider:null };
+  window._cop = { ctxType:'stock', ctx:{ticker, loading:true}, uiMode:'auto', msgs:[], busy:false, provider:null };
   renderCopilot();
   $('#copilot').scrollIntoView({behavior:'smooth', block:'nearest'});
   try {
@@ -531,29 +536,42 @@ async function askCopilotStock(ticker){
   } catch(e){ window._cop.ctx = {ticker}; }
   renderCopilot();
 }
+function copilotSetMode(m){ window._cop.uiMode = m; }
 function renderCopilot(){
   const c = window._cop;
-  const title = c.mode==='stock'
-    ? `💬 Artik Copilot — ${c.ctx.ticker||'stock'}${c.ctx.status?` · ${c.ctx.status} ${c.ctx.score??''}`:''}`
-    : `💬 Artik Copilot — ${(c.ctx&&c.ctx.count)||0} search result${((c.ctx&&c.ctx.count)===1)?'':'s'}`;
-  const sugg = c.mode==='stock'
-    ? ['Why this rating?','What is the biggest risk?','Explain the trade plan',"What's holding the score back?",'Compare to peers']
+  const title = c.ctxType==='stock'
+    ? `🤖 Artik Broker AI — ${c.ctx.ticker||'stock'}${c.ctx.status?` · ${c.ctx.status} ${c.ctx.score??''}`:''}`
+    : `🤖 Artik Broker AI — ${(c.ctx&&c.ctx.count)||0} search result${((c.ctx&&c.ctx.count)===1)?'':'s'}`;
+  const sugg = c.ctxType==='stock'
+    ? ['Why this rating?','What is the biggest risk?','Explain the trade plan','What does this company do?','Compare to peers']
     : ['Why did the top stock appear?','Compare the top 3 BUYs','Which has the strongest quality?','Find cheaper alternatives','Show only BUYs'];
-  let msgs = c.msgs.map(m =>
-    `<div class="cop-msg ${m.role}"><div class="cop-bubble">${m.role==='assistant'?mdLite(m.content):escapeHtml(m.content)}</div></div>`).join('');
+  let msgs = c.msgs.map(m => {
+    if(m.role!=='assistant') return `<div class="cop-msg user"><div class="cop-bubble">${escapeHtml(m.content)}</div></div>`;
+    let inner = '';
+    if(m.mode && m.mode!=='clarification') inner += `<span class="cop-tag">${m.mode}</span>`;
+    inner += mdLite(m.content);
+    if(m.clar && m.clar.options && m.clar.options.length){
+      inner += `<div class="cop-chips" style="padding:8px 0 0">` + m.clar.options.map(o =>
+        `<button class="chip" title="${escapeHtml(o.description||'')}" onclick="copilotAsk(${JSON.stringify(o.label).replace(/"/g,'&quot;')})">${escapeHtml(o.label)}</button>`).join('') + `</div>`;
+    }
+    return `<div class="cop-msg assistant"><div class="cop-bubble">${inner}</div></div>`;
+  }).join('');
   if(c.busy) msgs += `<div class="cop-msg assistant"><div class="cop-bubble"><span style="color:var(--mut)">Thinking…</span></div></div>`;
-  const placeholder = `<div class="hint" style="padding:4px 2px">Ask anything about ${c.mode==='stock'?'this stock':'these results'} — Artik data is the source of truth.</div>`;
+  const placeholder = `<div class="hint" style="padding:4px 2px">Ask anything about ${c.ctxType==='stock'?'this stock':'these results'} — research, analyze, compare, discover or screen. Artik data is the source of truth.</div>`;
   const chips = c.msgs.length ? '' :
     `<div class="cop-chips">${sugg.map(s=>`<button class="chip" onclick="copilotAsk(this.textContent)">${s}</button>`).join('')}</div>`;
+  const modeSel = `<select id="cop-mode" title="Mode" onchange="copilotSetMode(this.value)" style="padding:4px 8px;font-size:12.5px">`
+    + COP_MODES.map(([v,l])=>`<option value="${v}" ${c.uiMode===v?'selected':''}>${l}</option>`).join('') + `</select>`;
   $('#copilot').innerHTML = `
     <div class="cop-head"><b>${title}</b>
+      ${modeSel}
       ${c.provider?`<span class="pf-meta">via ${c.provider==='gpt'?'GPT':'Claude'}</span>`:''}
       <button class="ex-btn" style="margin-left:auto" onclick="$('#copilot').classList.add('hidden')">✕ Close</button>
     </div>
     <div class="cop-body" id="cop-body">${msgs||placeholder}</div>
     ${chips}
     <div class="cop-in">
-      <input id="cop-input" placeholder="Ask the copilot…" ${c.busy?'disabled':''}
+      <input id="cop-input" placeholder="Ask Artik Broker AI…" ${c.busy?'disabled':''}
         onkeydown="if(event.key==='Enter'){event.preventDefault();copilotAsk();}" />
       <button id="cop-send" onclick="copilotAsk()" ${c.busy?'disabled':''}>Send</button>
     </div>`;
@@ -569,11 +587,20 @@ async function copilotAsk(text){
   c.busy = true; renderCopilot();
   try {
     const res = await fetch('/api/copilot', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({mode:c.mode, context:c.ctx, messages:c.msgs})});
+      body: JSON.stringify({mode:c.uiMode, contextType:c.ctxType, context:c.ctx,
+        messages: c.msgs.map(m=>({role:m.role, content:m.content}))})});
     const d = await res.json();
     c.busy = false;
     if(d.error){ c.msgs.push({role:'assistant', content:'⚠️ '+d.error}); }
-    else { c.provider = d.provider; c.msgs.push({role:'assistant', content:d.reply}); }
+    else if(d.needs_clarification){
+      c.provider = d.provider;
+      c.msgs.push({role:'assistant', mode:'clarification',
+        content: d.clarification_question || 'Which would you like?',
+        clar: {options: d.clarification_options||[]}});
+    } else {
+      c.provider = d.provider;
+      c.msgs.push({role:'assistant', content:d.reply, mode:d.mode});
+    }
   } catch(e){
     c.busy = false; c.msgs.push({role:'assistant', content:'⚠️ Request failed: '+e});
   }

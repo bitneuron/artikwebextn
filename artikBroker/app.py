@@ -477,59 +477,98 @@ def api_search(q: str = Query(..., description="natural-language stock search"))
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Artik Stock Copilot — AI analyst chat that sits on top of the engine output.
-# The Artik Engine output (search results / stock detail passed as context) is the
-# single source of truth; the LLM only explains/compares/refines, never invents
-# numbers. Provider cascade: Claude first, GPT fallback (same as /api/search).
+# Artik Broker AI — research / analysis / discovery / comparison / screening copilot.
+# Five modes + Auto (with intent detection + low-confidence clarification). The Artik
+# Engine output (search results / stock detail passed as context) is the source of
+# truth; the LLM never invents Artik numbers. Structured output via a forced tool so
+# every reply carries routing metadata. Provider cascade: Claude first, GPT fallback.
 # ──────────────────────────────────────────────────────────────────────────────
-_COPILOT_SYSTEM = """You are Artik Stock Copilot, an AI equity-research analyst embedded inside Artik Broker.
-You work alongside the Artik Scoring Engine and help users understand, explore, compare, refine and
-discover stocks using Artik Broker's proprietary scoring framework.
+_COPILOT_MODES = ["research", "analysis", "discovery", "comparison", "screening"]
 
-You are NOT a generic financial chatbot and NOT a personal investment advisor — you are a copilot for
-Artik Broker. Your single source of truth is ALWAYS the Artik Engine output provided as context
-(current search results or current stock detail).
+_COPILOT_SYSTEM = """You are Artik Broker AI — the research, analysis, discovery, comparison and screening
+copilot for Artik Broker. You operate on top of the Artik Scoring Engine and help users understand stocks,
+industries, investment themes and Artik ratings. You are an equity-research and stock-discovery platform,
+NOT a generic financial chatbot and NOT a personal investment advisor. You are NOT limited to BUY/HOLD/SELL.
 
-MODES
-- Search Analysis: when given search results, help the user understand/compare/filter/refine results
-  and discover alternatives (e.g. "why did NVDA appear?", "compare the top 3 BUYs", "show only
-  Industrials", "find cheaper alternatives").
-- Stock Detail: when given one stock's detail, explain why it got its score and BUY/HOLD/SELL, its
-  strengths, risks, technicals, fundamentals, signals, trade plan, peer comparison and what-if scenarios.
+FIVE MODES
+- research: what a company does, business model, revenue, customers, products, moat, growth drivers,
+  industry position, risks, then an "Artik View" (ONLY citing Artik figures that appear in the context).
+- analysis: explain the Artik score, BUY/HOLD/SELL, score breakdown, strengths, risks, signals,
+  technicals, fundamentals, multiplier, trade plan — from the provided Artik context.
+- discovery: surface investment ideas around a theme (AI, data centers, semis, dividends, compounders,
+  value, etc.); propose candidate tickers and why each fits. You cannot compute Artik scores yourself —
+  if scores aren't in context, tell the user to run it as a search to get live Artik rankings.
+- comparison: compare companies across business model, growth, quality, valuation, risks, technicals,
+  signals and Artik score; identify a winner by category. Use Artik figures when present.
+- screening: interpret quantitative criteria (RSI, MACD, PE, ROE, ROIC, revenue growth, market cap,
+  beta, sector, Artik score); list matching ideas and why. As with discovery, real scores come from a search.
 
-HOW TO ANSWER
-- Be concise. Prefer bullet points, real numbers, and category-score references from the context.
-- Cite the Artik figures (score, category scores out of their max, multiplier, archetype, RSI, percentiles).
-- For what-if questions, clearly label the analysis as hypothetical and estimate the directional impact;
-  never change the actual Artik scores.
-- End most answers with 2-3 short suggested follow-up questions when helpful.
+MODE SELECTION
+- If the user (or UI) explicitly selected a mode, ALWAYS use it; do not ask for clarification.
+- If mode is "auto": detect intent ("what does X do"->research; "why is X a BUY"->analysis;
+  "find ..."->discovery; "compare ..."->comparison; "RSI below 30 / PE under 25"->screening).
+- If mode is "auto" and your confidence is below 0.70, DO NOT guess: set needs_clarification=true,
+  ask a short question, and give 2-4 clarification_options (label + one-line description).
 
-SOURCE PRIORITY: current Artik Engine output > current search results/signals/technicals/fundamentals.
-Use general financial knowledge ONLY to explain concepts, never to override Artik data.
+HOW TO ANSWER: concise; clear sections, bullets, small tables, real numbers. Cite Artik figures
+(score, category scores out of max, multiplier, archetype, RSI, percentiles) when present. Label what-if
+analysis as hypothetical and never change actual scores. End with 2-3 suggested follow-ups when useful.
 
-NEVER invent prices, scores, indicators, fundamentals, or signals. Never hallucinate, never guarantee
-future performance, never give personalized investment advice, never recommend specific trades.
+SOURCE PRIORITY: current Artik Engine output > general knowledge. Use general knowledge ONLY to explain
+concepts or company facts in research mode — never to fabricate Artik scores/metrics. If Artik data needed
+to answer is not in the context, say: "I do not see that information in the current Artik Engine output."
 
-MISSING DATA: if something is not in the provided context, say
-"I do not see that information in the current Artik Engine output." Do not guess."""
+NEVER invent prices, scores, technicals, fundamentals or signals; never hallucinate; never guarantee
+returns; never give personalized advice or tell users what they must buy/sell.
+
+ALWAYS reply by calling the artik_response tool with the answer plus routing metadata."""
+
+_COPILOT_TOOL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "mode": {"type": "string", "enum": _COPILOT_MODES + ["clarification"],
+                 "description": "The mode actually used (or 'clarification' when asking)."},
+        "confidence": {"type": "number", "description": "0..1 confidence in the chosen mode."},
+        "needs_clarification": {"type": "boolean"},
+        "clarification_question": {"type": ["string", "null"]},
+        "clarification_options": {
+            "type": "array",
+            "items": {"type": "object",
+                      "properties": {"label": {"type": "string"}, "description": {"type": "string"}},
+                      "required": ["label"]},
+        },
+        "answer": {"type": "string", "description": "Markdown answer. Empty string when needs_clarification is true."},
+    },
+    "required": ["mode", "confidence", "needs_clarification", "answer"],
+}
+_COPILOT_TOOL_NAME = "artik_response"
+_COPILOT_TOOL_DESC = ("Return the Artik Broker AI response together with routing metadata "
+                      "(mode, confidence, and an optional clarification request).")
 
 
-def _copilot_context_block(mode: str, context: dict) -> str:
-    label = "CURRENT STOCK DETAIL" if mode == "stock" else "CURRENT SEARCH RESULTS"
+def _copilot_context_block(context_type: str, context: dict) -> str:
+    label = {"stock": "CURRENT STOCK DETAIL", "search": "CURRENT SEARCH RESULTS"}.get(
+        context_type, "CONTEXT")
+    if not context:
+        return "No stock/search context is attached — answer generally (research/discovery/screening), and never invent Artik scores."
     try:
         blob = json.dumps(context, default=str)[:14000]
     except Exception:  # noqa: BLE001
         blob = "{}"
-    return (f"{label} — Artik Engine output (your single source of truth; do not invent anything "
-            f"beyond this):\n```json\n{blob}\n```")
+    return (f"{label} — Artik Engine output (source of truth; do not invent anything beyond it):\n"
+            f"```json\n{blob}\n```")
 
 
 def _copilot_anthropic(messages, sys_text, key):
     import anthropic
     client = anthropic.Anthropic(api_key=key)
-    msg = client.messages.create(model="claude-opus-4-8", max_tokens=1200,
-                                 system=sys_text, messages=messages)
-    return "".join(getattr(b, "text", "") for b in msg.content if getattr(b, "type", "") == "text").strip()
+    msg = client.messages.create(
+        model="claude-opus-4-8", max_tokens=1500, system=sys_text,
+        tools=[{"name": _COPILOT_TOOL_NAME, "description": _COPILOT_TOOL_DESC,
+                "input_schema": _COPILOT_TOOL_SCHEMA}],
+        tool_choice={"type": "tool", "name": _COPILOT_TOOL_NAME},
+        messages=messages)
+    return next((b.input for b in msg.content if getattr(b, "type", "") == "tool_use"), None)
 
 
 def _copilot_openai(messages, sys_text, key):
@@ -538,8 +577,13 @@ def _copilot_openai(messages, sys_text, key):
     resp = client.chat.completions.create(
         model="gpt-5-mini",
         messages=[{"role": "system", "content": sys_text}] + messages,
-        max_completion_tokens=1200, reasoning_effort="minimal")
-    return (resp.choices[0].message.content or "").strip()
+        tools=[{"type": "function", "function": {
+            "name": _COPILOT_TOOL_NAME, "description": _COPILOT_TOOL_DESC,
+            "parameters": _COPILOT_TOOL_SCHEMA}}],
+        tool_choice={"type": "function", "function": {"name": _COPILOT_TOOL_NAME}},
+        max_completion_tokens=1500, reasoning_effort="minimal")
+    calls = resp.choices[0].message.tool_calls
+    return json.loads(calls[0].function.arguments) if calls else None
 
 
 @app.post("/api/copilot")
@@ -551,33 +595,53 @@ async def api_copilot(request: Request):
     raw = body.get("messages") or []
     if not raw:
         return JSONResponse({"error": "no messages"}, status_code=400)
-    # keep the last 12 turns; coerce to clean user/assistant text
     conv = [{"role": ("assistant" if m.get("role") == "assistant" else "user"),
              "content": str(m.get("content", ""))[:4000]} for m in raw][-12:]
     if conv[0]["role"] != "user":              # Anthropic requires a leading user turn
         conv = conv[1:]
     if not conv:
         return JSONResponse({"error": "no user message"}, status_code=400)
-    mode = "stock" if body.get("mode") == "stock" else "search"
-    sys_text = _COPILOT_SYSTEM + "\n\n" + _copilot_context_block(mode, body.get("context") or {})
+
+    sel_mode = (body.get("mode") or "auto").strip().lower()
+    if sel_mode not in _COPILOT_MODES + ["auto"]:
+        sel_mode = "auto"
+    ctx_type = body.get("contextType") or ("stock" if body.get("mode") == "stock" else "")
+    if ctx_type not in ("stock", "search"):
+        ctx_type = "stock" if (body.get("context") or {}).get("ticker") else ("search" if body.get("context") else "")
+
+    mode_line = (f"The user explicitly selected mode = {sel_mode.upper()}. Use it; do not ask for clarification."
+                 if sel_mode != "auto" else
+                 "Mode = AUTO. Detect the best mode; if confidence < 0.70 ask for clarification.")
+    sys_text = (_COPILOT_SYSTEM + "\n\n" + mode_line + "\n\n"
+                + _copilot_context_block(ctx_type, body.get("context") or {}))
 
     akey, okey = _anthropic_key(), _openai_key()
     if not akey and not okey:
         return JSONResponse({"error": "Copilot unavailable: no ANTHROPIC_API_KEY or OPENAI_API_KEY configured."}, status_code=503)
-    reply, provider, last_err = None, None, None
+    out, provider, last_err = None, None, None
     if akey:
         try:
-            reply, provider = _copilot_anthropic(conv, sys_text, akey), "claude"
+            out, provider = _copilot_anthropic(conv, sys_text, akey), "claude"
         except Exception as e:  # noqa: BLE001
             last_err = _err_detail(e)
-    if reply is None and okey:
+    if out is None and okey:
         try:
-            reply, provider = _copilot_openai(conv, sys_text, okey), "gpt"
+            out, provider = _copilot_openai(conv, sys_text, okey), "gpt"
         except Exception as e:  # noqa: BLE001
             last_err = _err_detail(e)
-    if not reply:
+    if not out:
         return JSONResponse({"error": f"Copilot failed: {last_err or 'no provider available'}"}, status_code=502)
-    return {"provider": provider, "reply": reply}
+
+    needs = bool(out.get("needs_clarification"))
+    return {
+        "provider": provider,
+        "mode": out.get("mode") or (sel_mode if sel_mode != "auto" else "analysis"),
+        "confidence": out.get("confidence"),
+        "needs_clarification": needs,
+        "clarification_question": out.get("clarification_question") if needs else None,
+        "clarification_options": (out.get("clarification_options") or []) if needs else [],
+        "reply": out.get("answer") or "",
+    }
 
 
 # ──────────────────────────────────────────────────────────────────────────────
