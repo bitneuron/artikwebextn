@@ -44,7 +44,28 @@ if ! aws iam get-role --role-name "${ROLE}" >/dev/null 2>&1; then
 fi
 ROLE_ARN="arn:aws:iam::${ACCOUNT}:role/${ROLE}"
 
-# ── 5. Create the App Runner service, or push triggers auto-deploy ───────────
+# ── 5. Runtime env vars (AI Search key + password gate) ──────────────────────
+# ANTHROPIC_API_KEY: from your shell or artikAgents/.env. APP_PASSWORD: from your shell.
+KEY="${ANTHROPIC_API_KEY:-$(grep -h '^ANTHROPIC_API_KEY=' artikAgents/agents/.env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'"'")}"
+ENV_PAIRS=""
+[ -n "${KEY}" ]                && ENV_PAIRS="\"ANTHROPIC_API_KEY\":\"${KEY}\""
+[ -n "${APP_PASSWORD:-}" ]     && ENV_PAIRS="${ENV_PAIRS:+${ENV_PAIRS},}\"APP_PASSWORD\":\"${APP_PASSWORD}\""
+[ -n "${APP_USER:-}" ]         && ENV_PAIRS="${ENV_PAIRS:+${ENV_PAIRS},}\"APP_USER\":\"${APP_USER}\""
+RTE=""; [ -n "${ENV_PAIRS}" ] && RTE=",\"RuntimeEnvironmentVariables\":{${ENV_PAIRS}}"
+[ -z "${APP_PASSWORD:-}" ] && echo "⚠ APP_PASSWORD not set — deploying WITHOUT the password gate. Re-run with APP_PASSWORD=... to protect it."
+[ -z "${KEY}" ] && echo "⚠ No ANTHROPIC_API_KEY — AI Search will be disabled on the deploy."
+
+SRC_CONFIG="{
+  \"AuthenticationConfiguration\": {\"AccessRoleArn\": \"${ROLE_ARN}\"},
+  \"AutoDeploymentsEnabled\": true,
+  \"ImageRepository\": {
+    \"ImageIdentifier\": \"${IMAGE}\",
+    \"ImageRepositoryType\": \"ECR\",
+    \"ImageConfiguration\": {\"Port\": \"8080\"${RTE}}
+  }
+}"
+
+# ── 6. Create the service, or update it (applies new image + env vars) ────────
 SERVICE_ARN="$(aws apprunner list-services --region "${REGION}" \
   --query "ServiceSummaryList[?ServiceName=='${SERVICE}'].ServiceArn" --output text)"
 
@@ -52,25 +73,18 @@ if [ -z "${SERVICE_ARN}" ]; then
   echo "▶ Creating App Runner service '${SERVICE}'..."
   aws apprunner create-service --region "${REGION}" \
     --service-name "${SERVICE}" \
-    --source-configuration "{
-      \"AuthenticationConfiguration\": {\"AccessRoleArn\": \"${ROLE_ARN}\"},
-      \"AutoDeploymentsEnabled\": true,
-      \"ImageRepository\": {
-        \"ImageIdentifier\": \"${IMAGE}\",
-        \"ImageRepositoryType\": \"ECR\",
-        \"ImageConfiguration\": {\"Port\": \"8080\"}
-      }
-    }" \
+    --source-configuration "${SRC_CONFIG}" \
     --instance-configuration "{\"Cpu\": \"${CPU}\", \"Memory\": \"${MEMORY}\"}" \
     --health-check-configuration '{"Protocol":"TCP","Interval":10,"Timeout":5,"HealthyThreshold":1,"UnhealthyThreshold":5}' \
     >/dev/null
   echo "▶ Service creating — this takes a few minutes."
 else
-  echo "▶ Service exists; new image push auto-deploys. Forcing deployment..."
-  aws apprunner start-deployment --region "${REGION}" --service-arn "${SERVICE_ARN}" >/dev/null
+  echo "▶ Service exists; updating image + env vars (triggers a deployment)..."
+  aws apprunner update-service --region "${REGION}" --service-arn "${SERVICE_ARN}" \
+    --source-configuration "${SRC_CONFIG}" >/dev/null
 fi
 
-# ── 6. Show the URL ──────────────────────────────────────────────────────────
+# ── 7. Show the URL ──────────────────────────────────────────────────────────
 echo "▶ Waiting for service URL..."
 for _ in $(seq 1 30); do
   URL="$(aws apprunner list-services --region "${REGION}" \
