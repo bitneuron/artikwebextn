@@ -200,19 +200,51 @@ function statusCell(r){
                   : `<span style="color:var(--mut)">${r.error?'—':''}</span>`;
 }
 
+// ── Shared sortable-table helpers (Analyze · S&P 500 · DOW) ──────────────────
+const NUM_COLS = {price:1, score:1, rsi:1};
+function _cell(r,col){ return col==='archetype' ? ((r.breakdown&&r.breakdown.archetype)||'') : r[col]; }
+function sortRows(rows, col, dir){
+  return [...rows].sort((a,b)=>{
+    if(a.error && !b.error) return 1;          // error rows always last
+    if(b.error && !a.error) return -1;
+    let av=_cell(a,col), bv=_cell(b,col);
+    if(NUM_COLS[col]){ av=(av==null?-Infinity:av); bv=(bv==null?-Infinity:bv); return (av-bv)*dir; }
+    av=(av||'').toString().toUpperCase(); bv=(bv||'').toString().toUpperCase();
+    return av<bv ? -dir : av>bv ? dir : 0;
+  });
+}
+function sortHead(cols, st, onclick){
+  return cols.map(c=>{
+    if(c.sortable===false) return `<th class="${c.num?'num':''}">${c.label}</th>`;
+    const arr = st.col===c.key ? `<span class="arr">${st.dir>0?'▲':'▼'}</span>` : '';
+    return `<th class="${c.num?'num ':''}sortable" onclick="${onclick(c.key)}">${c.label}${arr}</th>`;
+  }).join('') + '<th></th>';
+}
+const ANALYZE_COLS = [
+  {key:'_n',label:'#',sortable:false},{key:'ticker',label:'Ticker'},{key:'sector',label:'Sector'},
+  {key:'price',label:'Price',num:true},{key:'score',label:'Score',num:true},
+  {key:'rsi',label:'RSI',num:true},{key:'status',label:'Status'},
+];
+const INDEX_COLS = [
+  {key:'_n',label:'#',sortable:false},{key:'ticker',label:'Ticker'},{key:'archetype',label:'Archetype'},
+  {key:'sector',label:'Sector'},{key:'price',label:'Price',num:true},{key:'score',label:'Score',num:true},
+  {key:'rsi',label:'RSI',num:true},{key:'status',label:'Status'},
+];
+
 function render(rows, opts){
   opts = opts || {};
+  window._rows = rows; window._mode = 'symbol'; window._lastOpts = opts;
+  if(!window._mainSort) window._mainSort = {col:'score', dir:-1};
+  const st = window._mainSort;
+  const view = sortRows(rows, st.col, st.dir);
   let html = '';
   if(opts.summary){
     const via = opts.provider==='gpt' ? ' · via GPT (fallback)' : opts.provider==='claude' ? ' · via Claude' : '';
     html += `<div style="margin:0 0 12px;padding:10px 14px;border:1px solid var(--line);border-radius:8px;background:rgba(56,139,253,.08)">`
          + `🔎 <b>AI Search:</b> ${opts.summary} <span style="color:var(--mut)">— ${rows.length} match${rows.length===1?'':'es'}, ranked by Artik Score${via}</span></div>`;
   }
-  html += '<table><thead><tr>'
-    + '<th>#</th><th>Ticker</th><th>Sector</th>'
-    + '<th class="num">Price</th><th class="num">Score</th><th class="num">RSI</th>'
-    + '<th>Status</th><th></th></tr></thead><tbody>';
-  rows.forEach((r,i) => {
+  html += `<table><thead><tr>${sortHead(ANALYZE_COLS, st, k=>`sortMain('${k}')`)}</tr></thead><tbody>`;
+  view.forEach((r,i) => {
     if(r.error){
       html += `<tr class="row"><td>${i+1}</td><td class="tick">${r.ticker}</td>`
            + `<td colspan="6" class="err">${r.error}</td></tr>`;
@@ -233,8 +265,12 @@ function render(rows, opts){
   });
   html += '</tbody></table>';
   $('#out').innerHTML = html;
-  window._rows = rows; window._mode = 'symbol';
   showDownload();
+}
+function sortMain(col){
+  const st = window._mainSort || (window._mainSort={col:'score',dir:-1});
+  if(st.col===col) st.dir*=-1; else { st.col=col; st.dir = NUM_COLS[col]?-1:1; }
+  render(window._rows, window._lastOpts);
 }
 
 function fmt(n){ return n==null ? '—' : '$'+Math.round(n).toLocaleString(); }
@@ -414,11 +450,23 @@ async function loadIndex(name, refresh){
   }
 }
 
+window._idx = window._idx || {};
 function renderIndex(rows, outId, pfx){
-  let html = '<table><thead><tr><th>#</th><th>Ticker</th><th>Archetype</th><th>Sector</th>'
-    + '<th class="num">Price</th><th class="num">Score</th><th class="num">RSI</th>'
-    + '<th>Status</th><th></th></tr></thead><tbody>';
-  rows.forEach((r,i) => {
+  window._idx[pfx] = window._idx[pfx] || {sort:{col:'score', dir:-1}};
+  window._idx[pfx].rows = rows;
+  window._idx[pfx].outId = outId;
+  drawIndex(pfx);
+}
+function sortIdx(pfx, col){
+  const st = window._idx[pfx].sort;
+  if(st.col===col) st.dir*=-1; else { st.col=col; st.dir = NUM_COLS[col]?-1:1; }
+  drawIndex(pfx);
+}
+function drawIndex(pfx){
+  const o = window._idx[pfx], st = o.sort;
+  const view = sortRows(o.rows, st.col, st.dir);
+  let html = `<table><thead><tr>${sortHead(INDEX_COLS, st, k=>`sortIdx('${pfx}','${k}')`)}</tr></thead><tbody>`;
+  view.forEach((r,i) => {
     if(r.error){
       html += `<tr class="row"><td>${i+1}</td><td class="tick">${r.ticker}</td><td colspan="7" class="err">${r.error}</td></tr>`;
       return;
@@ -436,7 +484,7 @@ function renderIndex(rows, outId, pfx){
     </tr>
     <tr class="detail" id="${pfx}-d${i}" style="display:none"><td colspan="9">${detail(r)}</td></tr>`;
   });
-  $('#'+outId).innerHTML = html + '</tbody></table>';
+  $('#'+o.outId).innerHTML = html + '</tbody></table>';
 }
 
 function toggleGen(pfx, i){
