@@ -41,7 +41,9 @@ username (`artik`) and your `APP_PASSWORD`.
 > AI Search requires credits on the Anthropic account tied to the key.
 
 ## Redeploy after code changes
-Re-run the same command — App Runner auto-deploys the new `:latest` image.
+Now that secrets live in Secrets Manager, ship code changes with `./artikBroker/redeploy.sh`
+(builds + pushes an immutable tag and swaps ONLY the image, preserving the Secrets
+Manager refs + IAM roles). `deploy.sh` is for the initial plaintext-env setup only.
 
 ## Test the image locally first (optional but recommended)
 ```bash
