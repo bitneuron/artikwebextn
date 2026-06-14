@@ -5,7 +5,7 @@ engine over live Yahoo Finance data, with daily-cached peer and index data.
 
 - **Frontend:** `static/index.html` (vanilla JS SPA, 4 tabs)
 - **Backend:** `app.py` (FastAPI, port **8100**) on the `artikAPIs` venv
-- **Engine (reused):** `artikagents/agents/stock_broker_agent/scoring.py` + `peer_universe.py` + `peer_metrics.py`
+- **Engine (reused):** the **`artik-engine`** package at `artikagents/agents/stock_broker_agent/artik_engine/` (`scoring.py` + `peer_universe.py` + `peer_metrics.py`), installed editable & imported as `from artik_engine import scoring`
 - **Only external service:** Yahoo Finance (via `yfinance`) — no API key
 
 ---
@@ -34,7 +34,7 @@ flowchart TD
         PP["parse_portfolio_csv()"]:::api
     end
 
-    subgraph Engine["🧮 scoring.py (stock_broker_agent) — deterministic, no LLM"]
+    subgraph Engine["🧮 artik_engine package (scoring.py) — deterministic, no LLM"]
         STL["score_ticker_live(ticker)"]:::eng
         FLI["fetch_live_inputs()"]:::eng
         TM["compute_trend_metrics()"]:::eng
@@ -106,9 +106,9 @@ flowchart TD
 ### Internal modules (in-process imports)
 | From | Imports / calls | Purpose |
 |---|---|---|
-| `app.py` | `scoring` (via `sys.path` → `stock_broker_agent/`) | the scoring engine |
+| `app.py` | `from artik_engine import scoring` (installed package) | the scoring engine |
 | `app.py` | `yfinance` (direct) | price fallback in `analyze_one` / `_live_price` |
-| `scoring.py` | `peer_universe`, `peer_metrics`, `numpy`, `pandas`, `yfinance` | engine + peer layer |
+| `artik_engine.scoring` | `peer_universe`, `peer_metrics` (relative), `numpy`, `pandas`, `yfinance` | engine + peer layer |
 | `peer_universe.py` | `requests`, `pandas.read_html` (build only) | fetch S&P 500 list |
 | `peer_metrics.py` | `yfinance` | per-peer metrics |
 
@@ -122,8 +122,8 @@ Frontend: **none** — `static/index.html` is pure vanilla JS (no CDN, no framew
 |---|---|---|
 | `artik_broker/static/index.html` | read (served) | `GET /` + StaticFiles |
 | `artik_broker/cache/index_<name>_<date>.json` | read+write | `/api/index/{name}` (daily) |
-| `…/stock_broker_agent/data/sp500_constituents.csv` | read (build if missing) | `peer_universe` |
-| `…/stock_broker_agent/data/peer_metrics_<date>.json` | read+write | `peer_metrics` (daily, per sector) |
+| `…/stock_broker_agent/artik_engine/data/sp500_constituents.csv` | read (build if missing) | `peer_universe` |
+| `…/stock_broker_agent/artik_engine/data/peer_metrics_<date>.json` | read+write | `peer_metrics` (daily, per sector) |
 | `…/knowledge_bases/Stock_Portfolio/<date>/combined_portfolio_*.csv` | read | `/api/portfolio*` |
 | uploaded broker CSVs (e*Trade/Schwab) | read (in-memory) | `/api/analyze_portfolio` |
 

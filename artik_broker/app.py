@@ -25,14 +25,9 @@ from typing import List
 
 warnings.filterwarnings("ignore")
 
-# Make the scoring engine importable.
-SCORING_DIR = (
-    Path(__file__).resolve().parent.parent
-    / "artikagents" / "agents" / "stock_broker_agent"
-)
-sys.path.insert(0, str(SCORING_DIR))
-
-import scoring  # noqa: E402
+# The scoring engine is the installed `artik-engine` package
+# (artikagents/agents/stock_broker_agent — `pip install -e` it into this venv).
+from artik_engine import scoring  # noqa: E402
 import yfinance as yf  # noqa: E402
 from fastapi import FastAPI, Query, UploadFile, File  # noqa: E402
 from fastapi.responses import FileResponse, JSONResponse  # noqa: E402

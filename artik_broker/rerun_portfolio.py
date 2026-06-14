@@ -6,8 +6,7 @@ import warnings
 from pathlib import Path
 
 warnings.filterwarnings("ignore")
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "artikagents" / "agents" / "stock_broker_agent"))
-import scoring  # noqa: E402
+from artik_engine import scoring  # noqa: E402  (installed artik-engine package)
 
 DESTS = [
     Path(__file__).resolve().parent.parent
