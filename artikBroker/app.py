@@ -16,11 +16,15 @@ from pathlib import Path
 import csv
 import io
 import json
+import os
 import re
 import sys
+import base64
+import secrets
 import warnings
 import datetime as dt
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from typing import List
 
 warnings.filterwarnings("ignore")
@@ -29,14 +33,52 @@ warnings.filterwarnings("ignore")
 # (artikAgents/agents/stock_broker_agent — `pip install -e` it into this venv).
 from artik_engine import scoring  # noqa: E402
 import yfinance as yf  # noqa: E402
-from fastapi import FastAPI, Query, UploadFile, File  # noqa: E402
-from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
+from fastapi import FastAPI, Query, UploadFile, File, Request  # noqa: E402
+from fastapi.responses import FileResponse, JSONResponse, Response  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 
 app = FastAPI(title="artikBroker")
 
 HERE = Path(__file__).resolve().parent
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
+
+# ── Auth gate ────────────────────────────────────────────────────────────────
+# When APP_PASSWORD is set (e.g. on AWS) the whole app requires HTTP Basic auth.
+# Unset locally → open for dev. Protects the LLM-backed /api/search from abuse.
+APP_USER = os.environ.get("APP_USER", "artik")
+APP_PASSWORD = os.environ.get("APP_PASSWORD")
+
+
+@app.middleware("http")
+async def _password_gate(request: Request, call_next):
+    if APP_PASSWORD:
+        auth = request.headers.get("authorization", "")
+        ok = False
+        if auth.startswith("Basic "):
+            try:
+                user, _, pw = base64.b64decode(auth[6:]).decode("utf-8").partition(":")
+                ok = secrets.compare_digest(user, APP_USER) and secrets.compare_digest(pw, APP_PASSWORD)
+            except Exception:  # noqa: BLE001
+                ok = False
+        if not ok:
+            return Response(
+                "Authentication required", status_code=401,
+                headers={"WWW-Authenticate": 'Basic realm="artikBroker"'},
+            )
+    return await call_next(request)
+
+
+def _anthropic_key() -> str | None:
+    """ANTHROPIC_API_KEY from env (AWS) or the local artikAgents/.env (dev)."""
+    k = os.environ.get("ANTHROPIC_API_KEY")
+    if k:
+        return k
+    envf = HERE.parent / "artikAgents" / "agents" / ".env"
+    if envf.exists():
+        for line in envf.read_text().splitlines():
+            if line.startswith("ANTHROPIC_API_KEY="):
+                return line.split("=", 1)[1].strip().strip('"').strip("'")
+    return None
 
 # Saved portfolio snapshots live under Stock_Portfolio/<dated-folder>/combined_portfolio_*.csv
 PORTFOLIO_DIR = (
@@ -156,6 +198,151 @@ def api_analyze(symbols: str = Query(..., description="comma-separated tickers")
     # rank scorable rows by score desc, keep errors at the end
     results.sort(key=lambda r: (r.get("score") is None, -(r.get("score") or 0)))
     return {"count": len(results), "results": results}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# AI Search — natural-language stock discovery.
+# Claude parses intent into criteria + candidate tickers; the deterministic engine
+# produces ALL scores/data (no fabricated numbers). Then filter + rank by Artik Score.
+# ──────────────────────────────────────────────────────────────────────────────
+
+_SEARCH_TOOL = {
+    "name": "return_search_plan",
+    "description": "Return the parsed stock-search plan: a one-line summary, optional "
+                   "hard filters to apply against live data, and 12-25 candidate tickers "
+                   "most relevant to the query (US-listed operating companies; no ETFs/funds).",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "summary": {"type": "string", "description": "One sentence describing the interpreted search intent."},
+            "filters": {
+                "type": "object",
+                "description": "Only include keys the query actually implies.",
+                "properties": {
+                    "sector": {"type": "string", "description": "yfinance sector name to require, e.g. 'Industrials', 'Technology'."},
+                    "rsi_max": {"type": "number"},
+                    "rsi_min": {"type": "number"},
+                    "score_min": {"type": "number"},
+                    "score_max": {"type": "number"},
+                    "status": {"type": "string", "enum": ["BUY", "HOLD", "SELL"]},
+                    "macd_bullish": {"type": "boolean", "description": "true if the query wants a bullish MACD state."},
+                },
+            },
+            "candidates": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "ticker": {"type": "string"},
+                        "reason": {"type": "string", "description": "Short reason this name matches the SEARCH INTENT (theme/criteria) — not a score."},
+                    },
+                    "required": ["ticker", "reason"],
+                },
+            },
+        },
+        "required": ["summary", "candidates"],
+    },
+}
+
+_SEARCH_SYSTEM = (
+    "You are Artik Broker AI Search, a stock discovery engine. Convert the user's "
+    "natural-language query into (1) a one-line intent summary, (2) optional hard filters, "
+    "and (3) 12-25 candidate US-listed operating-company tickers most relevant to the intent. "
+    "Use correct, real ticker symbols. Prefer liquid, well-known names with strong exposure to "
+    "the theme/criteria. Do NOT invent tickers, do NOT include ETFs or funds, and do NOT assign "
+    "scores or prices — the scoring engine computes those. Always call return_search_plan."
+)
+
+
+def _score_many(tickers: List[str]) -> List[dict]:
+    """Score tickers concurrently via the engine (network-bound -> threads help)."""
+    seen, ordered = set(), []
+    for t in tickers:
+        u = (t or "").strip().upper()
+        if u and u not in seen:
+            seen.add(u)
+            ordered.append(u)
+    ordered = ordered[:25]
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        return list(ex.map(analyze_one, ordered))
+
+
+def _passes(r: dict, f: dict) -> bool:
+    if r.get("error") or r.get("score") is None:
+        return False
+    if "sector" in f and f["sector"]:
+        if (f["sector"] or "").lower() not in (r.get("sector") or "").lower():
+            return False
+    sc = r.get("score")
+    if "score_min" in f and sc < f["score_min"]:
+        return False
+    if "score_max" in f and sc > f["score_max"]:
+        return False
+    rsi = r.get("rsi")
+    if "rsi_max" in f and (rsi is None or rsi > f["rsi_max"]):
+        return False
+    if "rsi_min" in f and (rsi is None or rsi < f["rsi_min"]):
+        return False
+    if "status" in f and f["status"] and r.get("status") != f["status"]:
+        return False
+    if f.get("macd_bullish"):
+        if "bull" not in str((r.get("technicals") or {}).get("macd_state") or "").lower():
+            return False
+    return True
+
+
+@app.get("/api/search")
+def api_search(q: str = Query(..., description="natural-language stock search")):
+    query = (q or "").strip()
+    if not query:
+        return JSONResponse({"error": "empty query"}, status_code=400)
+    key = _anthropic_key()
+    if not key:
+        return JSONResponse({"error": "AI search unavailable: no ANTHROPIC_API_KEY configured."}, status_code=503)
+
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=key)
+        msg = client.messages.create(
+            model="claude-opus-4-8",
+            max_tokens=2000,
+            system=_SEARCH_SYSTEM,
+            tools=[_SEARCH_TOOL],
+            tool_choice={"type": "tool", "name": "return_search_plan"},
+            messages=[{"role": "user", "content": query}],
+        )
+        plan = next((b.input for b in msg.content if b.type == "tool_use"), None)
+    except Exception as e:  # noqa: BLE001
+        detail = getattr(getattr(e, "body", None), "get", lambda *_: None)("error") if hasattr(e, "body") else None
+        msg_txt = (detail or {}).get("message") if isinstance(detail, dict) else None
+        return JSONResponse(
+            {"error": f"AI search failed: {msg_txt or type(e).__name__}"},
+            status_code=502,
+        )
+
+    if not plan or not plan.get("candidates"):
+        return JSONResponse({"error": "could not interpret the query into candidates."}, status_code=422)
+
+    filters = plan.get("filters") or {}
+    reasons = {(c.get("ticker") or "").upper(): c.get("reason", "") for c in plan["candidates"]}
+    rows = [r for r in _score_many(list(reasons.keys())) if r]
+
+    # Apply hard filters against live engine values; keep scorable rows only.
+    matched = [r for r in rows if _passes(r, filters)]
+    # If filters eliminate everything, fall back to all scorable candidates (still ranked).
+    if not matched:
+        matched = [r for r in rows if not r.get("error") and r.get("score") is not None]
+    for r in matched:
+        r["why"] = reasons.get(r["ticker"], "")
+    matched.sort(key=lambda r: -(r.get("score") or 0))
+
+    return {
+        "query": query,
+        "summary": plan.get("summary", ""),
+        "filters": filters,
+        "count": len(matched),
+        "results": matched[:25],
+    }
 
 
 # ──────────────────────────────────────────────────────────────────────────────

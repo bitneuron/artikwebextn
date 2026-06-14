@@ -98,13 +98,16 @@
   <!-- ANALYZE VIEW -->
   <section id="view-analyze">
     <div class="bar">
-      <textarea id="syms" placeholder="Enter symbols, comma-separated   e.g.  NVDA, GOOGL, TSM, TSLA"></textarea>
-      <button id="go" onclick="run()">Analyze</button>
+      <textarea id="syms" placeholder="Search stocks in plain English  —  or enter tickers.   e.g.  'oversold semiconductors with RSI below 30'  ·  'Buffett-style compounders'  ·  NVDA, GOOGL, TSM"></textarea>
+      <button id="go" onclick="run()">Search</button>
     </div>
     <div class="hint">
       Try:
-      <a onclick="fill('NVDA, GOOGL, TSM, MU, TSLA')">NVDA, GOOGL, TSM, MU, TSLA</a> ·
-      <a onclick="fill('AAPL, META, AMZN, MSFT, AVGO')">AAPL, META, AMZN, MSFT, AVGO</a>
+      <a onclick="fill('AI infrastructure stocks')">AI infrastructure stocks</a> ·
+      <a onclick="fill('industrial stocks with RSI below 30')">oversold industrials (RSI&lt;30)</a> ·
+      <a onclick="fill('Buffett-style compounders with score above 80')">Buffett compounders, score&gt;80</a> ·
+      <a onclick="fill('stocks similar to Costco')">similar to Costco</a> ·
+      <a onclick="fill('NVDA, GOOGL, TSM, MU, TSLA')">NVDA, GOOGL, TSM…</a>
     </div>
 
     <div class="upload">
@@ -164,17 +167,30 @@ function fill(v){ $('#syms').value = v; run(); }
 async function run(){
   const raw = $('#syms').value.trim();
   if(!raw){ return; }
-  const btn = $('#go'); btn.disabled = true; btn.textContent = 'Analyzing…';
-  $('#out').innerHTML = '<div class="spin">Running live analysis…</div>';
+  // Pure ticker list (commas/spaces, each 1-6 letters) -> fast engine; else -> AI search.
+  const tokens = raw.split(/[\s,]+/).filter(Boolean);
+  const isTickers = tokens.length>0 && tokens.every(t => /^[A-Za-z][A-Za-z.\-]{0,5}$/.test(t));
+  const btn = $('#go'); btn.disabled = true;
   try {
-    const res = await fetch('/api/analyze?symbols=' + encodeURIComponent(raw));
-    const data = await res.json();
-    if(data.error){ $('#out').innerHTML = '<div class="err">'+data.error+'</div>'; return; }
-    render(data.results);
+    if(isTickers){
+      btn.textContent = 'Analyzing…';
+      $('#out').innerHTML = '<div class="spin">Running live analysis…</div>';
+      const res = await fetch('/api/analyze?symbols=' + encodeURIComponent(tokens.join(',')));
+      const data = await res.json();
+      if(data.error){ $('#out').innerHTML = '<div class="err">'+data.error+'</div>'; return; }
+      render(data.results);
+    } else {
+      btn.textContent = 'Searching…';
+      $('#out').innerHTML = '<div class="spin">🔎 AI Search — interpreting your query and scoring candidates live… (this can take ~15s)</div>';
+      const res = await fetch('/api/search?q=' + encodeURIComponent(raw));
+      const data = await res.json();
+      if(data.error){ $('#out').innerHTML = '<div class="err">'+data.error+'</div>'; return; }
+      render(data.results, {summary:data.summary});
+    }
   } catch(e){
     $('#out').innerHTML = '<div class="err">Request failed: '+e+'</div>';
   } finally {
-    btn.disabled = false; btn.textContent = 'Analyze';
+    btn.disabled = false; btn.textContent = 'Search';
   }
 }
 
@@ -183,8 +199,14 @@ function statusCell(r){
                   : `<span style="color:var(--mut)">${r.error?'—':''}</span>`;
 }
 
-function render(rows){
-  let html = '<table><thead><tr>'
+function render(rows, opts){
+  opts = opts || {};
+  let html = '';
+  if(opts.summary){
+    html += `<div style="margin:0 0 12px;padding:10px 14px;border:1px solid var(--line);border-radius:8px;background:rgba(56,139,253,.08)">`
+         + `🔎 <b>AI Search:</b> ${opts.summary} <span style="color:var(--mut)">— ${rows.length} match${rows.length===1?'':'es'}, ranked by Artik Score</span></div>`;
+  }
+  html += '<table><thead><tr>'
     + '<th>#</th><th>Ticker</th><th>Sector</th>'
     + '<th class="num">Price</th><th class="num">Score</th><th class="num">RSI</th>'
     + '<th>Status</th><th></th></tr></thead><tbody>';
@@ -194,9 +216,10 @@ function render(rows){
            + `<td colspan="6" class="err">${r.error}</td></tr>`;
       return;
     }
+    const why = r.why ? `<div style="font-weight:400;font-size:12px;color:var(--mut);margin-top:2px;max-width:340px;white-space:normal">${r.why}</div>` : '';
     html += `<tr class="row">
       <td>${i+1}</td>
-      <td class="tick">${r.ticker}</td>
+      <td class="tick">${r.ticker}${why}</td>
       <td style="color:var(--mut)">${r.sector||'—'}</td>
       <td class="num">$${r.price!=null?r.price.toLocaleString():'—'}</td>
       <td class="num"><b>${r.score}</b></td>
