@@ -185,7 +185,7 @@ async function run(){
       const res = await fetch('/api/search?q=' + encodeURIComponent(raw));
       const data = await res.json();
       if(data.error){ $('#out').innerHTML = '<div class="err">'+data.error+'</div>'; return; }
-      render(data.results, {summary:data.summary});
+      render(data.results, {summary:data.summary, provider:data.provider});
     }
   } catch(e){
     $('#out').innerHTML = '<div class="err">Request failed: '+e+'</div>';
@@ -203,8 +203,9 @@ function render(rows, opts){
   opts = opts || {};
   let html = '';
   if(opts.summary){
+    const via = opts.provider==='gpt' ? ' · via GPT (fallback)' : opts.provider==='claude' ? ' · via Claude' : '';
     html += `<div style="margin:0 0 12px;padding:10px 14px;border:1px solid var(--line);border-radius:8px;background:rgba(56,139,253,.08)">`
-         + `🔎 <b>AI Search:</b> ${opts.summary} <span style="color:var(--mut)">— ${rows.length} match${rows.length===1?'':'es'}, ranked by Artik Score</span></div>`;
+         + `🔎 <b>AI Search:</b> ${opts.summary} <span style="color:var(--mut)">— ${rows.length} match${rows.length===1?'':'es'}, ranked by Artik Score${via}</span></div>`;
   }
   html += '<table><thead><tr>'
     + '<th>#</th><th>Ticker</th><th>Sector</th>'

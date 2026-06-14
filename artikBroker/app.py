@@ -291,36 +291,92 @@ def _passes(r: dict, f: dict) -> bool:
     return True
 
 
+def _openai_key() -> str | None:
+    """OPENAI_API_KEY from env (AWS) or the local artikAgents/.env (dev)."""
+    k = os.environ.get("OPENAI_API_KEY")
+    if k:
+        return k
+    envf = HERE.parent / "artikAgents" / "agents" / ".env"
+    if envf.exists():
+        for line in envf.read_text().splitlines():
+            if line.startswith("OPENAI_API_KEY="):
+                return line.split("=", 1)[1].strip().strip('"').strip("'")
+    return None
+
+
+def _err_detail(e) -> str:
+    """Pull the provider's human message out of an SDK exception, if present."""
+    body = getattr(e, "body", None)
+    if isinstance(body, dict):
+        err = body.get("error")
+        if isinstance(err, dict) and err.get("message"):
+            return err["message"]
+    return str(e)[:200] or type(e).__name__
+
+
+def _parse_anthropic(query: str, key: str) -> dict | None:
+    import anthropic
+    client = anthropic.Anthropic(api_key=key)
+    msg = client.messages.create(
+        model="claude-opus-4-8",
+        max_tokens=2000,
+        system=_SEARCH_SYSTEM,
+        tools=[_SEARCH_TOOL],
+        tool_choice={"type": "tool", "name": "return_search_plan"},
+        messages=[{"role": "user", "content": query}],
+    )
+    return next((b.input for b in msg.content if b.type == "tool_use"), None)
+
+
+def _parse_openai(query: str, key: str) -> dict | None:
+    """OpenAI GPT fallback — same structured plan via function calling (GPT-5 API)."""
+    from openai import OpenAI
+    client = OpenAI(api_key=key)
+    resp = client.chat.completions.create(
+        model="gpt-5-mini",
+        messages=[
+            {"role": "system", "content": _SEARCH_SYSTEM},
+            {"role": "user", "content": query},
+        ],
+        tools=[{"type": "function", "function": {
+            "name": _SEARCH_TOOL["name"],
+            "description": _SEARCH_TOOL["description"],
+            "parameters": _SEARCH_TOOL["input_schema"],
+        }}],
+        tool_choice={"type": "function", "function": {"name": _SEARCH_TOOL["name"]}},
+        max_completion_tokens=2000,
+        reasoning_effort="minimal",
+    )
+    calls = resp.choices[0].message.tool_calls
+    return json.loads(calls[0].function.arguments) if calls else None
+
+
 @app.get("/api/search")
 def api_search(q: str = Query(..., description="natural-language stock search")):
     query = (q or "").strip()
     if not query:
         return JSONResponse({"error": "empty query"}, status_code=400)
-    key = _anthropic_key()
-    if not key:
-        return JSONResponse({"error": "AI search unavailable: no ANTHROPIC_API_KEY configured."}, status_code=503)
 
-    try:
-        import anthropic
-        client = anthropic.Anthropic(api_key=key)
-        msg = client.messages.create(
-            model="claude-opus-4-8",
-            max_tokens=2000,
-            system=_SEARCH_SYSTEM,
-            tools=[_SEARCH_TOOL],
-            tool_choice={"type": "tool", "name": "return_search_plan"},
-            messages=[{"role": "user", "content": query}],
-        )
-        plan = next((b.input for b in msg.content if b.type == "tool_use"), None)
-    except Exception as e:  # noqa: BLE001
-        detail = getattr(getattr(e, "body", None), "get", lambda *_: None)("error") if hasattr(e, "body") else None
-        msg_txt = (detail or {}).get("message") if isinstance(detail, dict) else None
-        return JSONResponse(
-            {"error": f"AI search failed: {msg_txt or type(e).__name__}"},
-            status_code=502,
-        )
+    akey, okey = _anthropic_key(), _openai_key()
+    if not akey and not okey:
+        return JSONResponse({"error": "AI search unavailable: no ANTHROPIC_API_KEY or OPENAI_API_KEY configured."}, status_code=503)
 
-    if not plan or not plan.get("candidates"):
+    # Provider cascade: Claude first; on ANY failure (e.g. low credits) fall back to OpenAI GPT.
+    plan, provider, last_err = None, None, None
+    if akey:
+        try:
+            plan, provider = _parse_anthropic(query, akey), "claude"
+        except Exception as e:  # noqa: BLE001
+            last_err = _err_detail(e)
+    if plan is None and okey:
+        try:
+            plan, provider = _parse_openai(query, okey), "gpt"
+        except Exception as e:  # noqa: BLE001
+            last_err = _err_detail(e)
+
+    if plan is None:
+        return JSONResponse({"error": f"AI search failed: {last_err or 'no provider available'}"}, status_code=502)
+    if not plan.get("candidates"):
         return JSONResponse({"error": "could not interpret the query into candidates."}, status_code=422)
 
     filters = plan.get("filters") or {}
@@ -340,6 +396,7 @@ def api_search(q: str = Query(..., description="natural-language stock search"))
         "query": query,
         "summary": plan.get("summary", ""),
         "filters": filters,
+        "provider": provider,  # "claude" or "gpt" (fallback)
         "count": len(matched),
         "results": matched[:25],
     }

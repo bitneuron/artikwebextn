@@ -47,13 +47,15 @@ ROLE_ARN="arn:aws:iam::${ACCOUNT}:role/${ROLE}"
 # ── 5. Runtime env vars (AI Search key + password gate) ──────────────────────
 # ANTHROPIC_API_KEY: from your shell or artikAgents/.env. APP_PASSWORD: from your shell.
 KEY="${ANTHROPIC_API_KEY:-$(grep -h '^ANTHROPIC_API_KEY=' artikAgents/agents/.env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'"'")}"
+OKEY="${OPENAI_API_KEY:-$(grep -h '^OPENAI_API_KEY=' artikAgents/agents/.env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'"'")}"
 ENV_PAIRS=""
 [ -n "${KEY}" ]                && ENV_PAIRS="\"ANTHROPIC_API_KEY\":\"${KEY}\""
+[ -n "${OKEY}" ]               && ENV_PAIRS="${ENV_PAIRS:+${ENV_PAIRS},}\"OPENAI_API_KEY\":\"${OKEY}\""
 [ -n "${APP_PASSWORD:-}" ]     && ENV_PAIRS="${ENV_PAIRS:+${ENV_PAIRS},}\"APP_PASSWORD\":\"${APP_PASSWORD}\""
 [ -n "${APP_USER:-}" ]         && ENV_PAIRS="${ENV_PAIRS:+${ENV_PAIRS},}\"APP_USER\":\"${APP_USER}\""
 RTE=""; [ -n "${ENV_PAIRS}" ] && RTE=",\"RuntimeEnvironmentVariables\":{${ENV_PAIRS}}"
 [ -z "${APP_PASSWORD:-}" ] && echo "⚠ APP_PASSWORD not set — deploying WITHOUT the password gate. Re-run with APP_PASSWORD=... to protect it."
-[ -z "${KEY}" ] && echo "⚠ No ANTHROPIC_API_KEY — AI Search will be disabled on the deploy."
+[ -z "${KEY}${OKEY}" ] && echo "⚠ No ANTHROPIC_API_KEY or OPENAI_API_KEY — AI Search will be disabled on the deploy."
 
 SRC_CONFIG="{
   \"AuthenticationConfiguration\": {\"AccessRoleArn\": \"${ROLE_ARN}\"},
