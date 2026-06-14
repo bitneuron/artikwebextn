@@ -76,6 +76,8 @@
   select { background:var(--panel); color:var(--txt); border:1px solid var(--line);
            border-radius:8px; padding:8px 12px; font-size:14px; }
   .pf-meta { color:var(--mut); font-size:12.5px; }
+  .pg-sent { text-align:center; color:var(--mut); font-size:12px; padding:14px; }
+  .pg-end  { text-align:center; color:var(--mut); font-size:12px; padding:10px; opacity:.7; }
   .hidden { display:none; }
   th.sortable { cursor:pointer; user-select:none; white-space:nowrap; }
   th.sortable:hover { color:var(--txt); }
@@ -246,43 +248,83 @@ const INDEX_COLS = [
   {key:'rsi',label:'RSI',num:true},{key:'status',label:'Status'},
 ];
 
+// ── Infinite-scroll paging ────────────────────────────────────────────────────
+// First page is sized to fill the browser viewport; more rows auto-load as the
+// user scrolls (IntersectionObserver on a sentinel). Used by every table/grid.
+const _pagers = {};
+function _pageSize(rowH){ return Math.max(6, Math.ceil((window.innerHeight - 250) / (rowH||46))); }
+function renderPaged(outId, opts){
+  const prev = _pagers[outId];
+  if(prev && prev.obs){ prev.obs.disconnect(); }
+  const first = opts.pageSize || _pageSize(opts.rowHeight);
+  _pagers[outId] = { rows: opts.rows||[], rowHtml: opts.rowHtml, shown:0, step:first, obs:null };
+  $('#'+outId).innerHTML = (opts.pre||'')
+    + `<table><thead>${opts.head}</thead><tbody id="${outId}__tb"></tbody></table>`
+    + `<div id="${outId}__more"></div>`;
+  _pageAppend(outId, first);
+}
+function _pageAppend(outId, n){
+  const st = _pagers[outId]; if(!st) return;
+  const tb = document.getElementById(outId+'__tb'); if(!tb) return;
+  const end = Math.min(st.shown + n, st.rows.length);
+  let html = '';
+  for(let i=st.shown; i<end; i++){ html += st.rowHtml(st.rows[i], i); }
+  tb.insertAdjacentHTML('beforeend', html);
+  st.shown = end;
+  const more = document.getElementById(outId+'__more');
+  if(st.shown >= st.rows.length){
+    if(st.obs){ st.obs.disconnect(); st.obs = null; }
+    more.innerHTML = st.rows.length > st.step
+      ? `<div class="pg-end">All ${st.rows.length} shown</div>` : '';
+    return;
+  }
+  more.innerHTML = `<div id="${outId}__sent" class="pg-sent">↓ Scroll for more — showing ${st.shown} of ${st.rows.length}</div>`;
+  const sent = document.getElementById(outId+'__sent');
+  if(st.obs) st.obs.disconnect();
+  st.obs = new IntersectionObserver(
+    es => { if(es.some(e => e.isIntersecting)) _pageAppend(outId, st.step); },
+    {rootMargin:'300px'});
+  st.obs.observe(sent);
+}
+
 function render(rows, opts){
   opts = opts || {};
   window._rows = rows; window._mode = 'symbol'; window._lastOpts = opts;
   if(!window._mainSort) window._mainSort = {col:'score', dir:-1};
   const st = window._mainSort;
   const view = sortRows(rows, st.col, st.dir);
-  let html = '';
+  let pre = '';
   if(opts.savedNote){
-    html += `<div style="margin:0 0 12px;padding:10px 14px;border:1px solid var(--line);border-radius:8px;background:rgba(210,153,34,.12)">${opts.savedNote}</div>`;
+    pre += `<div style="margin:0 0 12px;padding:10px 14px;border:1px solid var(--line);border-radius:8px;background:rgba(210,153,34,.12)">${opts.savedNote}</div>`;
   }
   if(opts.summary){
     const via = opts.provider==='gpt' ? ' · via GPT (fallback)' : opts.provider==='claude' ? ' · via Claude' : '';
-    html += `<div style="margin:0 0 12px;padding:10px 14px;border:1px solid var(--line);border-radius:8px;background:rgba(56,139,253,.08)">`
+    pre += `<div style="margin:0 0 12px;padding:10px 14px;border:1px solid var(--line);border-radius:8px;background:rgba(56,139,253,.08)">`
          + `🔎 <b>AI Search:</b> ${opts.summary} <span style="color:var(--mut)">— ${rows.length} match${rows.length===1?'':'es'}, ranked by Artik Score${via}</span></div>`;
   }
-  html += `<table><thead><tr>${sortHead(ANALYZE_COLS, st, k=>`sortMain('${k}')`)}</tr></thead><tbody>`;
-  view.forEach((r,i) => {
-    if(r.error){
-      html += `<tr class="row"><td>${i+1}</td><td class="tick">${r.ticker}</td>`
-           + `<td colspan="6" class="err">${r.error}</td></tr>`;
-      return;
-    }
-    const why = r.why ? `<div style="font-weight:400;font-size:12px;color:var(--mut);margin-top:2px;max-width:340px;white-space:normal">${r.why}</div>` : '';
-    html += `<tr class="row">
-      <td>${i+1}</td>
-      <td class="tick">${r.ticker}${why}</td>
-      <td style="color:var(--mut)">${r.sector||'—'}</td>
-      <td class="num">$${r.price!=null?r.price.toLocaleString():'—'}</td>
-      <td class="num"><b>${r.score}</b></td>
-      <td class="num">${r.rsi!=null?r.rsi:'—'}</td>
-      <td>${statusCell(r)}</td>
-      <td><button class="ex-btn" onclick="toggle(${i})">Explain ▾</button></td>
-    </tr>
-    <tr class="detail" id="d${i}" style="display:none"><td colspan="8">${detail(r)}</td></tr>`;
+  renderPaged('out', {
+    pre,
+    head: `<tr>${sortHead(ANALYZE_COLS, st, k=>`sortMain('${k}')`)}</tr>`,
+    rows: view,
+    rowHtml: (r,i) => {
+      if(r.error){
+        return `<tr class="row"><td>${i+1}</td><td class="tick">${r.ticker}</td>`
+             + `<td colspan="6" class="err">${r.error}</td></tr>`;
+      }
+      const why = r.why ? `<div style="font-weight:400;font-size:12px;color:var(--mut);margin-top:2px;max-width:340px;white-space:normal">${r.why}</div>` : '';
+      return `<tr class="row">
+        <td>${i+1}</td>
+        <td class="tick">${r.ticker}${why}</td>
+        <td style="color:var(--mut)">${r.sector||'—'}</td>
+        <td class="num">$${r.price!=null?r.price.toLocaleString():'—'}</td>
+        <td class="num"><b>${r.score}</b></td>
+        <td class="num">${r.rsi!=null?r.rsi:'—'}</td>
+        <td>${statusCell(r)}</td>
+        <td><button class="ex-btn" onclick="toggle(${i})">Explain ▾</button></td>
+      </tr>
+      <tr class="detail" id="d${i}" style="display:none"><td colspan="8">${detail(r)}</td></tr>`;
+    },
   });
-  html += '</tbody></table>';
-  $('#out').innerHTML = html;
   showDownload();
 }
 function sortMain(col){
@@ -510,27 +552,27 @@ async function renderHistory(){
            'No past searches yet. Run a search on the <b>Analyze</b> tab and it will appear here.')+'</div>';
     return;
   }
-  let html = '<table><thead><tr>'+
-    '<th>When</th><th>Type</th><th>Query</th><th class="num">Results</th><th>Source</th><th></th>'+
-    '</tr></thead><tbody>';
-  list.forEach(e => {
-    const badge = e.type==='ai' ? '🔎 AI' : '🎯 Tickers';
-    const src = e.type==='ai' ? (e.provider==='gpt'?'GPT':e.provider==='claude'?'Claude':'—') : '—';
-    const qtxt = (e.query||'').replace(/</g,'&lt;');
-    html += `<tr class="row">
-      <td style="white-space:nowrap;color:var(--mut)">${fmtTs(e.ts)}</td>
-      <td style="white-space:nowrap">${badge}</td>
-      <td style="max-width:380px;white-space:normal">${qtxt}${e.summary?`<div style="font-size:11.5px;color:var(--mut)">${e.summary.replace(/</g,'&lt;')}</div>`:''}</td>
-      <td class="num">${e.count!=null?e.count:'—'}</td>
-      <td style="color:var(--mut)">${src}</td>
-      <td style="white-space:nowrap">
-        <button class="ex-btn" onclick="viewHist('${e.id}')">View</button>
-        <button class="ex-btn" onclick="rerunHist('${e.id}')">↻ Re-run</button>
-        <button class="ex-btn" onclick="deleteHist('${e.id}')">✕</button>
-      </td>
-    </tr>`;
+  renderPaged('hist-out', {
+    head: '<tr><th>When</th><th>Type</th><th>Query</th><th class="num">Results</th><th>Source</th><th></th></tr>',
+    rows: list,
+    rowHtml: (e) => {
+      const badge = e.type==='ai' ? '🔎 AI' : '🎯 Tickers';
+      const src = e.type==='ai' ? (e.provider==='gpt'?'GPT':e.provider==='claude'?'Claude':'—') : '—';
+      const qtxt = (e.query||'').replace(/</g,'&lt;');
+      return `<tr class="row">
+        <td style="white-space:nowrap;color:var(--mut)">${fmtTs(e.ts)}</td>
+        <td style="white-space:nowrap">${badge}</td>
+        <td style="max-width:380px;white-space:normal">${qtxt}${e.summary?`<div style="font-size:11.5px;color:var(--mut)">${e.summary.replace(/</g,'&lt;')}</div>`:''}</td>
+        <td class="num">${e.count!=null?e.count:'—'}</td>
+        <td style="color:var(--mut)">${src}</td>
+        <td style="white-space:nowrap">
+          <button class="ex-btn" onclick="viewHist('${e.id}')">View</button>
+          <button class="ex-btn" onclick="rerunHist('${e.id}')">↻ Re-run</button>
+          <button class="ex-btn" onclick="deleteHist('${e.id}')">✕</button>
+        </td>
+      </tr>`;
+    },
   });
-  $('#hist-out').innerHTML = html + '</tbody></table>';
 }
 
 async function viewHist(id){
@@ -592,26 +634,27 @@ function sortIdx(pfx, col){
 function drawIndex(pfx){
   const o = window._idx[pfx], st = o.sort;
   const view = sortRows(o.rows, st.col, st.dir);
-  let html = `<table><thead><tr>${sortHead(INDEX_COLS, st, k=>`sortIdx('${pfx}','${k}')`)}</tr></thead><tbody>`;
-  view.forEach((r,i) => {
-    if(r.error){
-      html += `<tr class="row"><td>${i+1}</td><td class="tick">${r.ticker}</td><td colspan="7" class="err">${r.error}</td></tr>`;
-      return;
-    }
-    const arch = (r.breakdown && r.breakdown.archetype) || '—';
-    html += `<tr class="row">
-      <td>${i+1}</td><td class="tick">${r.ticker}</td>
-      <td style="color:var(--mut);font-size:12px">${arch}</td>
-      <td style="color:var(--mut)">${r.sector||'—'}</td>
-      <td class="num">$${r.price!=null?r.price.toLocaleString():'—'}</td>
-      <td class="num"><b>${r.score}</b></td>
-      <td class="num">${r.rsi!=null?r.rsi:'—'}</td>
-      <td>${statusCell(r)}</td>
-      <td><button class="ex-btn" onclick="toggleGen('${pfx}',${i})">Explain ▾</button></td>
-    </tr>
-    <tr class="detail" id="${pfx}-d${i}" style="display:none"><td colspan="9">${detail(r)}</td></tr>`;
+  renderPaged(o.outId, {
+    head: `<tr>${sortHead(INDEX_COLS, st, k=>`sortIdx('${pfx}','${k}')`)}</tr>`,
+    rows: view,
+    rowHtml: (r,i) => {
+      if(r.error){
+        return `<tr class="row"><td>${i+1}</td><td class="tick">${r.ticker}</td><td colspan="7" class="err">${r.error}</td></tr>`;
+      }
+      const arch = (r.breakdown && r.breakdown.archetype) || '—';
+      return `<tr class="row">
+        <td>${i+1}</td><td class="tick">${r.ticker}</td>
+        <td style="color:var(--mut);font-size:12px">${arch}</td>
+        <td style="color:var(--mut)">${r.sector||'—'}</td>
+        <td class="num">$${r.price!=null?r.price.toLocaleString():'—'}</td>
+        <td class="num"><b>${r.score}</b></td>
+        <td class="num">${r.rsi!=null?r.rsi:'—'}</td>
+        <td>${statusCell(r)}</td>
+        <td><button class="ex-btn" onclick="toggleGen('${pfx}',${i})">Explain ▾</button></td>
+      </tr>
+      <tr class="detail" id="${pfx}-d${i}" style="display:none"><td colspan="9">${detail(r)}</td></tr>`;
+    },
   });
-  $('#'+o.outId).innerHTML = html + '</tbody></table>';
 }
 
 function toggleGen(pfx, i){
@@ -738,9 +781,10 @@ function applyPfView(){
     `<th class="${c.num?'num ':''}${c.sortable===false?'':'sortable'}"${c.sortable===false?'':` onclick="sortPf('${c.key}')"`}>${c.label}${c.sortable===false?'':arrow(c.key)}</th>`
   ).join('') + '<th></th>';
 
-  let body = '';
-  view.forEach((r,i) => {
-    body += `<tr class="row">
+  renderPaged('pf-out', {
+    head: `<tr>${head}</tr>`,
+    rows: view,
+    rowHtml: (r,i) => `<tr class="row">
       <td>${i+1}</td>
       <td class="tick">${r.ticker}</td>
       <td style="color:var(--mut);font-size:12px">${r.archetype||'—'}</td>
@@ -754,10 +798,8 @@ function applyPfView(){
       <td class="num">${plSaved(r.pl, r.pl_pct)}</td>
       <td><button class="ex-btn" onclick="explainPf('${r.ticker}', this)">Explain ▾</button></td>
     </tr>
-    <tr class="detail" style="display:none"><td colspan="12"><div class="spin" style="padding:12px">…</div></td></tr>`;
+    <tr class="detail" style="display:none"><td colspan="12"><div class="spin" style="padding:12px">…</div></td></tr>`,
   });
-
-  $('#pf-out').innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
 async function explainPf(ticker, btn){
