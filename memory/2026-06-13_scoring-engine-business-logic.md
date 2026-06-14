@@ -2,7 +2,7 @@
 
 The authoritative reference for how `artikagents/agents/stock_broker_agent/scoring.py` scores a
 stock. Used by: artik_broker, the stock_broker_agent pipeline, sp500_screen, RUN_STOCK_ANALYSIS.
-Pure Python + yfinance (no LLM). Skill docs: `stock_analysis_report/skills/business_quality/Archetype_Multiplier_Skill.md`
+Pure Python + yfinance (no LLM). Skill docs: `stock_analysis/skills/business_quality/Archetype_Multiplier_Skill.md`
 + `skills/quant/Peer_Normalization_Skill.md`.
 
 ## Final formula (unchanged across all upgrades)

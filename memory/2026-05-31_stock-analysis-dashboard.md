@@ -66,9 +66,9 @@ DEFAULT_SYNTH_MODEL = "claude-opus-4-8"
 Built in `build_dashboard.py` → `SKILL_DROPDOWN_OPTIONS`; rendered as `<optgroup label="{folder}/">`.
 
 Group order (top to bottom):
-1. `commercial/` → **Fairlead Strategy** (source: `stock_analysis_report/Fairlead_Strategy.md`, matched by filename)
+1. `commercial/` → **Fairlead Strategy** (source: `stock_analysis/Fairlead_Strategy.md`, matched by filename)
 2. `foundation/` → Modular Skills Architecture, Stock Analysis Skill, Architecture (the former `standard/` group, renamed)
-3. `orchestrator/`, `core/`, `technical/`, `business_quality/`, `risk/`, `quant/`, `research/`, `portfolio/`, `agents/` — one per folder under `knowledge_bases/stock_analysis_report/skills/`.
+3. `orchestrator/`, `core/`, `technical/`, `business_quality/`, `risk/`, `quant/`, `research/`, `portfolio/`, `agents/` — one per folder under `knowledge_bases/stock_analysis/skills/`.
 
 ### Skill id resolution (run_analysis.py)
 Dropdown values: `skill-<stem>` (per-folder specs), `lib-<stem>` (report-root .md), special `lib-architecture` → `skills/Stock_Modular_Architecture.md`. Resolver searches `skills/**` then report-root `*.md`. The prompt is augmented with the skill's markdown methodology and instructs the model to follow it. `?skill=` is single-select → "run against that skill only".

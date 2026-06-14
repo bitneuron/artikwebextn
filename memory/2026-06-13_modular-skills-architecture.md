@@ -1,7 +1,7 @@
 # Modular Skills Architecture — reorg & entry point (2026-06-13)
 
 Context for the stock-analysis **skill library** under
-`artikagents/agents/knowledge_bases/stock_analysis_report/`. This is the reference/skills
+`artikagents/agents/knowledge_bases/stock_analysis/`. This is the reference/skills
 layer that sits *behind* the stock-broker pipeline (see
 [2026-05-31_stock-analysis-dashboard.md](2026-05-31_stock-analysis-dashboard.md)).
 
@@ -15,7 +15,7 @@ layer that sits *behind* the stock-broker pipeline (see
 
 ## Canonical folder layout (after 2026-06-13 reorg)
 ```
-stock_analysis_report/
+stock_analysis/
 ├── README.md               ← architecture (was 2 duplicate arch docs, now merged+deleted)
 ├── RUN_STOCK_ANALYSIS.md   ← ENTRY POINT (call with tickers)
 ├── skills/                 ← full engine, one folder per layer L0–L9
@@ -63,4 +63,4 @@ The dashboard/API/React read these docs by exact name — moving them required e
 ## Gotchas / open items
 - **Not runtime-verified:** the React dashboard render — `fastapi` isn't installed in the plain shell, so could only verify Python `py_compile` + tree logic. To confirm: run the API + `npm run dev`, check the "L0 · Mandate" group shows.
 - Generated PDFs moved out to `knowledge_bases/analyzed_reports/` (2026-06-13) — output separated from methodology source; consumers repointed: `run_analysis.py`, `artikAPIs/.../stock_analysis.py`, `artikAPIs/.../kb_upload.py`.
-- The skill_library API base is `…/stock_analysis_report/skills/` (so README at report root is *outside* it — that's why the in-tree overview is SKILLS_LIBRARY.md, not README).
+- The skill_library API base is `…/stock_analysis/skills/` (so README at report root is *outside* it — that's why the in-tree overview is SKILLS_LIBRARY.md, not README).
