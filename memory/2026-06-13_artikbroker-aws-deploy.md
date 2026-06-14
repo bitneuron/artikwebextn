@@ -28,9 +28,12 @@ User's stated criteria: "easy to deploy and stable."
   (claude-opus-4-8) first, auto-fallback to OpenAI (gpt-5-mini)** on any failure
   (e.g. Anthropic low credits). LLM only parses intent + proposes candidate tickers;
   the engine produces all scores. UI banner shows which provider answered.
-- **Live behind HTTP Basic auth** (username `artik`; password in the `APP_PASSWORD`
-  App Runner env var — value NOT stored here). Also requires `ANTHROPIC_API_KEY` +
-  `OPENAI_API_KEY` env vars (set by deploy.sh from artikAgents/.env; never in the image).
+- **Auth = login form + signed session cookie** (`/login`, `/logout`). Password verified
+  against a **pbkdf2-sha256 HASH** (`APP_PASSWORD_HASH`); a random `APP_SECRET` signs an
+  HttpOnly+Secure cookie (7-day TTL). No plaintext password stored or sent per-request
+  (replaced the earlier HTTP Basic Auth). Also needs `ANTHROPIC_API_KEY` + `OPENAI_API_KEY`
+  env vars (deploy.sh sets all from artikAgents/.env; keys never in the image). Auth is off
+  locally when those env vars are unset.
 - **Gotchas learned:** (1) the container installs only `requirements.txt` — both
   `anthropic` AND `openai` must be listed there (local venv masked the missing openai).
   (2) **AutoDeployments is now DISABLED** — it raced with update-service and served stale
