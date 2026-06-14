@@ -50,6 +50,19 @@ A standalone web app to analyze one/many stock symbols and show BUY/HOLD/SELL wi
   (GLOBAL_QUOTE) so failed tickers still show a price. Key from env (`ALPHA_VANTAGE_API_KEY`) — never
   hardcoded/logged. See [[2026-06-13_artikbroker-aws-deploy]] for AWS/secret/deploy details.
 
+## Added 2026-06-14 (deployed)
+- **Portfolio Refresh button** (`GET /api/portfolio/refresh?date=`): re-scores a saved snapshot's
+  holdings against LIVE data — recomputes price/score/RSI/status/archetype/value/P&L while keeping
+  qty + cost_basis from the broker CSV. Scores all holdings via a direct ThreadPool (NOT `_score_many`,
+  which caps at 25 for AI Search). ETFs/unscored tickers fall back to `_live_price()` so totals stay
+  right (verified: refresh reproduces the snapshot's $1.05M / +30.6%). Not cached — always live.
+- **Past Searches tab + server-side history** (`history_store.py`, `/api/history` CRUD): every
+  Analyze/AI search is saved (query + full results). Backend chosen by env — **S3 on AWS**
+  (`HISTORY_S3_BUCKET`), **local folder** `search_history/` in dev. View = cached results, Re-run = live,
+  + delete/clear. Capped 50, metadata-only listing. Replaced the earlier localStorage version (per-browser)
+  so history survives redeploys + is cross-device. See [[2026-06-13_artikbroker-aws-deploy]].
+- **diagrams.html**: standalone non-technical component + search-sequence diagrams (Mermaid via CDN).
+
 ## Related
 - Scoring formula/thresholds: see [[2026-06-13_portfolio-snapshot]] and scoring.py.
 - Skill methodology behind it: [[2026-06-13_modular-skills-architecture]] (RUN_STOCK_ANALYSIS.md entry point).

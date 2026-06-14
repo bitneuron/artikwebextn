@@ -61,6 +61,16 @@ User's stated criteria: "easy to deploy and stable."
   the user's head (NOT in memory or git). To rotate any value: update the Secrets Manager secret,
   then `aws apprunner start-deployment` (or redeploy).
 
+## Search history → S3 (2026-06-14)
+- **S3-backed Past Searches store.** Private, encrypted (AES256), public-access-blocked bucket
+  **`artikbroker-search-history-515966528039`** (us-west-2). The App Runner **instance role** got a
+  SECOND inline policy `ReadWriteHistoryBucket` (s3 Get/Put/Delete + ListBucket) — the secrets policy
+  `ReadArtikbrokerSecrets` is untouched. Service has a plaintext env var **`HISTORY_S3_BUCKET`**
+  (RuntimeEnvironmentVariables, not a secret); `history_store.py` switches to S3 when it's set, else a
+  local folder. Provisioned by **`setup_history_s3.py`** (idempotent: bucket + role policy + env var).
+  `boto3` added to requirements.txt. Deploy order used: setup script (deploy #1) → wait RUNNING →
+  `redeploy.sh` (deploy #2, ships code; preserves env var + 5 secrets). Live since image `v20260614101056`.
+
 ## Scope decisions
 - **One service only** (artikBroker; not artikAPIs). It's self-contained.
 - **Public, no Portfolio:** `.dockerignore` excludes `knowledge_bases/`, so the private
