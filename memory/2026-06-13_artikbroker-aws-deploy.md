@@ -18,10 +18,17 @@ User's stated criteria: "easy to deploy and stable."
   create an IAM user/role for future deploys.
 
 ## Deploy / redeploy
-- One command from repo root: `./artikBroker/deploy.sh` (build → ECR → App Runner).
-- Runbook: `artikBroker/DEPLOY.md`. Dockerfile builds from the **superproject root**
-  (needs both `artikBroker/` and the engine at `artikAgents/agents/stock_broker_agent/`).
-- Deps pinned in `artikBroker/requirements.txt` (Py 3.13, numpy 2.4.0, pandas 2.3.3…).
+- **Ship a code change → `./artikBroker/redeploy.sh`** (the canonical deploy now that secrets
+  live in Secrets Manager). It builds an **immutable-tagged** image, pushes to ECR, and updates the
+  service swapping **only the image** — preserving `RuntimeEnvironmentSecrets` + IAM roles. Uses the
+  **artikAPIs venv python** for the boto3 step (system python3 has no boto3 — that was a bug).
+- `./artikBroker/deploy.sh` is the **initial plaintext-env setup only** — it writes env vars directly
+  and would REGRESS the Secrets Manager config; don't use it on the live service. (DEPLOY.md is the runbook.)
+- Dockerfile builds from the **superproject root** (needs both `artikBroker/` and the engine at
+  `artikAgents/agents/stock_broker_agent/`). Deps pinned in `artikBroker/requirements.txt`
+  (Py 3.13, numpy 2.4.0, pandas 2.3.3, anthropic, openai…).
+- **Live features (image `v2026061401…`):** AI Search (Claude→GPT), login gate, sortable tables,
+  Alpha Vantage enrichment. See [[2026-06-13_artik-broker-webapp]] for the feature details.
 
 ## AI Search + password gate (added 2026-06-14)
 - `/api/search`: natural-language stock discovery. Provider cascade — **Claude
@@ -41,14 +48,18 @@ User's stated criteria: "easy to deploy and stable."
   not `:latest`.
 
 ## Secrets in AWS Secrets Manager (2026-06-14)
-- All 4 sensitive values (ANTHROPIC_API_KEY, OPENAI_API_KEY, APP_PASSWORD_HASH, APP_SECRET)
-  are now **Secrets Manager** entries `artikbroker/<KEY>`, referenced by the App Runner service
-  as `RuntimeEnvironmentSecrets` (ARNs). **No plaintext** in the service config anymore.
+- All **5** sensitive values — ANTHROPIC_API_KEY, OPENAI_API_KEY, APP_PASSWORD_HASH, APP_SECRET,
+  **ALPHA_VANTAGE_API_KEY** — are **Secrets Manager** entries `artikbroker/<KEY>`, referenced by the
+  service as `RuntimeEnvironmentSecrets` (ARNs). **No plaintext** in the service config.
 - App Runner reads them via an **instance role** `AppRunnerInstanceRole-artikbroker`
-  (trust: tasks.apprunner.amazonaws.com; inline policy: secretsmanager:GetSecretValue on the 4 ARNs).
-  Distinct from the ECR *access* role (build.apprunner.amazonaws.com) used to pull the image.
-- Re-run migration anytime: `artikAPIs/venv/bin/python artikBroker/migrate_secrets.py` (idempotent).
-- To rotate a value: update the Secrets Manager secret, then start a new App Runner deployment.
+  (trust: tasks.apprunner.amazonaws.com; inline policy `ReadArtikbrokerSecrets`:
+  secretsmanager:GetSecretValue on all 5 ARNs). Distinct from the ECR *access* role
+  `AppRunnerECRAccessRole` (build.apprunner.amazonaws.com) used to pull the image.
+- Scripts (idempotent, read values from the gitignored `.env`, never hardcoded):
+  `migrate_secrets.py` (the original 4), `add_alpha_vantage_aws.py` (adds a key + updates the role policy).
+- Login is **password-gated**: username `artik`, password value lives ONLY in Secrets Manager /
+  the user's head (NOT in memory or git). To rotate any value: update the Secrets Manager secret,
+  then `aws apprunner start-deployment` (or redeploy).
 
 ## Scope decisions
 - **One service only** (artikBroker; not artikAPIs). It's self-contained.

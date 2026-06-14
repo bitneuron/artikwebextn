@@ -33,6 +33,23 @@ A standalone web app to analyze one/many stock symbols and show BUY/HOLD/SELL wi
 - `static/index.html` = vanilla JS single page (no build step).
 - ETFs (ARKK/EWY/QQQ/…) and invalid tickers return graceful error rows. Max 40 symbols/request.
 
+## Added 2026-06-14
+- **AI Search (natural language):** the Analyze box accepts plain English OR tickers (auto-detected:
+  comma/space-separated 1–6-letter tokens → `/api/analyze`; otherwise → `/api/search`). `/api/search`
+  uses a **provider cascade — Claude (`claude-opus-4-8`) first, auto-fallback to OpenAI (`gpt-5-mini`)**
+  on any failure (e.g. Anthropic low credits). The LLM only parses intent + proposes candidate tickers;
+  the engine still produces all scores. Results show an intent-summary banner (+ "via GPT/Claude") and a
+  per-row "why matched". Scores candidates in parallel (ThreadPoolExecutor) + applies hard filters
+  (RSI/score/sector/status/macd) against live values.
+- **Sortable columns:** click any header on Analyze / S&P 500 / DOW to sort (▲▼), click to flip; default
+  Artik Score ↓, error rows last. Shared `sortRows`/`sortHead` helpers; portfolio tab already had it.
+- **Alpha Vantage enrichment** (`alpha_vantage.py` + `/api/enrich/{ticker}`): an on-click button in each
+  Explain panel loads **Bollinger Bands** (price vs upper/mid/lower + position label) + an AV
+  **fundamentals** cross-check. On-click + **daily-cached per ticker** (free tier = 25 calls/day).
+  yfinance stays the engine's source. `analyze_one` also has a **yfinance→AV price fallback**
+  (GLOBAL_QUOTE) so failed tickers still show a price. Key from env (`ALPHA_VANTAGE_API_KEY`) — never
+  hardcoded/logged. See [[2026-06-13_artikbroker-aws-deploy]] for AWS/secret/deploy details.
+
 ## Related
 - Scoring formula/thresholds: see [[2026-06-13_portfolio-snapshot]] and scoring.py.
 - Skill methodology behind it: [[2026-06-13_modular-skills-architecture]] (RUN_STOCK_ANALYSIS.md entry point).
