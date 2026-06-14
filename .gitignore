@@ -45,3 +45,13 @@ htmlcov/
 # Environment variables
 .env
 credentials.json
+
+# Personal financial data (holdings, P&L, broker exports) — never commit
+memory/combined_portfolio_*.csv
+memory/*portfolio-snapshot*.md
+**/combined_portfolio_*.csv
+**/*etrade*.csv
+**/*schwab*.csv
+
+# Regenerable engine caches (large, daily)
+artik_broker/cache/

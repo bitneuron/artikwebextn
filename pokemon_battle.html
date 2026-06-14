@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pokemon Battle Simulator</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#1a1a2e;font-family:'Courier New',monospace;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+#game{width:900px;max-width:100%}
+
+/* ─── TYPE BADGES ─── */
+.type-badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:.65rem;margin:1px;font-weight:bold;text-transform:capitalize}
+.type-fire{background:#ff6b35}.type-water{background:#4fc3f7;color:#000}.type-grass{background:#66bb6a;color:#000}
+.type-electric{background:#ffee58;color:#000}.type-psychic{background:#ec407a}.type-ghost{background:#7e57c2}
+.type-fighting{background:#ef5350}.type-normal{background:#bdbdbd;color:#000}.type-flying{background:#81d4fa;color:#000}
+.type-poison{background:#ab47bc}.type-steel{background:#90a4ae;color:#000}.type-ice{background:#b2ebf2;color:#000}
+.type-dragon{background:#5c6bc0}.type-dark{background:#424242}.type-rock{background:#a1887f}
+.type-ground{background:#d7ccc8;color:#000}.type-bug{background:#aed581;color:#000}.type-fairy{background:#f48fb1;color:#000}
+
+/* ─── BUTTONS ─── */
+.btn{background:#3b4cca;color:#fff;border:none;padding:11px 28px;font-size:1rem;font-family:'Courier New',monospace;border-radius:8px;cursor:pointer;transition:background .18s,color .18s;font-weight:bold;letter-spacing:1px}
+.btn:hover{background:#ffde00;color:#000}
+.btn:disabled{background:#444;color:#777;cursor:not-allowed}
+.btn-outline{background:transparent;border:2px solid #3b4cca;color:#aad}
+.btn-outline:hover{background:#3b4cca;color:#fff}
+
+/* ─── SERIES SELECT ─── */
+#series-screen{text-align:center;padding:2rem 1rem}
+h1{font-size:2.6rem;color:#ffde00;text-shadow:3px 3px 0 #3b4cca;margin-bottom:.4rem;letter-spacing:2px}
+.subtitle{color:#aaa;margin-bottom:2rem}
+.series-options{display:flex;gap:20px;justify-content:center;margin-bottom:2rem;flex-wrap:wrap}
+.series-card{background:#16213e;border:3px solid #0f3460;border-radius:14px;padding:24px 36px;cursor:pointer;transition:all .2s;text-align:center;min-width:160px}
+.series-card:hover,.series-card.selected{border-color:#ffde00;box-shadow:0 0 20px rgba(255,222,0,.3);transform:translateY(-4px)}
+.series-card .big{font-size:2rem;font-weight:bold;color:#ffde00}
+.series-card .small{font-size:.8rem;color:#aaa;margin-top:4px}
+
+/* ─── SELECT SCREEN ─── */
+#select-screen{display:none;text-align:center}
+.select-header{margin-bottom:1.2rem}
+.score-bar{display:flex;justify-content:center;gap:40px;background:#16213e;border-radius:10px;padding:10px 24px;margin-bottom:1.4rem;font-size:1rem}
+.score-bar .score-label{color:#aaa;font-size:.75rem}
+.score-bar .score-val{font-size:1.6rem;font-weight:bold;color:#ffde00}
+.pokemon-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.4rem}
+@media(max-width:600px){.pokemon-grid{grid-template-columns:repeat(2,1fr)}}
+.pokemon-card{background:#16213e;border:3px solid #0f3460;border-radius:12px;padding:10px 6px;cursor:pointer;transition:all .18s;text-align:center}
+.pokemon-card:hover{border-color:#ffde00;transform:translateY(-3px);box-shadow:0 6px 16px rgba(255,222,0,.18)}
+.pokemon-card.selected{border-color:#ffde00;background:#1e2d5e;box-shadow:0 0 20px rgba(255,222,0,.35)}
+.pokemon-card img{width:72px;height:72px;image-rendering:pixelated}
+.poke-name{font-weight:bold;text-transform:capitalize;font-size:.88rem;margin-top:4px}
+.has-mega{font-size:.62rem;color:#ff9800;margin-top:2px}
+.stats-preview{font-size:.62rem;color:#888;margin-top:3px}
+
+/* ─── BATTLE SCREEN ─── */
+#battle-screen{display:none}
+.series-hud{display:flex;justify-content:space-between;align-items:center;background:#16213e;border-radius:10px;padding:6px 16px;margin-bottom:8px;font-size:.85rem}
+.series-hud .hud-score{display:flex;gap:24px}
+.series-hud .pip-row{display:flex;gap:5px}
+.pip{width:16px;height:16px;border-radius:50%;background:#333;border:2px solid #555}
+.pip.won{background:#ffde00;border-color:#ffde00;box-shadow:0 0 6px #ffde00}
+.pip.cpu-won{background:#e74c3c;border-color:#e74c3c}
+
+.battle-field{background:linear-gradient(180deg,#7ec8e3 0%,#87ceeb 55%,#3a8a3a 55%,#2e7d32 100%);border-radius:16px;padding:20px;position:relative;height:280px;margin-bottom:8px;overflow:hidden;border:3px solid #333}
+.battle-field::before{content:'';position:absolute;bottom:42%;right:15%;width:120px;height:28px;background:rgba(0,0,0,.12);border-radius:50%}
+.battle-field::after{content:'';position:absolute;bottom:18%;left:15%;width:150px;height:32px;background:rgba(0,0,0,.14);border-radius:50%}
+
+.enemy-area{position:absolute;top:14px;left:14px;z-index:10}
+.player-area{position:absolute;bottom:14px;right:14px;z-index:10;text-align:right}
+.status-box{background:rgba(255,255,255,.95);color:#000;border-radius:10px;padding:7px 12px;min-width:185px;border:2.5px solid #333;box-shadow:2px 2px 6px rgba(0,0,0,.25)}
+.status-box .poke-name{font-weight:bold;font-size:.95rem;text-transform:capitalize}
+.status-box .poke-level{font-size:.68rem;color:#555;margin-bottom:3px}
+.hp-label{font-size:.65rem;font-weight:bold;color:#555}
+.hp-bar-container{background:#ccc;height:7px;border-radius:4px;overflow:hidden;margin-top:2px}
+.hp-bar{height:100%;border-radius:4px;transition:width .55s ease,background-color .55s;background:#2ecc71}
+.hp-bar.yellow{background:#f1c40f}.hp-bar.red{background:#e74c3c}
+.hp-text{font-size:.68rem;color:#555;text-align:right;margin-top:2px}
+.status-tag{font-size:.6rem;margin-top:2px}
+
+#enemy-sprite{position:absolute;top:18px;right:17%;width:120px;height:120px;image-rendering:pixelated;filter:drop-shadow(2px 5px 4px rgba(0,0,0,.3));z-index:5;transition:opacity .4s}
+#player-sprite{position:absolute;bottom:20px;left:17%;width:130px;height:130px;image-rendering:pixelated;filter:drop-shadow(2px 5px 4px rgba(0,0,0,.3));z-index:5;transition:opacity .4s}
+
+/* tera glow on sprites */
+.tera-active-player #player-sprite{filter:drop-shadow(0 0 12px gold) drop-shadow(2px 5px 4px rgba(0,0,0,.3))}
+.tera-active-enemy #enemy-sprite{filter:drop-shadow(0 0 12px gold) drop-shadow(2px 5px 4px rgba(0,0,0,.3))}
+.mega-active-player #player-sprite{filter:drop-shadow(0 0 14px #ff4500) drop-shadow(2px 5px 4px rgba(0,0,0,.3))}
+.mega-active-enemy #enemy-sprite{filter:drop-shadow(0 0 14px #ff4500) drop-shadow(2px 5px 4px rgba(0,0,0,.3))}
+
+/* ─── BATTLE UI ─── */
+.battle-ui{background:#fff;border:3px solid #333;border-radius:12px;overflow:hidden;color:#000}
+.battle-log{background:#f0f0f0;padding:9px 14px;min-height:60px;max-height:75px;overflow-y:auto;font-size:.92rem;border-bottom:2px solid #333;line-height:1.45}
+.battle-log p{margin:1px 0}
+
+.power-row{display:flex;gap:0;border-bottom:2px solid #333}
+.power-btn{flex:1;background:#fff;border:none;border-right:1px solid #ccc;padding:9px 6px;font-family:'Courier New',monospace;font-size:.78rem;font-weight:bold;cursor:pointer;transition:background .15s,box-shadow .15s;display:flex;flex-direction:column;align-items:center;gap:2px}
+.power-btn:last-child{border-right:none}
+.power-btn:disabled{color:#bbb;cursor:not-allowed;background:#f9f9f9}
+.power-btn .icon{font-size:1.2rem}
+.power-btn:hover:not(:disabled){background:#fffbe6}
+.power-btn.mega-on{background:#fff3e0;box-shadow:inset 0 -3px 0 #ff6f00;color:#e65100}
+.power-btn.tera-on{background:#fffde7;box-shadow:inset 0 -3px 0 #f9a825;color:#f57f17}
+.power-btn.z-on{background:#e8f5e9;box-shadow:inset 0 -3px 0 #2e7d32;color:#1b5e20}
+.power-btn.used{color:#bbb;background:#f5f5f5;text-decoration:line-through}
+
+.move-grid{display:grid;grid-template-columns:1fr 1fr}
+.move-btn{background:#fff;color:#000;border:0;border-right:1px solid #ccc;border-bottom:1px solid #ccc;padding:12px 12px;font-size:.88rem;font-family:'Courier New',monospace;cursor:pointer;transition:background .12s;text-align:left}
+.move-btn:nth-child(2),.move-btn:nth-child(4){border-right:0}
+.move-btn:nth-child(3),.move-btn:nth-child(4){border-bottom:0}
+.move-btn:hover:not(:disabled){background:#e8f4fd}
+.move-btn:disabled{color:#bbb;cursor:not-allowed;background:#f9f9f9}
+.move-btn .move-name{font-weight:bold;font-size:.9rem}
+.move-btn .move-info{font-size:.68rem;color:#666;margin-top:2px}
+.move-btn.z-highlight{background:#e8f5e9;border-color:#4caf50}
+.move-btn.z-highlight:hover:not(:disabled){background:#c8e6c9}
+
+/* ─── BETWEEN SCREEN ─── */
+#between-screen{display:none;text-align:center;padding:2.5rem 1rem}
+.between-score{display:flex;justify-content:center;gap:60px;margin:1.5rem 0}
+.score-block{text-align:center}
+.score-block .name{color:#aaa;font-size:.85rem;margin-bottom:6px}
+.score-block .num{font-size:3.5rem;font-weight:bold}
+.score-block .num.player-c{color:#ffde00;text-shadow:2px 2px 0 #3b4cca}
+.score-block .num.cpu-c{color:#e74c3c}
+.vs-divider{font-size:2rem;color:#666;align-self:center;padding-top:20px}
+
+/* ─── END SCREEN ─── */
+#end-screen{display:none;text-align:center;padding:3rem 1rem}
+.result-title{font-size:3rem;margin-bottom:.8rem;letter-spacing:3px}
+.result-win{color:#ffde00;text-shadow:3px 3px 0 #3b4cca}
+.result-lose{color:#e74c3c;text-shadow:2px 2px 0 #333}
+#result-msg{color:#aaa;margin-bottom:2rem;font-size:1.05rem}
+
+/* ─── ANIMATIONS ─── */
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-10px)}40%{transform:translateX(10px)}60%{transform:translateX(-6px)}80%{transform:translateX(4px)}}
+@keyframes flash{0%,100%{opacity:1}40%{opacity:.15}}
+@keyframes zmove{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
+@keyframes megapulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.6) hue-rotate(30deg)}}
+.shake{animation:shake .42s ease}
+.flash{animation:flash .38s ease 3}
+.zmove-anim{animation:zmove .5s ease 2}
+.mega-evolve-anim{animation:megapulse .5s ease 4}
+</style>
+</head>
+<body>
+<div id="game">
+
+<!-- ══════════════════════════════════════════════
+     SERIES SELECT SCREEN
+══════════════════════════════════════════════ -->
+<div id="series-screen">
+  <h1>POKEMON BATTLE</h1>
+  <p class="subtitle">Choose your series format</p>
+  <div class="series-options">
+    <div class="series-card" data-n="3">
+      <div class="big">Bo3</div>
+      <div class="small">Best of 3<br>First to 2 wins</div>
+    </div>
+    <div class="series-card" data-n="5">
+      <div class="big">Bo5</div>
+      <div class="small">Best of 5<br>First to 3 wins</div>
+    </div>
+    <div class="series-card" data-n="7">
+      <div class="big">Bo7</div>
+      <div class="small">Best of 7<br>First to 4 wins</div>
+    </div>
+  </div>
+  <button class="btn" id="series-start-btn" disabled>CONFIRM FORMAT</button>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     POKEMON SELECT SCREEN
+══════════════════════════════════════════════ -->
+<div id="select-screen">
+  <div class="select-header">
+    <h1>CHOOSE YOUR POKEMON</h1>
+    <p class="subtitle" id="select-subtitle">Battle 1 — Pick your fighter!</p>
+  </div>
+  <div class="score-bar">
+    <div><div class="score-label">YOU</div><div class="score-val" id="score-you">0</div></div>
+    <div style="color:#666;font-size:1.4rem;align-self:center">vs</div>
+    <div><div class="score-label">CPU</div><div class="score-val" id="score-cpu" style="color:#e74c3c">0</div></div>
+  </div>
+  <div class="pokemon-grid" id="pokemon-grid"></div>
+  <button class="btn" id="pick-btn" disabled>GO, POKEMON!</button>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     BATTLE SCREEN
+══════════════════════════════════════════════ -->
+<div id="battle-screen">
+  <!-- Series HUD -->
+  <div class="series-hud">
+    <div>
+      <span style="color:#ffde00;font-weight:bold">YOU</span>
+      <span id="hud-format" style="color:#666;font-size:.75rem;margin-left:8px"></span>
+    </div>
+    <div class="hud-score">
+      <div class="pip-row" id="player-pips"></div>
+      <span style="color:#555">vs</span>
+      <div class="pip-row" id="cpu-pips"></div>
+    </div>
+    <div><span style="color:#e74c3c;font-weight:bold">CPU</span></div>
+  </div>
+
+  <!-- Field -->
+  <div class="battle-field" id="battle-field">
+    <div class="enemy-area">
+      <div class="status-box">
+        <div class="poke-name" id="enemy-name">???</div>
+        <div class="poke-level">Lv. 50</div>
+        <div class="status-tag" id="enemy-tags"></div>
+        <div class="hp-label">HP</div>
+        <div class="hp-bar-container"><div class="hp-bar" id="enemy-hp-bar" style="width:100%"></div></div>
+        <div class="hp-text" id="enemy-hp-text">???/???</div>
+      </div>
+    </div>
+    <img id="enemy-sprite" src="" alt="enemy">
+    <img id="player-sprite" src="" alt="player">
+    <div class="player-area">
+      <div class="status-box">
+        <div class="poke-name" id="player-name">???</div>
+        <div class="poke-level">Lv. 50</div>
+        <div class="status-tag" id="player-tags"></div>
+        <div class="hp-label">HP</div>
+        <div class="hp-bar-container"><div class="hp-bar" id="player-hp-bar" style="width:100%"></div></div>
+        <div class="hp-text" id="player-hp-text">???/???</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Battle UI -->
+  <div class="battle-ui">
+    <div class="battle-log" id="battle-log"><p>A battle is about to begin!</p></div>
+    <div class="power-row">
+      <button class="power-btn" id="btn-mega" title="Mega Evolve before your next move">
+        <span class="icon">💍</span><span>MEGA RING</span>
+      </button>
+      <button class="power-btn" id="btn-tera" title="Terastallize — change your type">
+        <span class="icon">💎</span><span>TERA ORB</span>
+      </button>
+      <button class="power-btn" id="btn-z" title="Z-Ring — then pick a move to Z-Move">
+        <span class="icon">⚡</span><span>Z-RING</span>
+      </button>
+    </div>
+    <div class="move-grid" id="move-grid"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     BETWEEN BATTLES SCREEN
+══════════════════════════════════════════════ -->
+<div id="between-screen">
+  <h1 id="between-title">ROUND OVER</h1>
+  <p id="between-result" style="color:#aaa;margin-top:.5rem"></p>
+  <div class="between-score">
+    <div class="score-block"><div class="name">YOU</div><div class="num player-c" id="bs-you">0</div></div>
+    <div class="vs-divider">vs</div>
+    <div class="score-block"><div class="name">CPU</div><div class="num cpu-c" id="bs-cpu">0</div></div>
+  </div>
+  <p id="between-needed" style="color:#888;margin-bottom:1.5rem;font-size:.9rem"></p>
+  <button class="btn" id="next-battle-btn">NEXT BATTLE</button>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     END SCREEN
+══════════════════════════════════════════════ -->
+<div id="end-screen">
+  <div class="result-title" id="end-title">YOU WIN!</div>
+  <p id="result-msg" style="color:#aaa;margin-bottom:.5rem"></p>
+  <p id="result-record" style="color:#666;margin-bottom:2rem;font-size:.9rem"></p>
+  <button class="btn" id="play-again-btn">PLAY AGAIN</button>
+</div>
+
+</div><!-- #game -->
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// POKEMON DATA
+// mega: { name, id (sprite), types, attack?, defense?, spAtk?, spDef?, speed? }
+//   — only stats that change are listed; rest inherit from base
+// teraType: the Tera Type this Pokemon uses
+// ═══════════════════════════════════════════════════════════════
+const POKEMON = [
+  {
+    id:6, name:"Charizard", types:["fire","flying"],
+    hp:152, attack:109, defense:78, spAtk:109, spDef:85, speed:100,
+    teraType:"fire",
+    mega:{ name:"Mega Charizard X", id:10034, types:["dragon","fire"], attack:130, defense:111, spAtk:130, spDef:85, speed:100 },
+    moves:[
+      {name:"Flamethrower", type:"fire",    power:90,  pp:15, cat:"special",  desc:"Fire / 90"},
+      {name:"Air Slash",    type:"flying",  power:75,  pp:15, cat:"special",  desc:"Flying / 75"},
+      {name:"Dragon Claw",  type:"dragon",  power:80,  pp:15, cat:"physical", desc:"Dragon / 80"},
+      {name:"Slash",        type:"normal",  power:70,  pp:20, cat:"physical", desc:"Normal / 70"},
+    ]
+  },
+  {
+    id:9, name:"Blastoise", types:["water"],
+    hp:162, attack:83, defense:100, spAtk:85, spDef:105, speed:78,
+    teraType:"water",
+    mega:{ name:"Mega Blastoise", id:10036, types:["water"], spAtk:135, spDef:120 },
+    moves:[
+      {name:"Surf",         type:"water",   power:90,  pp:15, cat:"special",  desc:"Water / 90"},
+      {name:"Ice Beam",     type:"ice",     power:90,  pp:10, cat:"special",  desc:"Ice / 90"},
+      {name:"Flash Cannon", type:"steel",   power:80,  pp:10, cat:"special",  desc:"Steel / 80"},
+      {name:"Bite",         type:"dark",    power:60,  pp:25, cat:"physical", desc:"Dark / 60"},
+    ]
+  },
+  {
+    id:3, name:"Venusaur", types:["grass","poison"],
+    hp:160, attack:82, defense:83, spAtk:100, spDef:100, speed:80,
+    teraType:"grass",
+    mega:{ name:"Mega Venusaur", id:10033, types:["grass","poison"], spAtk:122, spDef:120, defense:123 },
+    moves:[
+      {name:"Solar Beam",   type:"grass",   power:120, pp:10, cat:"special",  desc:"Grass / 120"},
+      {name:"Sludge Bomb",  type:"poison",  power:90,  pp:10, cat:"special",  desc:"Poison / 90"},
+      {name:"Earthquake",   type:"ground",  power:100, pp:10, cat:"physical", desc:"Ground / 100"},
+      {name:"Body Slam",    type:"normal",  power:85,  pp:15, cat:"physical", desc:"Normal / 85"},
+    ]
+  },
+  {
+    id:25, name:"Pikachu", types:["electric"],
+    hp:95, attack:55, defense:40, spAtk:50, spDef:50, speed:90,
+    teraType:"electric",
+    mega:null,
+    moves:[
+      {name:"Thunderbolt",  type:"electric",power:90,  pp:15, cat:"special",  desc:"Elec / 90"},
+      {name:"Thunder",      type:"electric",power:110, pp:10, cat:"special",  desc:"Elec / 110"},
+      {name:"Iron Tail",    type:"steel",   power:100, pp:15, cat:"physical", desc:"Steel / 100"},
+      {name:"Quick Attack", type:"normal",  power:40,  pp:30, cat:"physical", desc:"Normal / 40"},
+    ]
+  },
+  {
+    id:94, name:"Gengar", types:["ghost","poison"],
+    hp:120, attack:65, defense:60, spAtk:130, spDef:75, speed:110,
+    teraType:"ghost",
+    mega:{ name:"Mega Gengar", id:10054, types:["ghost","poison"], spAtk:170, speed:130, defense:80 },
+    moves:[
+      {name:"Shadow Ball",  type:"ghost",   power:80,  pp:15, cat:"special",  desc:"Ghost / 80"},
+      {name:"Sludge Wave",  type:"poison",  power:95,  pp:10, cat:"special",  desc:"Poison / 95"},
+      {name:"Thunderbolt",  type:"electric",power:90,  pp:15, cat:"special",  desc:"Elec / 90"},
+      {name:"Dark Pulse",   type:"dark",    power:80,  pp:15, cat:"special",  desc:"Dark / 80"},
+    ]
+  },
+  {
+    id:448, name:"Lucario", types:["fighting","steel"],
+    hp:120, attack:110, defense:70, spAtk:115, spDef:70, speed:90,
+    teraType:"fighting",
+    mega:{ name:"Mega Lucario", id:10056, types:["fighting","steel"], attack:145, spAtk:140, defense:88, spDef:88, speed:112 },
+    moves:[
+      {name:"Aura Sphere",  type:"fighting",power:80,  pp:20, cat:"special",  desc:"Fight / 80"},
+      {name:"Close Combat", type:"fighting",power:120, pp:5,  cat:"physical", desc:"Fight / 120"},
+      {name:"Flash Cannon", type:"steel",   power:80,  pp:10, cat:"special",  desc:"Steel / 80"},
+      {name:"ExtremeSpeed", type:"normal",  power:80,  pp:5,  cat:"physical", desc:"Normal / 80"},
+    ]
+  },
+  {
+    id:150, name:"Mewtwo", types:["psychic"],
+    hp:174, attack:110, defense:90, spAtk:154, spDef:90, speed:130,
+    teraType:"psychic",
+    mega:{ name:"Mega Mewtwo Y", id:10045, types:["psychic"], spAtk:194, speed:140, spDef:120 },
+    moves:[
+      {name:"Psystrike",    type:"psychic", power:100, pp:10, cat:"special",  desc:"Psych / 100"},
+      {name:"Ice Beam",     type:"ice",     power:90,  pp:10, cat:"special",  desc:"Ice / 90"},
+      {name:"Thunderbolt",  type:"electric",power:90,  pp:15, cat:"special",  desc:"Elec / 90"},
+      {name:"Shadow Ball",  type:"ghost",   power:80,  pp:15, cat:"special",  desc:"Ghost / 80"},
+    ]
+  },
+  {
+    id:143, name:"Snorlax", types:["normal"],
+    hp:250, attack:110, defense:65, spAtk:65, spDef:110, speed:30,
+    teraType:"normal",
+    mega:null,
+    moves:[
+      {name:"Body Slam",    type:"normal",  power:85,  pp:15, cat:"physical", desc:"Normal / 85"},
+      {name:"Earthquake",   type:"ground",  power:100, pp:10, cat:"physical", desc:"Ground / 100"},
+      {name:"Crunch",       type:"dark",    power:80,  pp:15, cat:"physical", desc:"Dark / 80"},
+      {name:"Heavy Slam",   type:"steel",   power:100, pp:10, cat:"physical", desc:"Steel / 100"},
+    ]
+  },
+  // ── NEW 8 ──
+  {
+    id:445, name:"Garchomp", types:["dragon","ground"],
+    hp:192, attack:130, defense:85, spAtk:80, spDef:85, speed:102,
+    teraType:"dragon",
+    mega:{ name:"Mega Garchomp", id:10070, types:["dragon","ground"], attack:170, spAtk:120, defense:115, spDef:95, speed:92 },
+    moves:[
+      {name:"Earthquake",   type:"ground",  power:100, pp:10, cat:"physical", desc:"Ground / 100"},
+      {name:"Dragon Claw",  type:"dragon",  power:80,  pp:15, cat:"physical", desc:"Dragon / 80"},
+      {name:"Stone Edge",   type:"rock",    power:100, pp:5,  cat:"physical", desc:"Rock / 100"},
+      {name:"Iron Head",    type:"steel",   power:80,  pp:15, cat:"physical", desc:"Steel / 80"},
+    ]
+  },
+  {
+    id:257, name:"Blaziken", types:["fire","fighting"],
+    hp:120, attack:120, defense:70, spAtk:110, spDef:70, speed:80,
+    teraType:"fire",
+    mega:{ name:"Mega Blaziken", id:10071, types:["fire","fighting"], attack:160, spAtk:130, defense:80, spDef:80, speed:100 },
+    moves:[
+      {name:"Blaze Kick",   type:"fire",    power:85,  pp:10, cat:"physical", desc:"Fire / 85"},
+      {name:"Close Combat", type:"fighting",power:120, pp:5,  cat:"physical", desc:"Fight / 120"},
+      {name:"Hi Jump Kick", type:"fighting",power:130, pp:10, cat:"physical", desc:"Fight / 130"},
+      {name:"Thunder Punch",type:"electric",power:75,  pp:15, cat:"physical", desc:"Elec / 75"},
+    ]
+  },
+  {
+    id:282, name:"Gardevoir", types:["psychic","fairy"],
+    hp:130, attack:65, defense:65, spAtk:125, spDef:115, speed:80,
+    teraType:"fairy",
+    mega:{ name:"Mega Gardevoir", id:10072, types:["psychic","fairy"], spAtk:165, spDef:135, speed:100 },
+    moves:[
+      {name:"Moonblast",    type:"fairy",   power:95,  pp:15, cat:"special",  desc:"Fairy / 95"},
+      {name:"Psychic",      type:"psychic", power:90,  pp:10, cat:"special",  desc:"Psych / 90"},
+      {name:"Shadow Ball",  type:"ghost",   power:80,  pp:15, cat:"special",  desc:"Ghost / 80"},
+      {name:"Thunderbolt",  type:"electric",power:90,  pp:15, cat:"special",  desc:"Elec / 90"},
+    ]
+  },
+  {
+    id:212, name:"Scizor", types:["bug","steel"],
+    hp:130, attack:130, defense:100, spAtk:55, spDef:80, speed:65,
+    teraType:"steel",
+    mega:{ name:"Mega Scizor", id:10073, types:["bug","steel"], attack:150, defense:140, spDef:100 },
+    moves:[
+      {name:"Bullet Punch", type:"steel",   power:40,  pp:30, cat:"physical", desc:"Steel / 40"},
+      {name:"X-Scissor",    type:"bug",     power:80,  pp:15, cat:"physical", desc:"Bug / 80"},
+      {name:"Iron Head",    type:"steel",   power:80,  pp:15, cat:"physical", desc:"Steel / 80"},
+      {name:"Superpower",   type:"fighting",power:120, pp:5,  cat:"physical", desc:"Fight / 120"},
+    ]
+  },
+  {
+    id:248, name:"Tyranitar", types:["rock","dark"],
+    hp:181, attack:134, defense:110, spAtk:95, spDef:100, speed:61,
+    teraType:"dark",
+    mega:{ name:"Mega Tyranitar", id:10060, types:["rock","dark"], attack:164, defense:150, spDef:120 },
+    moves:[
+      {name:"Rock Slide",   type:"rock",    power:75,  pp:10, cat:"physical", desc:"Rock / 75"},
+      {name:"Crunch",       type:"dark",    power:80,  pp:15, cat:"physical", desc:"Dark / 80"},
+      {name:"Earthquake",   type:"ground",  power:100, pp:10, cat:"physical", desc:"Ground / 100"},
+      {name:"Stone Edge",   type:"rock",    power:100, pp:5,  cat:"physical", desc:"Rock / 100"},
+    ]
+  },
+  {
+    id:65, name:"Alakazam", types:["psychic"],
+    hp:90, attack:50, defense:45, spAtk:135, spDef:95, speed:120,
+    teraType:"psychic",
+    mega:{ name:"Mega Alakazam", id:10053, types:["psychic"], spAtk:175, speed:150, spDef:105 },
+    moves:[
+      {name:"Psychic",      type:"psychic", power:90,  pp:10, cat:"special",  desc:"Psych / 90"},
+      {name:"Shadow Ball",  type:"ghost",   power:80,  pp:15, cat:"special",  desc:"Ghost / 80"},
+      {name:"Focus Blast",  type:"fighting",power:120, pp:5,  cat:"special",  desc:"Fight / 120"},
+      {name:"Energy Ball",  type:"grass",   power:90,  pp:10, cat:"special",  desc:"Grass / 90"},
+    ]
+  },
+  {
+    id:373, name:"Salamence", types:["dragon","flying"],
+    hp:151, attack:135, defense:80, spAtk:110, spDef:80, speed:100,
+    teraType:"dragon",
+    mega:{ name:"Mega Salamence", id:10116, types:["dragon","flying"], attack:145, defense:130, speed:120 },
+    moves:[
+      {name:"Dragon Claw",  type:"dragon",  power:80,  pp:15, cat:"physical", desc:"Dragon / 80"},
+      {name:"Earthquake",   type:"ground",  power:100, pp:10, cat:"physical", desc:"Ground / 100"},
+      {name:"Aerial Ace",   type:"flying",  power:60,  pp:20, cat:"physical", desc:"Flying / 60"},
+      {name:"Fire Fang",    type:"fire",    power:65,  pp:15, cat:"physical", desc:"Fire / 65"},
+    ]
+  },
+  {
+    id:384, name:"Rayquaza", types:["dragon","flying"],
+    hp:180, attack:150, defense:90, spAtk:150, spDef:90, speed:95,
+    teraType:"dragon",
+    mega:{ name:"Mega Rayquaza", id:10079, types:["dragon","flying"], attack:180, spAtk:180, defense:100, spDef:100, speed:115 },
+    moves:[
+      {name:"Dragon Ascent",type:"flying",  power:120, pp:5,  cat:"physical", desc:"Flying / 120"},
+      {name:"Outrage",      type:"dragon",  power:120, pp:10, cat:"physical", desc:"Dragon / 120"},
+      {name:"ExtremeSpeed", type:"normal",  power:80,  pp:5,  cat:"physical", desc:"Normal / 80"},
+      {name:"Fire Blast",   type:"fire",    power:110, pp:5,  cat:"special",  desc:"Fire / 110"},
+    ]
+  },
+];
+
+// ═══════════════════════════════════════════════════════════════
+// TYPE CHART
+// ═══════════════════════════════════════════════════════════════
+const TYPE_CHART = {
+  fire:     {fire:.5,water:.5,grass:2,ice:2,bug:2,steel:2,rock:.5,dragon:.5},
+  water:    {fire:2,water:.5,grass:.5,ground:2,rock:2,dragon:.5},
+  grass:    {fire:.5,water:2,grass:.5,poison:.5,ground:2,rock:2,flying:.5,bug:.5,dragon:.5,steel:.5},
+  electric: {water:2,grass:.5,electric:.5,ground:0,flying:2,dragon:.5},
+  ice:      {fire:.5,water:.5,grass:2,ice:.5,ground:2,flying:2,dragon:2,steel:.5},
+  fighting: {normal:2,ice:2,rock:2,dark:2,steel:2,poison:.5,flying:.5,psychic:.5,bug:.5,ghost:0},
+  poison:   {grass:2,poison:.5,ground:.5,rock:.5,ghost:.5,steel:0,fairy:2},
+  ground:   {fire:2,electric:2,grass:.5,poison:2,rock:2,flying:0,bug:.5,steel:2},
+  flying:   {grass:2,electric:.5,fighting:2,bug:2,rock:.5,steel:.5},
+  psychic:  {fighting:2,poison:2,psychic:.5,dark:0,steel:.5},
+  ghost:    {normal:0,fighting:0,ghost:2,psychic:2,dark:.5},
+  dragon:   {dragon:2,steel:.5,fairy:0},
+  dark:     {fighting:.5,psychic:2,ghost:2,dark:.5,fairy:.5},
+  steel:    {fire:.5,water:.5,electric:.5,ice:2,rock:2,steel:.5,fairy:2},
+  normal:   {ghost:0,rock:.5,steel:.5},
+  rock:     {fire:2,ice:2,flying:2,bug:2,fighting:.5,ground:.5,steel:.5},
+  bug:      {fire:.5,grass:2,fighting:.5,flying:.5,psychic:2,ghost:.5,dark:2,steel:.5,fairy:.5},
+  fairy:    {fire:.5,fighting:2,poison:.5,dragon:2,dark:2,steel:.5},
+};
+function getEff(moveType, defTypes){
+  let m=1;
+  for(const t of defTypes){const r=TYPE_CHART[moveType]||{};if(r[t]!==undefined)m*=r[t];}
+  return m;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Z-MOVE NAMES & POWER
+// ═══════════════════════════════════════════════════════════════
+const Z_NAMES = {
+  fire:"Inferno Overdrive", water:"Hydro Vortex", grass:"Bloom Doom",
+  electric:"Gigavolt Havoc", psychic:"Shattered Psyche", ghost:"Never-Ending Nightmare",
+  fighting:"All-Out Pummeling", normal:"Breakneck Blitz", flying:"Supersonic Skystrike",
+  poison:"Acid Downpour", steel:"Corkscrew Crash", ice:"Subzero Slammer",
+  dragon:"Devastating Drake", dark:"Black Hole Eclipse", rock:"Continental Crush",
+  ground:"Tectonic Rage", bug:"Savage Spin-Out", fairy:"Twinkle Tackle",
+};
+function zPower(bp){
+  if(bp<=55)return 100; if(bp<=65)return 120; if(bp<=75)return 140;
+  if(bp<=85)return 160; if(bp<=95)return 175; if(bp<=100)return 180;
+  if(bp<=110)return 185; if(bp<=125)return 190; return 200;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GAME STATE
+// ═══════════════════════════════════════════════════════════════
+let seriesLen=3, winsNeeded=2;
+let playerWins=0, cpuWins=0, battleNum=0;
+
+// Per-battle state
+let playerPoke, enemyPoke;
+let playerHP, enemyHP;
+let playerPP, enemyPP;
+let playerMega, playerTera, playerZ;   // available flags
+let enemyMega,  enemyTera,  enemyZ;
+let playerMegaActive=false, playerTeraActive=false;
+let enemyMegaActive=false,  enemyTeraActive=false;
+let playerCurrentTypes, enemyCurrentTypes;
+let megaPending=false, zPending=false;
+let battleActive=false, playerTurn=true;
+let turnNum=0;
+// CPU timing
+let cpuMegaTurn, cpuZTurn;
+let selectedIdx=null;
+
+// ═══════════════════════════════════════════════════════════════
+// DOM REFS
+// ═══════════════════════════════════════════════════════════════
+const $ = id => document.getElementById(id);
+const screens = ['series-screen','select-screen','battle-screen','between-screen','end-screen'];
+function show(id){ screens.forEach(s=>$(s).style.display = s===id ? 'block':'none'); }
+
+// ═══════════════════════════════════════════════════════════════
+// SERIES SELECT
+// ═══════════════════════════════════════════════════════════════
+document.querySelectorAll('.series-card').forEach(card=>{
+  card.addEventListener('click',()=>{
+    document.querySelectorAll('.series-card').forEach(c=>c.classList.remove('selected'));
+    card.classList.add('selected');
+    seriesLen = parseInt(card.dataset.n);
+    winsNeeded = Math.ceil(seriesLen/2);
+    $('series-start-btn').disabled = false;
+  });
+});
+$('series-start-btn').addEventListener('click',()=>{
+  playerWins=0; cpuWins=0; battleNum=0;
+  showSelectScreen();
+});
+
+// ═══════════════════════════════════════════════════════════════
+// SELECT SCREEN
+// ═══════════════════════════════════════════════════════════════
+function showSelectScreen(){
+  selectedIdx=null;
+  $('pick-btn').disabled=true;
+  $('score-you').textContent=playerWins;
+  $('score-cpu').textContent=cpuWins;
+  $('select-subtitle').textContent=`Battle ${battleNum+1} — Pick your fighter!`;
+  buildGrid();
+  show('select-screen');
+}
+
+function buildGrid(){
+  const g=$('pokemon-grid'); g.innerHTML='';
+  POKEMON.forEach((p,i)=>{
+    const c=document.createElement('div'); c.className='pokemon-card';
+    c.innerHTML=`
+      <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.id}.png"
+           onerror="this.src=''" alt="${p.name}" width="72" height="72">
+      <div class="poke-name">${p.name}</div>
+      <div style="margin-top:3px">${p.types.map(t=>`<span class="type-badge type-${t}">${t}</span>`).join('')}</div>
+      ${p.mega?`<div class="has-mega">💍 Can Mega Evolve</div>`:'<div class="has-mega" style="color:#666">No Mega</div>'}
+      <div class="stats-preview">HP:${p.hp} Spd:${p.speed}</div>
+    `;
+    c.addEventListener('click',()=>{
+      document.querySelectorAll('.pokemon-card').forEach(x=>x.classList.remove('selected'));
+      c.classList.add('selected'); selectedIdx=i; $('pick-btn').disabled=false;
+    });
+    g.appendChild(c);
+  });
+}
+
+$('pick-btn').addEventListener('click', startBattle);
+
+// ═══════════════════════════════════════════════════════════════
+// START BATTLE
+// ═══════════════════════════════════════════════════════════════
+function applyMegaStats(base, mega){
+  // merge mega stat overrides onto base stats
+  return {
+    ...base,
+    name: mega.name,
+    types: mega.types,
+    attack:  mega.attack  ?? base.attack,
+    defense: mega.defense ?? base.defense,
+    spAtk:   mega.spAtk   ?? base.spAtk,
+    spDef:   mega.spDef   ?? base.spDef,
+    speed:   mega.speed   ?? base.speed,
+  };
+}
+
+function startBattle(){
+  battleNum++;
+  playerPoke = JSON.parse(JSON.stringify(POKEMON[selectedIdx]));
+  // CPU picks random different pokemon
+  const pool = POKEMON.filter((_,i)=>i!==selectedIdx);
+  enemyPoke = JSON.parse(JSON.stringify(pool[Math.floor(Math.random()*pool.length)]));
+
+  playerHP=playerPoke.hp; enemyHP=enemyPoke.hp;
+  playerPP=playerPoke.moves.map(m=>m.pp);
+  enemyPP=enemyPoke.moves.map(m=>m.pp);
+
+  playerCurrentTypes=[...playerPoke.types];
+  enemyCurrentTypes=[...enemyPoke.types];
+
+  playerMega=!!playerPoke.mega; playerTera=true; playerZ=true;
+  enemyMega=!!enemyPoke.mega;   enemyTera=true;  enemyZ=true;
+  playerMegaActive=false; playerTeraActive=false;
+  enemyMegaActive=false;  enemyTeraActive=false;
+  megaPending=false; zPending=false;
+  battleActive=true; turnNum=0;
+
+  // CPU timing: mega on turn 1 or 2, Z on turn 2-4
+  cpuMegaTurn = Math.random()<.6 ? 1 : 2;
+  cpuZTurn    = 2 + Math.floor(Math.random()*3);
+
+  const BASE='https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon';
+  $('player-sprite').src=`${BASE}/back/${playerPoke.id}.png`;
+  $('enemy-sprite').src=`${BASE}/${enemyPoke.id}.png`;
+  $('player-sprite').style.opacity='1';
+  $('enemy-sprite').style.opacity='1';
+  $('player-name').textContent=playerPoke.name;
+  $('enemy-name').textContent=enemyPoke.name;
+  $('player-tags').innerHTML='';
+  $('enemy-tags').innerHTML='';
+  $('battle-field').className='battle-field';
+
+  updateHUD();
+  updateHPBars();
+  buildMoveButtons();
+  updatePowerButtons();
+  show('battle-screen');
+  log(`Battle ${battleNum}! A wild ${enemyPoke.name} appeared!`,true);
+  log(`Go, ${playerPoke.name}!`);
+
+  playerTurn = playerPoke.speed >= enemyPoke.speed;
+  if(!playerTurn){ log(`${enemyPoke.name} is faster — enemy goes first!`); setTimeout(enemyMove,1300); }
+  else log(`What will ${playerPoke.name} do?`);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HUD PIPS
+// ═══════════════════════════════════════════════════════════════
+function updateHUD(){
+  $('hud-format').textContent=`Bo${seriesLen} — first to ${winsNeeded}`;
+  const pp=$('player-pips'); pp.innerHTML='';
+  const cp=$('cpu-pips');    cp.innerHTML='';
+  for(let i=0;i<winsNeeded;i++){
+    const p=document.createElement('div');
+    p.className='pip'+(i<playerWins?' won':''); pp.appendChild(p);
+  }
+  for(let i=0;i<winsNeeded;i++){
+    const p=document.createElement('div');
+    p.className='pip'+(i<cpuWins?' cpu-won':''); cp.appendChild(p);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HP BARS
+// ═══════════════════════════════════════════════════════════════
+function updateHPBars(){
+  const pPct=Math.max(0,playerHP/playerPoke.hp*100);
+  const ePct=Math.max(0,enemyHP/enemyPoke.hp*100);
+  const pb=$('player-hp-bar'), eb=$('enemy-hp-bar');
+  pb.style.width=pPct+'%'; eb.style.width=ePct+'%';
+  pb.className='hp-bar'+(pPct<20?' red':pPct<50?' yellow':'');
+  eb.className='hp-bar'+(ePct<20?' red':ePct<50?' yellow':'');
+  $('player-hp-text').textContent=`${Math.max(0,playerHP)}/${playerPoke.hp}`;
+  $('enemy-hp-text').textContent=`${Math.max(0,enemyHP)}/${enemyPoke.hp}`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MOVE BUTTONS
+// ═══════════════════════════════════════════════════════════════
+function buildMoveButtons(){
+  const g=$('move-grid'); g.innerHTML='';
+  playerPoke.moves.forEach((m,i)=>{
+    const b=document.createElement('button');
+    b.className='move-btn'; b.id=`mb-${i}`;
+    b.innerHTML=`<div><span class="type-badge type-${m.type}">${m.type}</span> <span class="move-name">${m.name}</span></div>
+      <div class="move-info">${m.desc} &nbsp; PP:<span id="pp-${i}">${playerPP[i]}</span>/${m.pp}</div>`;
+    b.addEventListener('click',()=>playerMove(i));
+    g.appendChild(b);
+  });
+}
+
+function setMoveBtns(on){
+  playerPoke.moves.forEach((_,i)=>{
+    const b=$(`mb-${i}`);
+    if(b) b.disabled=!on||playerPP[i]<=0;
+    if(b && on && zPending) b.classList.add('z-highlight');
+    else if(b) b.classList.remove('z-highlight');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// POWER BUTTONS
+// ═══════════════════════════════════════════════════════════════
+function updatePowerButtons(){
+  const bm=$('btn-mega'), bt=$('btn-tera'), bz=$('btn-z');
+
+  // MEGA
+  if(!playerPoke.mega || !playerMega || playerMegaActive){
+    bm.disabled=true; bm.classList.remove('mega-on');
+    if(playerMegaActive) bm.classList.add('used');
+    else if(!playerPoke.mega){ bm.disabled=true; bm.classList.add('used'); }
+  } else {
+    bm.disabled=false;
+    bm.className='power-btn'+(megaPending?' mega-on':'');
+  }
+
+  // TERA
+  if(!playerTera || playerTeraActive){
+    bt.disabled=true;
+    if(playerTeraActive) bt.classList.add('used');
+  } else {
+    bt.disabled=false; bt.className='power-btn';
+  }
+
+  // Z
+  if(!playerZ){
+    bz.disabled=true; bz.classList.add('used');
+  } else {
+    bz.disabled=false;
+    bz.className='power-btn'+(zPending?' z-on':'');
+  }
+}
+
+$('btn-mega').addEventListener('click',()=>{
+  if(!playerMega||playerMegaActive||!playerTurn||!battleActive) return;
+  megaPending=!megaPending;
+  if(zPending){ zPending=false; setMoveBtns(true); }
+  updatePowerButtons();
+  log(megaPending?`Mega Ring activated! Pick a move to Mega Evolve!`:`Mega Ring deactivated.`);
+});
+
+$('btn-tera').addEventListener('click',()=>{
+  if(!playerTera||playerTeraActive||!playerTurn||!battleActive) return;
+  playerTeraActive=true; playerTera=false;
+  playerCurrentTypes=[playerPoke.teraType];
+  $('battle-field').classList.add('tera-active-player');
+  const tag=`<span class="type-badge type-${playerPoke.teraType}">✦ TERA ${playerPoke.teraType.toUpperCase()}</span>`;
+  $('player-tags').innerHTML=tag;
+  log(`${playerPoke.name} Terastallized into ${playerPoke.teraType.toUpperCase()} type! ✦`);
+  updatePowerButtons();
+});
+
+$('btn-z').addEventListener('click',()=>{
+  if(!playerZ||!playerTurn||!battleActive) return;
+  zPending=!zPending;
+  if(megaPending){ megaPending=false; }
+  updatePowerButtons();
+  setMoveBtns(true);
+  log(zPending?`Z-Ring activated! Pick a move to unleash a Z-Move!`:`Z-Ring deactivated.`);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// LOG
+// ═══════════════════════════════════════════════════════════════
+function log(msg,clear=false){
+  const el=$('battle-log');
+  if(clear) el.innerHTML='';
+  const p=document.createElement('p'); p.textContent=msg;
+  el.appendChild(p); el.scrollTop=el.scrollHeight;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DAMAGE
+// ═══════════════════════════════════════════════════════════════
+function calcDmg(atkr, move, defr, defTypes){
+  if(!move.power) return {dmg:0,eff:1};
+  const atk = move.cat==='special'?atkr.spAtk:atkr.attack;
+  const def = move.cat==='special'?defr.spDef:defr.defense;
+  const eff = getEff(move.type, defTypes);
+  const stab = atkr.types.includes(move.type)?1.5:1;
+  const rand = .85+Math.random()*.15;
+  const dmg = Math.max(1,Math.floor(((2*50/5+2)*move.power*atk/def/50+2)*stab*eff*rand));
+  return {dmg,eff};
+}
+
+function effMsg(e){
+  if(e===0)   return "It had no effect!";
+  if(e>=4)    return "It's super super effective!!";
+  if(e>=2)    return "It's super effective!";
+  if(e<=.25)  return "It's barely effective...";
+  if(e<=.5)   return "It's not very effective...";
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PLAYER MOVE
+// ═══════════════════════════════════════════════════════════════
+function playerMove(idx){
+  if(!playerTurn||!battleActive) return;
+  if(playerPP[idx]<=0){log("No PP left for that move!"); return;}
+
+  setMoveBtns(false);
+  playerPP[idx]--;
+  $(`pp-${idx}`).textContent=playerPP[idx];
+
+  const move=playerPoke.moves[idx];
+  const isZ=zPending;
+  const isMega=megaPending;
+
+  if(isMega){
+    megaPending=false; playerMega=false; playerMegaActive=true;
+    // apply mega stats
+    const megaData=playerPoke.mega;
+    playerPoke=applyMegaStats(playerPoke,megaData);
+    playerCurrentTypes=[...playerPoke.types];
+    const BASE='https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon';
+    $('player-sprite').src=`${BASE}/back/${megaData.id}.png`;
+    $('player-sprite').classList.add('mega-evolve-anim');
+    setTimeout(()=>$('player-sprite').classList.remove('mega-evolve-anim'),2500);
+    $('player-name').textContent=playerPoke.name;
+    $('battle-field').classList.add('mega-active-player');
+    const tag=`<span class="type-badge type-${playerPoke.types[0]}">⬡ MEGA</span>`;
+    $('player-tags').innerHTML=tag+(playerTeraActive?`<span class="type-badge type-${playerPoke.teraType}">✦</span>`:'');
+    log(`${playerPoke.name} Mega Evolved into ${playerPoke.name}! ⬡`);
+    updatePowerButtons();
+  }
+
+  if(isZ){ zPending=false; playerZ=false; updatePowerButtons(); }
+
+  const movePow = isZ?zPower(move.power):move.power;
+  const displayName = isZ?(Z_NAMES[move.type]||('Z-'+move.name)):move.name;
+  log(`${playerPoke.name} used ${displayName}!${isZ?' ⚡':''}`, !isMega);
+
+  if(!movePow){ log("(No damage)"); setTimeout(()=>{ playerTurn=false; setTimeout(enemyMove,900); },600); return; }
+
+  const atkrForCalc={...playerPoke, types:playerCurrentTypes};
+  const {dmg,eff}=calcDmg(atkrForCalc,{...move,power:movePow},enemyPoke,enemyCurrentTypes);
+
+  setTimeout(()=>{
+    enemyHP-=dmg;
+    const em=effMsg(eff); if(em) log(em);
+    log(`Dealt ${dmg} damage to ${enemyPoke.name}!`);
+    const sp=$('enemy-sprite');
+    sp.classList.add(isZ?'zmove-anim':'shake');
+    setTimeout(()=>sp.classList.remove(isZ?'zmove-anim':'shake'),600);
+    updateHPBars();
+    if(enemyHP<=0) endBattle(true);
+    else{ playerTurn=false; setTimeout(enemyMove,1100); }
+  },380);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ENEMY MOVE (CPU AI)
+// ═══════════════════════════════════════════════════════════════
+function enemyMove(){
+  if(!battleActive) return;
+  turnNum++;
+
+  // CPU: Mega evolve on scheduled turn
+  if(enemyMega && !enemyMegaActive && turnNum===cpuMegaTurn && enemyPoke.mega){
+    enemyMegaActive=true; enemyMega=false;
+    const megaData=enemyPoke.mega;
+    enemyPoke=applyMegaStats(enemyPoke,megaData);
+    enemyCurrentTypes=[...enemyPoke.types];
+    const BASE='https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon';
+    $('enemy-sprite').src=`${BASE}/${megaData.id}.png`;
+    $('enemy-sprite').classList.add('mega-evolve-anim');
+    setTimeout(()=>$('enemy-sprite').classList.remove('mega-evolve-anim'),2500);
+    $('enemy-name').textContent=enemyPoke.name;
+    $('battle-field').classList.add('mega-active-enemy');
+    $('enemy-tags').innerHTML=`<span class="type-badge type-${enemyPoke.types[0]}">⬡ MEGA</span>`;
+    log(`Enemy ${enemyPoke.name} Mega Evolved! ⬡`);
+  }
+
+  // CPU: Tera when HP < 50%
+  if(enemyTera && !enemyTeraActive && enemyHP/enemyPoke.hp<.5){
+    enemyTeraActive=true; enemyTera=false;
+    enemyCurrentTypes=[enemyPoke.teraType];
+    $('battle-field').classList.add('tera-active-enemy');
+    const prev=$('enemy-tags').innerHTML;
+    $('enemy-tags').innerHTML=prev+`<span class="type-badge type-${enemyPoke.teraType}">✦</span>`;
+    log(`Enemy ${enemyPoke.name} Terastallized into ${enemyPoke.teraType.toUpperCase()}! ✦`);
+  }
+
+  const avail=enemyPoke.moves.map((m,i)=>({m,i})).filter(({m,i})=>enemyPP[i]>0&&m.power>0);
+  if(!avail.length){
+    log(`${enemyPoke.name} struggled!`); playerHP-=10; updateHPBars();
+    if(playerHP<=0){endBattle(false);return;}
+    playerTurn=true; setMoveBtns(true); log(`What will ${playerPoke.name} do?`); return;
+  }
+
+  // CPU: pick best Z move on scheduled turn
+  let useZ=false;
+  if(enemyZ && turnNum===cpuZTurn){
+    useZ=true; enemyZ=false;
+  }
+
+  let chosen;
+  if(useZ){
+    // pick highest base power move for Z
+    chosen=avail.reduce((best,c)=>c.m.power>best.m.power?c:best,avail[0]);
+  } else {
+    // pick random
+    chosen=avail[Math.floor(Math.random()*avail.length)];
+  }
+
+  const {m:move,i:idx}=chosen;
+  enemyPP[idx]--;
+
+  const movePow=useZ?zPower(move.power):move.power;
+  const displayName=useZ?(Z_NAMES[move.type]||('Z-'+move.name)):move.name;
+  log(`${enemyPoke.name} used ${displayName}!${useZ?' ⚡':''}`);
+
+  const atkrForCalc={...enemyPoke, types:enemyCurrentTypes};
+  const {dmg,eff}=calcDmg(atkrForCalc,{...move,power:movePow},playerPoke,playerCurrentTypes);
+
+  setTimeout(()=>{
+    playerHP-=dmg;
+    const em=effMsg(eff); if(em) log(em);
+    log(`Dealt ${dmg} damage to ${playerPoke.name}!`);
+    const sp=$('player-sprite');
+    sp.classList.add(useZ?'zmove-anim':'flash');
+    setTimeout(()=>sp.classList.remove(useZ?'zmove-anim':'flash'),900);
+    updateHPBars();
+    if(playerHP<=0) endBattle(false);
+    else{ playerTurn=true; setMoveBtns(true); log(`What will ${playerPoke.name} do?`); }
+  },380);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// END BATTLE
+// ═══════════════════════════════════════════════════════════════
+function endBattle(playerWon){
+  battleActive=false;
+  setMoveBtns(false);
+  ['btn-mega','btn-tera','btn-z'].forEach(id=>$(id).disabled=true);
+
+  if(playerWon){ playerWins++; $('enemy-sprite').style.opacity='.2'; log(`${enemyPoke.name} fainted! You win this round!`); }
+  else          { cpuWins++;   $('player-sprite').style.opacity='.2'; log(`${playerPoke.name} fainted! CPU wins this round!`); }
+
+  updateHUD();
+
+  setTimeout(()=>{
+    if(playerWins>=winsNeeded||cpuWins>=winsNeeded){
+      showEndScreen();
+    } else {
+      showBetweenScreen(playerWon);
+    }
+  },1600);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BETWEEN SCREEN
+// ═══════════════════════════════════════════════════════════════
+function showBetweenScreen(playerWon){
+  $('between-title').textContent = playerWon ? 'ROUND WON! 🏆' : 'ROUND LOST...';
+  $('between-title').style.color = playerWon ? '#ffde00' : '#e74c3c';
+  $('between-result').textContent = playerWon
+    ? `${playerPoke.name} defeated ${enemyPoke.name}!`
+    : `${enemyPoke.name} defeated ${playerPoke.name}!`;
+  $('bs-you').textContent=playerWins;
+  $('bs-cpu').textContent=cpuWins;
+  const pr=winsNeeded-playerWins, cr=winsNeeded-cpuWins;
+  $('between-needed').textContent=`You need ${pr} more win${pr!==1?'s':''} | CPU needs ${cr} more win${cr!==1?'s':''}`;
+  show('between-screen');
+}
+
+$('next-battle-btn').addEventListener('click',showSelectScreen);
+
+// ═══════════════════════════════════════════════════════════════
+// END SCREEN
+// ═══════════════════════════════════════════════════════════════
+function showEndScreen(){
+  const won=playerWins>=winsNeeded;
+  const t=$('end-title');
+  t.textContent = won ? 'YOU WIN THE SERIES! 🏆' : 'CPU WINS THE SERIES!';
+  t.className = 'result-title '+(won?'result-win':'result-lose');
+  $('result-msg').textContent = won
+    ? `You dominated the Bo${seriesLen} series!`
+    : `The CPU took the Bo${seriesLen} series!`;
+  $('result-record').textContent=`Final score: You ${playerWins} — ${cpuWins} CPU`;
+  show('end-screen');
+}
+
+$('play-again-btn').addEventListener('click',()=>{
+  playerWins=0; cpuWins=0; battleNum=0;
+  show('series-screen');
+  document.querySelectorAll('.series-card').forEach(c=>c.classList.remove('selected'));
+  $('series-start-btn').disabled=true;
+});
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+show('series-screen');
+</script>
+</body>
+</html>

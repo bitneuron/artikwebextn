@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Lens</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div id="app">
+
+    <header class="header">
+      <div class="logo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <circle cx="11" cy="11" r="8" stroke="#818cf8" stroke-width="2"/>
+          <circle cx="11" cy="11" r="4" fill="#4f46e5" opacity="0.7"/>
+          <line x1="17" y1="17" x2="22" y2="22" stroke="#818cf8" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+        <span class="logo-text">Lens</span>
+        <span class="logo-badge">by Artik</span>
+      </div>
+      <div id="page-url" class="page-url">—</div>
+    </header>
+
+    <div class="actions">
+      <button class="action-btn" id="btn-extract">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Extract Content
+      </button>
+      <button class="action-btn" id="btn-screenshot">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M3 9V6a2 2 0 0 1 2-2h1l2-2h8l2 2h1a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9z"/></svg>
+        Screenshot
+      </button>
+      <button class="action-btn action-btn--select" id="btn-select">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9V5a2 2 0 0 1 2-2h4M3 15v4a2 2 0 0 0 2 2h4M15 3h4a2 2 0 0 1 2 2v4M15 21h4a2 2 0 0 0 2-2v-4"/></svg>
+        Select Area
+      </button>
+    </div>
+
+
+    <div id="status" class="status hidden"></div>
+
+    <div id="progress" class="progress hidden">
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+      <span id="progress-text">Capturing...</span>
+    </div>
+
+    <div id="results" class="results hidden">
+      <div class="tabs">
+        <button class="tab active" data-tab="content">Content</button>
+        <button class="tab" data-tab="screenshot">Screenshot</button>
+        <button class="tab" data-tab="images">Images <span class="tab-badge" id="img-count"></span></button>
+        <button class="tab" data-tab="links">Links <span class="tab-badge" id="link-count"></span></button>
+      </div>
+
+      <div id="tab-content" class="tab-panel">
+        <div class="section-row">
+          <span class="section-label" id="heading-label">Headings</span>
+          <button class="copy-btn" data-copy="headings">Copy</button>
+        </div>
+        <div id="headings-list" class="headings-list"></div>
+        <div class="section-row" style="margin-top:10px">
+          <span class="section-label">Main Text</span>
+          <button class="copy-btn" data-copy="text">Copy</button>
+        </div>
+        <div id="text-preview" class="text-preview"></div>
+      </div>
+
+      <div id="tab-screenshot" class="tab-panel hidden">
+        <div id="screenshot-area" class="screenshot-area">
+          <p class="empty-msg">No screenshot yet — click "Full Screenshot"</p>
+        </div>
+        <div class="shot-actions hidden" id="shot-actions">
+          <button class="small-btn" id="btn-dl-img">Download PNG</button>
+          <button class="small-btn" id="btn-copy-img">Copy Image</button>
+        </div>
+      </div>
+
+      <div id="tab-images" class="tab-panel hidden">
+        <div id="images-grid" class="images-grid"></div>
+      </div>
+
+      <div id="tab-links" class="tab-panel hidden">
+        <div id="links-list" class="links-list"></div>
+      </div>
+    </div>
+
+    <div id="footer" class="footer hidden">
+      <button class="footer-btn footer-primary" id="btn-artiklens">Open in ArtikLens</button>
+      <button class="footer-btn" id="btn-copy-all">Copy All Text</button>
+      <button class="footer-btn footer-ai" id="btn-ask-ai">Ask ChatGPT</button>
+    </div>
+
+    <!-- AI Panel -->
+    <div id="ai-panel" class="ai-panel hidden">
+      <div class="ai-panel-header">
+        <span>Ask ChatGPT</span>
+        <button class="ai-close-btn" id="btn-ai-close">✕</button>
+      </div>
+      <textarea id="ai-question" class="ai-textarea" rows="2" placeholder="What would you like to know about this page?"></textarea>
+      <div class="ai-btn-row">
+        <button class="ai-send-btn" id="btn-ai-send">Ask ChatGPT</button>
+        <button class="ai-open-btn" id="btn-open-chatgpt" title="Open this conversation in ChatGPT tab">Open in ChatGPT ↗</button>
+      </div>
+      <div id="ai-response" class="ai-response hidden"></div>
+      <button class="ai-pdf-btn hidden" id="btn-dl-pdf">Download as PDF (for ChatGPT upload)</button>
+    </div>
+
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
