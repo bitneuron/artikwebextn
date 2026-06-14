@@ -78,6 +78,24 @@
   .pf-meta { color:var(--mut); font-size:12.5px; }
   .pg-sent { text-align:center; color:var(--mut); font-size:12px; padding:14px; }
   .pg-end  { text-align:center; color:var(--mut); font-size:12px; padding:10px; opacity:.7; }
+  /* Copilot chat */
+  #copilot { margin-top:18px; border:1px solid var(--line); border-radius:12px; background:var(--panel); overflow:hidden; }
+  .cop-head { display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--line); background:rgba(56,139,253,.07); }
+  .cop-body { max-height:46vh; overflow-y:auto; padding:12px 14px; display:flex; flex-direction:column; gap:10px; }
+  .cop-msg { display:flex; }
+  .cop-msg.user { justify-content:flex-end; }
+  .cop-bubble { max-width:82%; padding:8px 12px; border-radius:12px; font-size:13.5px; line-height:1.5; white-space:normal; }
+  .cop-msg.user .cop-bubble { background:var(--acc); color:#fff; border-bottom-right-radius:4px; }
+  .cop-msg.assistant .cop-bubble { background:var(--bg); border:1px solid var(--line); border-bottom-left-radius:4px; }
+  .cop-bubble ul { margin:6px 0; padding-left:18px; }
+  .cop-bubble code { background:rgba(127,127,127,.18); padding:1px 5px; border-radius:5px; font-size:12px; }
+  .cop-chips { display:flex; flex-wrap:wrap; gap:6px; padding:0 14px 10px; }
+  .cop-chips .chip { background:var(--bg); border:1px solid var(--line); color:var(--txt); border-radius:999px; padding:5px 11px; font-size:12px; cursor:pointer; }
+  .cop-chips .chip:hover { border-color:var(--acc); }
+  .cop-in { display:flex; gap:8px; padding:10px 14px; border-top:1px solid var(--line); }
+  .cop-in input { flex:1; background:var(--bg); color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:9px 12px; font-size:14px; }
+  .cop-in button { background:var(--acc); color:#fff; border:none; border-radius:8px; padding:9px 16px; font-size:14px; cursor:pointer; }
+  .cop-in button:disabled { opacity:.5; cursor:default; }
   .hidden { display:none; }
   th.sortable { cursor:pointer; user-select:none; white-space:nowrap; }
   th.sortable:hover { color:var(--txt); }
@@ -174,6 +192,9 @@
     </div>
     <div id="hist-out"></div>
   </section>
+
+  <!-- Artik Stock Copilot (chat) — shown after a search, or seeded from an Explain panel -->
+  <div id="copilot" class="hidden"></div>
 </main>
 
 <script>
@@ -196,6 +217,7 @@ async function run(){
       if(data.error){ $('#out').innerHTML = '<div class="err">'+data.error+'</div>'; return; }
       render(data.results);
       addHist({type:'tickers', query: tokens.join(', '), count:(data.results||[]).length, results:data.results});
+      openCopilotSearch();
     } else {
       btn.textContent = 'Searching…';
       $('#out').innerHTML = '<div class="spin">🔎 AI Search — interpreting your query and scoring candidates live… (this can take ~15s)</div>';
@@ -204,6 +226,7 @@ async function run(){
       if(data.error){ $('#out').innerHTML = '<div class="err">'+data.error+'</div>'; return; }
       render(data.results, {summary:data.summary, provider:data.provider});
       addHist({type:'ai', query: raw, summary:data.summary, provider:data.provider, count:(data.results||[]).length, results:data.results});
+      openCopilotSearch();
     }
   } catch(e){
     $('#out').innerHTML = '<div class="err">Request failed: '+e+'</div>';
@@ -428,14 +451,15 @@ function detail(r){
         <span class="k">Size</span><span>${tp.position_size??'—'}</span>
       </div>
     </div>
-    <div style="grid-column:1/-1;border-top:1px solid var(--line);margin-top:8px;padding-top:10px">
-      <button class="ex-btn" onclick="loadEnrich('${r.ticker}', this)">📊 Alpha Vantage — Bollinger Bands + fundamentals</button>
+    <div style="grid-column:1/-1;border-top:1px solid var(--line);margin-top:8px;padding-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="ex-btn" onclick="askCopilotStock('${r.ticker}')">💬 Ask Copilot about ${r.ticker}</button>
+      <span class="av-slot"><button class="ex-btn" onclick="loadEnrich('${r.ticker}', this)">📊 Alpha Vantage — Bollinger Bands + fundamentals</button></span>
     </div>
   </div>`;
 }
 
 async function loadEnrich(ticker, btn){
-  const box = btn.parentElement;
+  const box = btn.closest('.av-slot') || btn.parentElement;
   box.innerHTML = '<span style="color:var(--mut)">Loading Alpha Vantage…</span>';
   try {
     const res = await fetch('/api/enrich/' + encodeURIComponent(ticker));
@@ -461,6 +485,98 @@ async function loadEnrich(ticker, btn){
 function toggle(i){
   const d = $('#d'+i);
   d.style.display = d.style.display==='none' ? '' : 'none';
+}
+
+// ── Artik Stock Copilot (chat) ────────────────────────────────────────────────
+window._cop = { mode:'search', ctx:null, msgs:[], busy:false, provider:null };
+function escapeHtml(s){ return (s||'').replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function mdLite(s){            // tiny markdown: bold, code, bullets, line breaks
+  let h = escapeHtml(s);
+  h = h.replace(/`([^`]+)`/g, '<code>$1</code>')
+       .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+  const lines = h.split('\n'); let out='', inUl=false;
+  for(const ln of lines){
+    const m = ln.match(/^\s*[-•]\s+(.*)$/);
+    if(m){ if(!inUl){ out+='<ul>'; inUl=true; } out+='<li>'+m[1]+'</li>'; }
+    else { if(inUl){ out+='</ul>'; inUl=false; } out += ln.trim()? ln+'<br>' : ''; }
+  }
+  if(inUl) out+='</ul>';
+  return out;
+}
+function copilotSearchContext(){
+  const rows = (window._rows||[]).filter(r=>!r.error).slice(0,25).map(r=>({
+    ticker:r.ticker, company:r.company, sector:r.sector, score:r.score, status:r.status,
+    rsi:r.rsi, archetype:(r.breakdown&&r.breakdown.archetype), why:r.why,
+    strengths:(r.strengths||[]).slice(0,3), risks:(r.risks||[]).slice(0,3)
+  }));
+  const o = window._lastOpts||{};
+  return { query: ($('#syms').value||'').trim(), summary:o.summary||'', count:rows.length, results:rows };
+}
+function openCopilotSearch(){
+  if(!(window._rows||[]).length) return;
+  window._cop = { mode:'search', ctx:copilotSearchContext(), msgs:[], busy:false, provider:null };
+  $('#copilot').classList.remove('hidden');
+  renderCopilot();
+}
+async function askCopilotStock(ticker){
+  $('#copilot').classList.remove('hidden');
+  window._cop = { mode:'stock', ctx:{ticker, loading:true}, msgs:[], busy:false, provider:null };
+  renderCopilot();
+  $('#copilot').scrollIntoView({behavior:'smooth', block:'nearest'});
+  try {
+    const d = await (await fetch('/api/analyze?symbols='+encodeURIComponent(ticker))).json();
+    const r = (d.results||[])[0];
+    window._cop.ctx = (r && !r.error) ? r : {ticker};
+  } catch(e){ window._cop.ctx = {ticker}; }
+  renderCopilot();
+}
+function renderCopilot(){
+  const c = window._cop;
+  const title = c.mode==='stock'
+    ? `💬 Artik Copilot — ${c.ctx.ticker||'stock'}${c.ctx.status?` · ${c.ctx.status} ${c.ctx.score??''}`:''}`
+    : `💬 Artik Copilot — ${(c.ctx&&c.ctx.count)||0} search result${((c.ctx&&c.ctx.count)===1)?'':'s'}`;
+  const sugg = c.mode==='stock'
+    ? ['Why this rating?','What is the biggest risk?','Explain the trade plan',"What's holding the score back?",'Compare to peers']
+    : ['Why did the top stock appear?','Compare the top 3 BUYs','Which has the strongest quality?','Find cheaper alternatives','Show only BUYs'];
+  let msgs = c.msgs.map(m =>
+    `<div class="cop-msg ${m.role}"><div class="cop-bubble">${m.role==='assistant'?mdLite(m.content):escapeHtml(m.content)}</div></div>`).join('');
+  if(c.busy) msgs += `<div class="cop-msg assistant"><div class="cop-bubble"><span style="color:var(--mut)">Thinking…</span></div></div>`;
+  const placeholder = `<div class="hint" style="padding:4px 2px">Ask anything about ${c.mode==='stock'?'this stock':'these results'} — Artik data is the source of truth.</div>`;
+  const chips = c.msgs.length ? '' :
+    `<div class="cop-chips">${sugg.map(s=>`<button class="chip" onclick="copilotAsk(this.textContent)">${s}</button>`).join('')}</div>`;
+  $('#copilot').innerHTML = `
+    <div class="cop-head"><b>${title}</b>
+      ${c.provider?`<span class="pf-meta">via ${c.provider==='gpt'?'GPT':'Claude'}</span>`:''}
+      <button class="ex-btn" style="margin-left:auto" onclick="$('#copilot').classList.add('hidden')">✕ Close</button>
+    </div>
+    <div class="cop-body" id="cop-body">${msgs||placeholder}</div>
+    ${chips}
+    <div class="cop-in">
+      <input id="cop-input" placeholder="Ask the copilot…" ${c.busy?'disabled':''}
+        onkeydown="if(event.key==='Enter'){event.preventDefault();copilotAsk();}" />
+      <button id="cop-send" onclick="copilotAsk()" ${c.busy?'disabled':''}>Send</button>
+    </div>`;
+  const inp = $('#cop-input'); if(inp && !c.busy) inp.focus();
+  const body = $('#cop-body'); if(body) body.scrollTop = body.scrollHeight;
+}
+async function copilotAsk(text){
+  const c = window._cop; if(c.busy) return;
+  const inp = $('#cop-input');
+  const q = (text || (inp && inp.value) || '').trim();
+  if(!q) return;
+  c.msgs.push({role:'user', content:q});
+  c.busy = true; renderCopilot();
+  try {
+    const res = await fetch('/api/copilot', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({mode:c.mode, context:c.ctx, messages:c.msgs})});
+    const d = await res.json();
+    c.busy = false;
+    if(d.error){ c.msgs.push({role:'assistant', content:'⚠️ '+d.error}); }
+    else { c.provider = d.provider; c.msgs.push({role:'assistant', content:d.reply}); }
+  } catch(e){
+    c.busy = false; c.msgs.push({role:'assistant', content:'⚠️ Request failed: '+e});
+  }
+  renderCopilot();
 }
 
 async function runPortfolio(){

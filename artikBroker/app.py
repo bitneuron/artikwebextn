@@ -477,6 +477,110 @@ def api_search(q: str = Query(..., description="natural-language stock search"))
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Artik Stock Copilot — AI analyst chat that sits on top of the engine output.
+# The Artik Engine output (search results / stock detail passed as context) is the
+# single source of truth; the LLM only explains/compares/refines, never invents
+# numbers. Provider cascade: Claude first, GPT fallback (same as /api/search).
+# ──────────────────────────────────────────────────────────────────────────────
+_COPILOT_SYSTEM = """You are Artik Stock Copilot, an AI equity-research analyst embedded inside Artik Broker.
+You work alongside the Artik Scoring Engine and help users understand, explore, compare, refine and
+discover stocks using Artik Broker's proprietary scoring framework.
+
+You are NOT a generic financial chatbot and NOT a personal investment advisor — you are a copilot for
+Artik Broker. Your single source of truth is ALWAYS the Artik Engine output provided as context
+(current search results or current stock detail).
+
+MODES
+- Search Analysis: when given search results, help the user understand/compare/filter/refine results
+  and discover alternatives (e.g. "why did NVDA appear?", "compare the top 3 BUYs", "show only
+  Industrials", "find cheaper alternatives").
+- Stock Detail: when given one stock's detail, explain why it got its score and BUY/HOLD/SELL, its
+  strengths, risks, technicals, fundamentals, signals, trade plan, peer comparison and what-if scenarios.
+
+HOW TO ANSWER
+- Be concise. Prefer bullet points, real numbers, and category-score references from the context.
+- Cite the Artik figures (score, category scores out of their max, multiplier, archetype, RSI, percentiles).
+- For what-if questions, clearly label the analysis as hypothetical and estimate the directional impact;
+  never change the actual Artik scores.
+- End most answers with 2-3 short suggested follow-up questions when helpful.
+
+SOURCE PRIORITY: current Artik Engine output > current search results/signals/technicals/fundamentals.
+Use general financial knowledge ONLY to explain concepts, never to override Artik data.
+
+NEVER invent prices, scores, indicators, fundamentals, or signals. Never hallucinate, never guarantee
+future performance, never give personalized investment advice, never recommend specific trades.
+
+MISSING DATA: if something is not in the provided context, say
+"I do not see that information in the current Artik Engine output." Do not guess."""
+
+
+def _copilot_context_block(mode: str, context: dict) -> str:
+    label = "CURRENT STOCK DETAIL" if mode == "stock" else "CURRENT SEARCH RESULTS"
+    try:
+        blob = json.dumps(context, default=str)[:14000]
+    except Exception:  # noqa: BLE001
+        blob = "{}"
+    return (f"{label} — Artik Engine output (your single source of truth; do not invent anything "
+            f"beyond this):\n```json\n{blob}\n```")
+
+
+def _copilot_anthropic(messages, sys_text, key):
+    import anthropic
+    client = anthropic.Anthropic(api_key=key)
+    msg = client.messages.create(model="claude-opus-4-8", max_tokens=1200,
+                                 system=sys_text, messages=messages)
+    return "".join(getattr(b, "text", "") for b in msg.content if getattr(b, "type", "") == "text").strip()
+
+
+def _copilot_openai(messages, sys_text, key):
+    from openai import OpenAI
+    client = OpenAI(api_key=key)
+    resp = client.chat.completions.create(
+        model="gpt-5-mini",
+        messages=[{"role": "system", "content": sys_text}] + messages,
+        max_completion_tokens=1200, reasoning_effort="minimal")
+    return (resp.choices[0].message.content or "").strip()
+
+
+@app.post("/api/copilot")
+async def api_copilot(request: Request):
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"error": "invalid JSON body"}, status_code=400)
+    raw = body.get("messages") or []
+    if not raw:
+        return JSONResponse({"error": "no messages"}, status_code=400)
+    # keep the last 12 turns; coerce to clean user/assistant text
+    conv = [{"role": ("assistant" if m.get("role") == "assistant" else "user"),
+             "content": str(m.get("content", ""))[:4000]} for m in raw][-12:]
+    if conv[0]["role"] != "user":              # Anthropic requires a leading user turn
+        conv = conv[1:]
+    if not conv:
+        return JSONResponse({"error": "no user message"}, status_code=400)
+    mode = "stock" if body.get("mode") == "stock" else "search"
+    sys_text = _COPILOT_SYSTEM + "\n\n" + _copilot_context_block(mode, body.get("context") or {})
+
+    akey, okey = _anthropic_key(), _openai_key()
+    if not akey and not okey:
+        return JSONResponse({"error": "Copilot unavailable: no ANTHROPIC_API_KEY or OPENAI_API_KEY configured."}, status_code=503)
+    reply, provider, last_err = None, None, None
+    if akey:
+        try:
+            reply, provider = _copilot_anthropic(conv, sys_text, akey), "claude"
+        except Exception as e:  # noqa: BLE001
+            last_err = _err_detail(e)
+    if reply is None and okey:
+        try:
+            reply, provider = _copilot_openai(conv, sys_text, okey), "gpt"
+        except Exception as e:  # noqa: BLE001
+            last_err = _err_detail(e)
+    if not reply:
+        return JSONResponse({"error": f"Copilot failed: {last_err or 'no provider available'}"}, status_code=502)
+    return {"provider": provider, "reply": reply}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Alpha Vantage enrichment — on-demand single-ticker Bollinger Bands + fundamentals.
 # Fired only when a user clicks "Explain → Load Alpha Vantage" (respects the free
 # 25/day budget); cached once per ticker per day. yfinance stays the engine's source.
