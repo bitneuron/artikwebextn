@@ -44,17 +44,27 @@ if ! aws iam get-role --role-name "${ROLE}" >/dev/null 2>&1; then
 fi
 ROLE_ARN="arn:aws:iam::${ACCOUNT}:role/${ROLE}"
 
-# ── 5. Runtime env vars (AI Search key + password gate) ──────────────────────
-# ANTHROPIC_API_KEY: from your shell or artikAgents/.env. APP_PASSWORD: from your shell.
+# ── 5. Runtime env vars (AI Search keys + login gate) ────────────────────────
+# Keys from your shell or artikAgents/.env. Login gate: pass APP_PASSWORD=... and it's
+# stored as a pbkdf2 HASH (never plaintext); a random APP_SECRET signs session cookies.
 KEY="${ANTHROPIC_API_KEY:-$(grep -h '^ANTHROPIC_API_KEY=' artikAgents/agents/.env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'"'")}"
 OKEY="${OPENAI_API_KEY:-$(grep -h '^OPENAI_API_KEY=' artikAgents/agents/.env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'"'")}"
 ENV_PAIRS=""
-[ -n "${KEY}" ]                && ENV_PAIRS="\"ANTHROPIC_API_KEY\":\"${KEY}\""
-[ -n "${OKEY}" ]               && ENV_PAIRS="${ENV_PAIRS:+${ENV_PAIRS},}\"OPENAI_API_KEY\":\"${OKEY}\""
-[ -n "${APP_PASSWORD:-}" ]     && ENV_PAIRS="${ENV_PAIRS:+${ENV_PAIRS},}\"APP_PASSWORD\":\"${APP_PASSWORD}\""
-[ -n "${APP_USER:-}" ]         && ENV_PAIRS="${ENV_PAIRS:+${ENV_PAIRS},}\"APP_USER\":\"${APP_USER}\""
+[ -n "${KEY}" ]   && ENV_PAIRS="\"ANTHROPIC_API_KEY\":\"${KEY}\""
+[ -n "${OKEY}" ]  && ENV_PAIRS="${ENV_PAIRS:+${ENV_PAIRS},}\"OPENAI_API_KEY\":\"${OKEY}\""
+if [ -n "${APP_PASSWORD:-}" ]; then
+  # hash the password + mint a signing secret (plaintext never leaves this shell)
+  PW_ENV="$(APP_PASSWORD="${APP_PASSWORD}" python3 - <<'PY'
+import os,hashlib
+pw=os.environ["APP_PASSWORD"].encode(); salt=os.urandom(16); it=200000
+dk=hashlib.pbkdf2_hmac("sha256",pw,salt,it)
+print(f'"APP_PASSWORD_HASH":"pbkdf2_sha256${it}${salt.hex()}${dk.hex()}","APP_SECRET":"{os.urandom(32).hex()}"')
+PY
+)"
+  ENV_PAIRS="${ENV_PAIRS:+${ENV_PAIRS},}${PW_ENV}"
+fi
 RTE=""; [ -n "${ENV_PAIRS}" ] && RTE=",\"RuntimeEnvironmentVariables\":{${ENV_PAIRS}}"
-[ -z "${APP_PASSWORD:-}" ] && echo "⚠ APP_PASSWORD not set — deploying WITHOUT the password gate. Re-run with APP_PASSWORD=... to protect it."
+[ -z "${APP_PASSWORD:-}" ] && echo "⚠ APP_PASSWORD not set — deploying WITHOUT the login gate. Re-run with APP_PASSWORD=... to protect it."
 [ -z "${KEY}${OKEY}" ] && echo "⚠ No ANTHROPIC_API_KEY or OPENAI_API_KEY — AI Search will be disabled on the deploy."
 
 SRC_CONFIG="{

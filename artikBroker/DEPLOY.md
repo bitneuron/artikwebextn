@@ -15,9 +15,10 @@ API Gateway 29s limit, no cold starts.
   candidates. It needs **`ANTHROPIC_API_KEY`** at runtime (read from env on AWS, or
   `artikAgents/.env` locally). Without it, AI Search returns a clear "disabled" message;
   ticker analysis still works.
-- Because the LLM endpoint is public, protect the app with **`APP_PASSWORD`** (HTTP Basic
-  auth; username defaults to `artik`, override with `APP_USER`). When `APP_PASSWORD` is set
-  the whole app requires login; unset locally → open for dev.
+- Because the LLM endpoint is public, protect the app with **`APP_PASSWORD`** — `deploy.sh` stores it as a pbkdf2
+  HASH (`APP_PASSWORD_HASH`) plus a random `APP_SECRET` for signing session cookies;
+  the plaintext never leaves your shell. Users sign in at `/login`; later requests use
+  a signed HttpOnly+Secure cookie. Unset locally → open for dev.
 - The key is **never baked into the image** — `deploy.sh` passes both as App Runner
   RuntimeEnvironmentVariables. (For stricter handling, move them to Secrets Manager later.)
 

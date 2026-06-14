@@ -19,8 +19,9 @@ import json
 import os
 import re
 import sys
-import base64
-import secrets
+import time
+import hmac
+import hashlib
 import warnings
 import datetime as dt
 from collections import defaultdict
@@ -33,8 +34,8 @@ warnings.filterwarnings("ignore")
 # (artikAgents/agents/stock_broker_agent — `pip install -e` it into this venv).
 from artik_engine import scoring  # noqa: E402
 import yfinance as yf  # noqa: E402
-from fastapi import FastAPI, Query, UploadFile, File, Request  # noqa: E402
-from fastapi.responses import FileResponse, JSONResponse, Response  # noqa: E402
+from fastapi import FastAPI, Query, UploadFile, File, Request, Form  # noqa: E402
+from fastapi.responses import FileResponse, JSONResponse, Response, HTMLResponse, RedirectResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 
 app = FastAPI(title="artikBroker")
@@ -42,30 +43,86 @@ app = FastAPI(title="artikBroker")
 HERE = Path(__file__).resolve().parent
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 
-# ── Auth gate ────────────────────────────────────────────────────────────────
-# When APP_PASSWORD is set (e.g. on AWS) the whole app requires HTTP Basic auth.
-# Unset locally → open for dev. Protects the LLM-backed /api/search from abuse.
-APP_USER = os.environ.get("APP_USER", "artik")
-APP_PASSWORD = os.environ.get("APP_PASSWORD")
+# ── Auth gate (login form + signed session cookie + pbkdf2-hashed password) ───
+# Enabled when APP_PASSWORD_HASH and APP_SECRET are set (e.g. on AWS). Unset
+# locally → open for dev. The raw password is never stored or sent per-request:
+# it's typed once into /login (over HTTPS), checked against the hash, then a
+# signed HttpOnly+Secure cookie authorises later requests.
+APP_PASSWORD_HASH = os.environ.get("APP_PASSWORD_HASH", "")  # pbkdf2_sha256$iters$salt_hex$hash_hex
+APP_SECRET = os.environ.get("APP_SECRET", "")
+AUTH_ON = bool(APP_PASSWORD_HASH and APP_SECRET)
+SESSION_TTL = 7 * 24 * 3600  # 7 days
+
+
+def _verify_password(pw: str) -> bool:
+    try:
+        algo, iters, salt, h = APP_PASSWORD_HASH.split("$")
+        dk = hashlib.pbkdf2_hmac("sha256", pw.encode(), bytes.fromhex(salt), int(iters))
+        return hmac.compare_digest(dk.hex(), h)
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _make_token() -> str:
+    exp = str(int(time.time()) + SESSION_TTL)
+    sig = hmac.new(APP_SECRET.encode(), exp.encode(), hashlib.sha256).hexdigest()
+    return f"{exp}.{sig}"
+
+
+def _valid_token(tok: str) -> bool:
+    try:
+        exp, sig = tok.rsplit(".", 1)
+        good = hmac.new(APP_SECRET.encode(), exp.encode(), hashlib.sha256).hexdigest()
+        return hmac.compare_digest(sig, good) and int(exp) > int(time.time())
+    except Exception:  # noqa: BLE001
+        return False
+
+
+_LOGIN_HTML = """<!doctype html><html><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1"><title>artikBroker — Sign in</title>
+<style>body{{margin:0;height:100vh;display:grid;place-items:center;background:#0d1117;color:#e6edf3;
+font-family:-apple-system,Segoe UI,Roboto,sans-serif}}form{{background:#161b22;border:1px solid #30363d;
+border-radius:12px;padding:28px 26px;width:300px}}h1{{font-size:18px;margin:0 0 4px}}p.sub{{margin:0 0 18px;
+color:#8b949e;font-size:13px}}input{{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:8px;
+border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:14px}}button{{margin-top:12px;width:100%;
+padding:10px;border:0;border-radius:8px;background:#1f6feb;color:#fff;font-weight:600;font-size:14px;cursor:pointer}}
+.err{{color:#f85149;font-size:13px;margin:10px 0 0}}</style></head>
+<body><form method=post action=/login><h1>🔎 artikBroker</h1><p class=sub>Enter the access password.</p>
+<input type=password name=password placeholder=Password autofocus required>{err}<button type=submit>Sign in</button></form></body></html>"""
 
 
 @app.middleware("http")
-async def _password_gate(request: Request, call_next):
-    if APP_PASSWORD:
-        auth = request.headers.get("authorization", "")
-        ok = False
-        if auth.startswith("Basic "):
-            try:
-                user, _, pw = base64.b64decode(auth[6:]).decode("utf-8").partition(":")
-                ok = secrets.compare_digest(user, APP_USER) and secrets.compare_digest(pw, APP_PASSWORD)
-            except Exception:  # noqa: BLE001
-                ok = False
-        if not ok:
-            return Response(
-                "Authentication required", status_code=401,
-                headers={"WWW-Authenticate": 'Basic realm="artikBroker"'},
-            )
+async def _auth_gate(request: Request, call_next):
+    if AUTH_ON:
+        path = request.url.path
+        public = path.startswith("/login") or path.startswith("/static") or path == "/favicon.ico"
+        if not public and not _valid_token(request.cookies.get("session", "")):
+            if path.startswith("/api/"):
+                return JSONResponse({"error": "unauthorized — please sign in"}, status_code=401)
+            return RedirectResponse("/login", status_code=302)
     return await call_next(request)
+
+
+@app.get("/login")
+def login_page():
+    return HTMLResponse(_LOGIN_HTML.format(err=""))
+
+
+@app.post("/login")
+def login_submit(password: str = Form("")):
+    if AUTH_ON and _verify_password(password):
+        resp = RedirectResponse("/", status_code=302)
+        resp.set_cookie("session", _make_token(), max_age=SESSION_TTL,
+                        httponly=True, secure=True, samesite="lax")
+        return resp
+    return HTMLResponse(_LOGIN_HTML.format(err='<p class=err>Incorrect password</p>'), status_code=401)
+
+
+@app.get("/logout")
+def logout():
+    resp = RedirectResponse("/login", status_code=302)
+    resp.delete_cookie("session")
+    return resp
 
 
 def _anthropic_key() -> str | None:
