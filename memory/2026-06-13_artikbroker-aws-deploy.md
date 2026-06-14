@@ -23,6 +23,20 @@ User's stated criteria: "easy to deploy and stable."
   (needs both `artikBroker/` and the engine at `artikAgents/agents/stock_broker_agent/`).
 - Deps pinned in `artikBroker/requirements.txt` (Py 3.13, numpy 2.4.0, pandas 2.3.3…).
 
+## AI Search + password gate (added 2026-06-14)
+- `/api/search`: natural-language stock discovery. Provider cascade — **Claude
+  (claude-opus-4-8) first, auto-fallback to OpenAI (gpt-5-mini)** on any failure
+  (e.g. Anthropic low credits). LLM only parses intent + proposes candidate tickers;
+  the engine produces all scores. UI banner shows which provider answered.
+- **Live behind HTTP Basic auth** (username `artik`; password in the `APP_PASSWORD`
+  App Runner env var — value NOT stored here). Also requires `ANTHROPIC_API_KEY` +
+  `OPENAI_API_KEY` env vars (set by deploy.sh from artikAgents/.env; never in the image).
+- **Gotchas learned:** (1) the container installs only `requirements.txt` — both
+  `anthropic` AND `openai` must be listed there (local venv masked the missing openai).
+  (2) **AutoDeployments is now DISABLED** — it raced with update-service and served stale
+  revisions. Deploy with an **immutable image tag** (`v<timestamp>`) via update-service,
+  not `:latest`.
+
 ## Scope decisions
 - **One service only** (artikBroker; not artikAPIs). It's self-contained.
 - **Public, no Portfolio:** `.dockerignore` excludes `knowledge_bases/`, so the private
