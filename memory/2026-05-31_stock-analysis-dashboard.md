@@ -77,7 +77,7 @@ Dropdown values: `skill-<stem>` (per-folder specs), `lib-<stem>` (report-root .m
 
 ## PDF reports
 
-- **Saved to:** `knowledge_bases/stock_analysis_report/analyzed_Report/` (changed from report root). Filename: `{TICKER}_analysis{_skillslug}_{YYYYMMDD_HHMMSS}.pdf`. Both CLI and web save here (web uses run_analysis.py).
+- **Saved to:** `knowledge_bases/analyzed_reports/ (moved 2026-06-13)` (changed from report root). Filename: `{TICKER}_analysis{_skillslug}_{YYYYMMDD_HHMMSS}.pdf`. Both CLI and web save here (web uses run_analysis.py).
 - **Serve inline:** `GET /api/stock/report/{filename}` → FileResponse, `Content-Disposition: inline`, with traversal guard (rejects `/`, `\`, `..`, non-`.pdf`).
 - **List:** `GET /api/stock/reports` → `{"reports": [...]}` newest-first.
 
@@ -89,7 +89,7 @@ Dropdown values: `skill-<stem>` (per-folder specs), `lib-<stem>` (report-root .m
 
 When a skill is selected the analysis is driven by that skill's methodology (prompt
 augmentation), and two folders are **excluded from KB context everywhere**:
-- `analyzed_Report/` — our own generated PDFs (kills the feedback loop)
+- `analyzed_reports/` (now a top-level sibling, gitignored) — our own generated PDFs (kills the feedback loop)
 - `KR_Library/` (under `stock_knowledge_base/`) — reference library, not analysis context
 
 Implementation:
@@ -99,7 +99,7 @@ Implementation:
   passed to every `_load_kb(...)` call. This drives `agent.KB` → system context + image messages.
 - `run_analysis.py` STEP-1 scan mirrors the same `KB_EXCLUDE_FOLDERS` so the "Loaded …" /
   "Scanning" progress log doesn't show excluded files.
-- Verified: KB loads 198 blocks across 40 folders, none from analyzed_Report/KR_Library;
+- Verified: KB loads 198 blocks across 40 folders, none from analyzed_reports/KR_Library;
   ticker charts (`charts/<TICKER>`) still load.
 - NOTE: this is exclusion-only — the rest of the KB (charts, recommendations, company/macro
   notes, live market data) is still used. It does NOT reduce context to *only* the selected

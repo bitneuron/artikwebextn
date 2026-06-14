@@ -33,7 +33,7 @@ stock_analysis_report/
 ├── reference/              ← ALL source/methodology docs (read-only)
 │   ├── Stock_Analysis_Skill.md (841-line monolith) · Fairlead_Strategy.md
 │   └── Fundamental_Analysis.md · Stock_Patterns.md · Technical_Analysis_Summary.md · STOCK_RULES.md
-├── analyzed_Report/        ← generated reports (DO NOT rename — code depends on path)
+(analyzed reports moved out → knowledge_bases/analyzed_reports/, 2026-06-13)
 └── insight/
 ```
 
@@ -62,5 +62,5 @@ The dashboard/API/React read these docs by exact name — moving them required e
 
 ## Gotchas / open items
 - **Not runtime-verified:** the React dashboard render — `fastapi` isn't installed in the plain shell, so could only verify Python `py_compile` + tree logic. To confirm: run the API + `npm run dev`, check the "L0 · Mandate" group shows.
-- `analyzed_Report/` intentionally NOT renamed to `output/` — 5 code files read/write that path (`stock_broker_agent/*.py`, `shared/kb_loader.py`, `artikAPIs/.../stock_analysis.py`).
+- Generated PDFs moved out to `knowledge_bases/analyzed_reports/` (2026-06-13) — output separated from methodology source; consumers repointed: `run_analysis.py`, `artikAPIs/.../stock_analysis.py`, `artikAPIs/.../kb_upload.py`.
 - The skill_library API base is `…/stock_analysis_report/skills/` (so README at report root is *outside* it — that's why the in-tree overview is SKILLS_LIBRARY.md, not README).
