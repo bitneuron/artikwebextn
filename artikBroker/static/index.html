@@ -345,6 +345,58 @@
   }
   .scrim { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:38; display:none; }
   .app.navopen .scrim, .app.copopen .scrim { display:block; }
+
+  /* ═══════════════ PASS 2 — Portfolio / Index / History / Agents ═══════════════ */
+  .exec { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:18px; }
+  .estat { background:var(--glass); border:1px solid var(--glassline); border-radius:13px; padding:14px 16px;
+     backdrop-filter:blur(8px); }
+  .estat .lbl { color:var(--mut); font-size:11px; text-transform:uppercase; letter-spacing:.5px; }
+  .estat .big { font-size:26px; font-weight:800; margin-top:5px; line-height:1; }
+  .estat .sub { color:var(--mut); font-size:11.5px; margin-top:4px; }
+  .estat.ring { display:flex; align-items:center; gap:14px; }
+  .estat .gring { width:58px; height:58px; border-radius:50%; flex:none; display:grid; place-items:center;
+     font-weight:800; font-size:18px; background:conic-gradient(var(--rc) calc(var(--p)*1%),rgba(255,255,255,.07) 0); position:relative; }
+  .estat .gring::after { content:""; position:absolute; inset:4px; border-radius:50%; background:#0d1420; }
+  .estat .gring b { position:relative; z-index:1; }
+
+  .ana-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px; margin-bottom:20px; }
+  .mini-rank .rk { display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid rgba(255,255,255,.05); cursor:pointer; }
+  .mini-rank .rk:last-child { border-bottom:0; }
+  .mini-rank .rk:hover { color:#fff; }
+  .mini-rank .rk .tk { font-weight:700; width:62px; }
+  .mini-rank .rk .se { font-size:12px; color:var(--mut); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .mini-rank .rk .sv { font-weight:800; font-variant-numeric:tabular-nums; }
+  .heat { display:grid; grid-template-columns:repeat(auto-fill,minmax(116px,1fr)); gap:8px; }
+  .heat-tile { border-radius:10px; padding:10px 11px; border:1px solid rgba(255,255,255,.08); }
+  .heat-tile .hn { font-size:11.5px; opacity:.92; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .heat-tile .hv { font-size:20px; font-weight:800; margin-top:3px; }
+  .heat-tile .hc { font-size:10.5px; opacity:.7; }
+  .dist .drow { display:flex; align-items:center; gap:10px; margin:7px 0; font-size:12.5px; }
+  .dist .dlab { width:74px; color:var(--mut); flex:none; }
+  .dist .dbar { flex:1; height:14px; background:rgba(255,255,255,.06); border-radius:5px; overflow:hidden; }
+  .dist .dbar i { display:block; height:100%; border-radius:5px; }
+  .dist .dct { width:34px; text-align:right; font-weight:700; }
+
+  .hist-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:14px; }
+  .hcard { background:var(--glass); border:1px solid var(--glassline); border-radius:13px; padding:15px 16px;
+     backdrop-filter:blur(8px); display:flex; flex-direction:column; gap:9px; }
+  .hcard .htop { display:flex; align-items:center; gap:8px; }
+  .hcard .hq { font-size:14.5px; font-weight:600; line-height:1.35; }
+  .hcard .hsum { color:var(--mut); font-size:12px; }
+  .hcard .hmeta { display:flex; gap:8px; flex-wrap:wrap; align-items:center; color:var(--mut); font-size:11.5px; margin-top:2px; }
+  .hcard .hact { display:flex; gap:7px; margin-top:auto; padding-top:4px; }
+  .tag-s { padding:2px 9px; border-radius:999px; font-size:11px; font-weight:700; background:var(--panel2); border:1px solid var(--line); }
+  .tag-s.ai { color:#a9c7e6; border-color:rgba(59,130,246,.3); background:rgba(59,130,246,.1); }
+
+  .agrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(360px,1fr)); gap:16px; }
+  .agrid .agent-card { margin-bottom:0; background:var(--glass); border:1px solid var(--glassline); backdrop-filter:blur(8px); }
+  .a-kpis { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:6px 0 14px; }
+  .a-kpis .ak { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:9px 11px; }
+  .a-kpis .ak .lbl { color:var(--mut); font-size:10px; text-transform:uppercase; letter-spacing:.4px; }
+  .a-kpis .ak .v { font-size:16px; font-weight:700; margin-top:3px; }
+  .tchips { display:flex; gap:5px; flex-wrap:wrap; }
+  .tchip { background:var(--panel2); border:1px solid var(--line); border-radius:7px; padding:2px 8px; font-size:11.5px; font-weight:600; }
+  @media (max-width:760px){ .a-kpis { grid-template-columns:repeat(3,1fr); } }
 </style>
 </head>
 <body>
@@ -691,6 +743,14 @@ function render(rows, opts){
   showDownload();
 }
 function ringColor(s){ return s==='BUY'?'var(--buy)':s==='SELL'?'var(--sell)':'var(--hold)'; }
+// Score → colour using the engine thresholds (BUY≥75 · HOLD 50–74 · SELL<50).
+function scoreColor(s){ if(s==null) return 'var(--mut)'; return s>=75?'var(--buy)':s>=50?'var(--hold)':'var(--sell)'; }
+function scoreRGBA(s,a){ if(s==null) return `rgba(139,148,158,${a})`;
+  return s>=75?`rgba(34,197,94,${a})`:s>=50?`rgba(234,179,8,${a})`:`rgba(239,68,68,${a})`; }
+function gring(score){
+  const v = score==null?0:Math.max(0,Math.min(100,score));
+  return `<div class="gring" style="--p:${v};--rc:${scoreColor(score)}"><b>${score==null?'—':Math.round(score)}</b></div>`;
+}
 function stockCard(r,i){
   const strength = (r.strengths&&r.strengths[0])
     ? `<div class="strength">💡 <span>${escapeHtml(r.strengths[0])}</span></div>` : '';
@@ -896,14 +956,18 @@ function plCell(v,p){
 
 function renderPortfolio(data){
   const rows = data.results, t = data.totals;
-  let top = `<div class="totals">
-    <div class="stat"><b>${data.count}</b> <span>positions</span></div>
-    <div class="stat"><b>${fmt(t.value)}</b> <span>value</span></div>
-    <div class="stat"><b>${fmt(t.cost)}</b> <span>cost</span></div>
-    <div class="stat"><b class="${t.pl>=0?'pos':'neg'}">${t.pl>=0?'+':'−'}${fmt(Math.abs(t.pl)).slice(1)} (${t.pl>=0?'+':''}${t.pl_pct}%)</b> <span>total P/L</span></div>
-    <button class="dl" onclick="downloadCSV()">⬇ Download CSV</button>
-  </div>`;
-  $('#topbar').innerHTML = top;
+  const sc = rows.map(r=>r.score).filter(x=>x!=null);
+  const avg = sc.length ? sc.reduce((a,b)=>a+b,0)/sc.length : null;
+  const cnt = s => rows.filter(r => (r.status||'')===s).length;
+  $('#topbar').innerHTML = `<div class="exec">
+    <div class="estat ring">${gring(avg)}<div><div class="lbl">Health Score</div><div class="sub">${data.count} positions</div></div></div>
+    <div class="estat"><div class="lbl">Total Value</div><div class="big">${fmt(t.value)}</div><div class="sub">cost ${fmt(t.cost)}</div></div>
+    <div class="estat"><div class="lbl">Total P/L</div><div class="big ${t.pl>=0?'pos':'neg'}">${t.pl>=0?'+':'−'}${fmt(Math.abs(t.pl)).slice(1)}</div><div class="sub ${t.pl>=0?'pos':'neg'}">${t.pl>=0?'+':''}${t.pl_pct}%</div></div>
+    <div class="estat"><div class="lbl">Strong · BUY</div><div class="big pos">${cnt('BUY')}</div><div class="sub">of ${data.count}</div></div>
+    <div class="estat"><div class="lbl">Hold</div><div class="big" style="color:var(--hold)">${cnt('HOLD')}</div><div class="sub">monitor</div></div>
+    <div class="estat"><div class="lbl">Sell</div><div class="big neg">${cnt('SELL')}</div><div class="sub">review</div></div>
+  </div>
+  <div style="text-align:right;margin-bottom:12px"><button class="dl" onclick="downloadCSV()">⬇ Download CSV</button></div>`;
 
   let html = '<table><thead><tr>'
     + '<th>#</th><th>Ticker</th><th class="num">Qty</th><th class="num">Cost</th>'
@@ -1280,30 +1344,29 @@ async function renderHistory(){
     updateHistSelUI();
     return;
   }
-  const allOn = list.every(e => _histSel.has(e.id));
-  renderPaged('hist-out', {
-    head: `<tr><th style="width:28px"><input type="checkbox" onclick="histSelectAll(this.checked)" ${allOn?'checked':''} title="Select all"></th>`
-        + '<th>When</th><th>Type</th><th>Query</th><th class="num">Results</th><th>Source</th><th></th></tr>',
-    rows: list,
-    rowHtml: (e) => {
-      const badge = e.type==='ai' ? '🔎 AI' : '🎯 Tickers';
-      const src = e.type==='ai' ? (e.provider==='gpt'?'GPT':e.provider==='claude'?'Claude':'—') : '—';
-      const qtxt = (e.query||'').replace(/</g,'&lt;');
-      return `<tr class="row">
-        <td><input type="checkbox" onclick="histSelToggle('${e.id}',this.checked)" ${_histSel.has(e.id)?'checked':''}></td>
-        <td style="white-space:nowrap;color:var(--mut)">${fmtTs(e.ts)}</td>
-        <td style="white-space:nowrap">${badge}</td>
-        <td style="max-width:380px;white-space:normal">${qtxt}${e.summary?`<div style="font-size:11.5px;color:var(--mut)">${e.summary.replace(/</g,'&lt;')}</div>`:''}</td>
-        <td class="num">${e.count!=null?e.count:'—'}</td>
-        <td style="color:var(--mut)">${src}</td>
-        <td style="white-space:nowrap">
-          <button class="ex-btn" onclick="viewHist('${e.id}')">View</button>
-          <button class="ex-btn" onclick="rerunHist('${e.id}')">↻ Re-run</button>
-          <button class="ex-btn" onclick="deleteHist('${e.id}')">✕</button>
-        </td>
-      </tr>`;
-    },
-  });
+  const allOn = list.length && list.every(e => _histSel.has(e.id));
+  const cards = list.map(e => {
+    const isAi = e.type==='ai';
+    const src = isAi ? (e.provider==='gpt'?'GPT':e.provider==='claude'?'Claude':'AI') : 'Tickers';
+    return `<div class="hcard">
+      <div class="htop">
+        <input type="checkbox" onclick="histSelToggle('${e.id}',this.checked)" ${_histSel.has(e.id)?'checked':''}>
+        <span class="tag-s ${isAi?'ai':''}">${isAi?'🔎 AI Search':'🎯 Tickers'}</span>
+        <span class="hsum" style="margin-left:auto">${fmtTs(e.ts)}</span>
+      </div>
+      <div class="hq" onclick="viewHist('${e.id}')" style="cursor:pointer">${escapeHtml(e.query||'')}</div>
+      ${e.summary?`<div class="hsum">${escapeHtml(e.summary)}</div>`:''}
+      <div class="hmeta"><span>${e.count!=null?e.count+' result'+(e.count===1?'':'s'):'—'}</span><span>·</span><span>${src}</span></div>
+      <div class="hact">
+        <button class="ex-btn" onclick="viewHist('${e.id}')">View</button>
+        <button class="ex-btn" onclick="rerunHist('${e.id}')">↻ Re-run</button>
+        <button class="ex-btn" onclick="deleteHist('${e.id}')">✕ Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+  $('#hist-out').innerHTML =
+    `<label class="news-toggle" style="margin-bottom:14px"><input type="checkbox" onclick="histSelectAll(this.checked)" ${allOn?'checked':''}> Select all (${list.length})</label>`
+    + `<div class="hist-cards">${cards}</div>`;
   updateHistSelUI();
 }
 
@@ -1384,10 +1447,47 @@ function sortIdx(pfx, col){
   if(st.col===col) st.dir*=-1; else { st.col=col; st.dir = NUM_COLS[col]?-1:1; }
   drawIndex(pfx);
 }
+function indexDetail(pfx, tk){
+  const r = (window._idx[pfx].rows||[]).find(x=>x.ticker===tk);
+  if(r && !r.error){ window._rows=[r]; detailFor(r); }
+}
+function indexSummary(rows, pfx){
+  const ok = rows.filter(r => !r.error && r.score!=null);
+  if(!ok.length) return '';
+  const rk = r => `<div class="rk" onclick="indexDetail('${pfx}','${r.ticker}')"><span class="tk">${r.ticker}</span><span class="se">${escapeHtml(r.sector||'')}</span><span class="sv" style="color:${scoreColor(r.score)}">${r.score}</span></div>`;
+  const topBuys = [...ok].sort((a,b)=>b.score-a.score).filter(r=>r.status==='BUY').slice(0,5);
+  const topSells = [...ok].sort((a,b)=>a.score-b.score).slice(0,5);
+  // sector heatmap
+  const secMap={}; ok.forEach(r=>{ const s=r.sector||'—'; (secMap[s]=secMap[s]||[]).push(r.score); });
+  const sectors = Object.entries(secMap).map(([s,a])=>({s,avg:a.reduce((x,y)=>x+y,0)/a.length,n:a.length})).sort((a,b)=>b.avg-a.avg);
+  const heat = sectors.map(x=>`<div class="heat-tile" style="background:${scoreRGBA(x.avg,.15)};border-color:${scoreRGBA(x.avg,.4)}"><div class="hn">${escapeHtml(x.s)}</div><div class="hv" style="color:${scoreColor(x.avg)}">${x.avg.toFixed(0)}</div><div class="hc">${x.n} name${x.n===1?'':'s'}</div></div>`).join('');
+  // score distribution
+  const buckets=[['< 50',0,49.99],['50–59',50,59.99],['60–69',60,69.99],['70–79',70,79.99],['80–89',80,89.99],['90 +',90,300]];
+  const dc = buckets.map(([l,lo,hi])=>({l,lo,n:ok.filter(r=>r.score>=lo&&r.score<=hi).length}));
+  const dmax = Math.max(1,...dc.map(d=>d.n));
+  const distScore = dc.map(d=>`<div class="drow"><span class="dlab">${d.l}</span><span class="dbar"><i style="width:${d.n/dmax*100}%;background:${scoreRGBA(d.lo+5,.85)}"></i></span><span class="dct">${d.n}</span></div>`).join('');
+  // archetype distribution
+  const arch={}; ok.forEach(r=>{ const a=(r.breakdown&&r.breakdown.archetype)||'—'; arch[a]=(arch[a]||0)+1; });
+  const aArr = Object.entries(arch).sort((a,b)=>b[1]-a[1]);
+  const amax = Math.max(1,...aArr.map(a=>a[1]));
+  const distArch = aArr.map(a=>`<div class="drow"><span class="dlab" style="width:118px">${escapeHtml(a[0])}</span><span class="dbar"><i style="width:${a[1]/amax*100}%;background:linear-gradient(90deg,var(--acc),var(--acc2))"></i></span><span class="dct">${a[1]}</span></div>`).join('');
+  return `
+    <div class="ana-grid">
+      <div class="panel-card mini-rank"><h3>🟢 Top BUYs</h3>${topBuys.map(rk).join('')||'<div class="muted">No BUY-rated names.</div>'}</div>
+      <div class="panel-card mini-rank"><h3>🔻 Weakest / Sell Candidates</h3>${topSells.map(rk).join('')}</div>
+    </div>
+    <div class="panel-card"><h3>🗺️ Sector Heatmap — average Artik Score</h3><div class="heat">${heat}</div></div>
+    <div class="ana-grid">
+      <div class="panel-card dist"><h3>📊 Score Distribution</h3>${distScore}</div>
+      <div class="panel-card dist"><h3>🧬 Archetype Distribution</h3>${distArch}</div>
+    </div>
+    <div class="pf-meta" style="margin:2px 0 10px">Full ranking — sortable, click Explain per row</div>`;
+}
 function drawIndex(pfx){
   const o = window._idx[pfx], st = o.sort;
   const view = sortRows(o.rows, st.col, st.dir);
   renderPaged(o.outId, {
+    pre: indexSummary(o.rows, pfx),
     head: `<tr>${sortHead(INDEX_COLS, st, k=>`sortIdx('${pfx}','${k}')`)}</tr>`,
     rows: view,
     rowHtml: (r,i) => {
@@ -1522,11 +1622,17 @@ function applyPfView(){
   view.forEach(r => { tc+=num(r.cost_basis)||0; tv+=num(r.value)||0; tp+=num(r.pl)||0; });
   const pct = tc ? (tp/tc*100) : 0;
   const filt = (q||st) ? ' (filtered)' : '';
-  $('#pf-totals').innerHTML = `<div class="totals">
-    <div class="stat"><b>${view.length}</b> <span>positions${filt}</span></div>
-    <div class="stat"><b>${money(tv)}</b> <span>value</span></div>
-    <div class="stat"><b>${money(tc)}</b> <span>cost</span></div>
-    <div class="stat"><b class="${tp>=0?'pos':'neg'}">${tp>=0?'+':'−'}$${Math.abs(Math.round(tp)).toLocaleString()} (${pct>=0?'+':''}${pct.toFixed(1)}%)</b> <span>P/L</span></div>
+  const scored = view.map(r=>num(r.score)).filter(x=>x!=null);
+  const avg = scored.length ? scored.reduce((a,b)=>a+b,0)/scored.length : null;
+  const cnt = s => view.filter(r => (r.status||'')===s).length;
+  const strong=cnt('BUY'), hold=cnt('HOLD'), sell=cnt('SELL');
+  $('#pf-totals').innerHTML = `<div class="exec">
+    <div class="estat ring">${gring(avg)}<div><div class="lbl">Health Score</div><div class="sub">${scored.length} scored${filt}</div></div></div>
+    <div class="estat"><div class="lbl">Total Value</div><div class="big">${money(tv)}</div><div class="sub">cost ${money(tc)}</div></div>
+    <div class="estat"><div class="lbl">Total P/L</div><div class="big ${tp>=0?'pos':'neg'}">${tp>=0?'+':'−'}$${Math.abs(Math.round(tp)).toLocaleString()}</div><div class="sub ${tp>=0?'pos':'neg'}">${pct>=0?'+':''}${pct.toFixed(1)}%</div></div>
+    <div class="estat"><div class="lbl">Strong · BUY</div><div class="big pos">${strong}</div><div class="sub">of ${view.length} positions</div></div>
+    <div class="estat"><div class="lbl">Hold</div><div class="big" style="color:var(--hold)">${hold}</div><div class="sub">monitor</div></div>
+    <div class="estat"><div class="lbl">Sell Candidates</div><div class="big neg">${sell}</div><div class="sub">review</div></div>
   </div>`;
 
   const arrow = c => _pfSort.col===c ? `<span class="arr">${_pfSort.dir>0?'▲':'▼'}</span>` : '';
@@ -1604,13 +1710,13 @@ async function loadAgents(){
 
 function renderAgents(){
   if(!_agents.length){ $('#agents-list').innerHTML = '<div class="muted">No agents configured.</div>'; return; }
-  $('#agents-list').innerHTML = _agents.map(a=>{
-    const errs = (a.errors&&a.errors.length) ? a.errors.length+' error(s)' : 'None';
-    const errCls = (a.errors&&a.errors.length) ? 'neg' : 'muted';
+  $('#agents-list').innerHTML = '<div class="agrid">' + _agents.map(a=>{
     const lastSt = a.last_status ? `<span class="st ${a.last_status}">${a.last_status}</span>` : '';
+    const tchips = (a.tickers||[]).map(t=>`<span class="tchip">${escapeHtml(t)}</span>`).join('') || '<span class="muted">—</span>';
+    const errN = (a.errors&&a.errors.length) ? a.errors.length : 0;
     return `<div class="agent-card">
       <div class="agent-head">
-        <div style="flex:1">
+        <div style="flex:1;min-width:0">
           <h3>${escapeHtml(a.agent_name)} <span class="st ${a.status}">${a.status}</span></h3>
           <div class="agent-type">${escapeHtml(a.agent_type)}</div>
         </div>
@@ -1620,25 +1726,23 @@ function renderAgents(){
         </label>
       </div>
       <div class="agent-desc">${escapeHtml(a.description||'')}</div>
-      <div class="agent-grid">
-        <div><div class="k">Schedule</div><div class="v">${escapeHtml(a.schedule)}</div></div>
-        <div><div class="k">Last Run</div><div class="v">${fmtTime(a.last_run_at)} ${lastSt}</div></div>
-        <div><div class="k">Next Run</div><div class="v">${a.enabled?fmtTime(a.next_run_at):'—'}</div></div>
-        <div><div class="k">Stocks Covered</div><div class="v">${(a.tickers||[]).join(', ')||'—'}</div></div>
-        <div><div class="k">Signals Generated</div><div class="v">${a.signals_generated??'—'}</div></div>
-        <div><div class="k">Errors</div><div class="v ${errCls}">${errs}</div></div>
-        <div style="grid-column:1/-1"><div class="k">Last Result</div><div class="v">${escapeHtml(a.last_result||'—')}</div></div>
+      <div class="a-kpis">
+        <div class="ak"><div class="lbl">Schedule</div><div class="v" style="font-size:13px">${escapeHtml(a.schedule)}</div></div>
+        <div class="ak"><div class="lbl">Signals</div><div class="v">${a.signals_generated??'—'}</div></div>
+        <div class="ak"><div class="lbl">Errors</div><div class="v ${errN?'neg':''}">${errN||'0'}</div></div>
       </div>
+      <div style="margin-bottom:12px"><div class="agent-type" style="margin-bottom:6px">Tracked stocks</div><div class="tchips">${tchips}</div></div>
+      <div class="agent-type" style="margin-bottom:13px">Last run ${fmtTime(a.last_run_at)} ${lastSt} · Next ${a.enabled?fmtTime(a.next_run_at):'—'}<br><span class="muted">${escapeHtml(a.last_result||'—')}</span></div>
       <div class="agent-actions">
         <button class="ex-btn" onclick="runAgent('${a.agent_id}')" ${a.running?'disabled':''}>${a.running?'⏳ Running…':'▶ Run Now'}</button>
         <button class="ex-btn" onclick="editAgent('${a.agent_id}')">✏️ Edit</button>
-        <button class="ex-btn" onclick="viewResults('${a.agent_id}')">📊 View Results</button>
-        <button class="ex-btn" onclick="viewLogs('${a.agent_id}')">📜 View Logs</button>
+        <button class="ex-btn" onclick="viewResults('${a.agent_id}')">📊 Results</button>
+        <button class="ex-btn" onclick="viewLogs('${a.agent_id}')">📜 Logs</button>
         <button class="ex-btn" onclick="toggleAgent('${a.agent_id}',${a.enabled?'false':'true'})">${a.enabled?'⏸ Disable':'✅ Enable'}</button>
-        <button class="ex-btn" onclick="deleteAgent('${a.agent_id}')">🗑 Delete Config</button>
+        <button class="ex-btn" onclick="deleteAgent('${a.agent_id}')">🗑</button>
       </div>
     </div>`;
-  }).join('');
+  }).join('') + '</div>';
 }
 
 function agentById(id){ return _agents.find(a=>a.agent_id===id); }
@@ -1830,6 +1934,9 @@ if(location.hash.startsWith('#q=')){
 } else if(location.hash.startsWith('#stock=')){
   const tk = decodeURIComponent(location.hash.slice(7)).toUpperCase();
   if(tk) openStockDetail(tk);
+} else if(location.hash.startsWith('#view=')){
+  const v = location.hash.slice(6);
+  if(_VIEWS.includes(v) && v!=='detail') showTab(v);
 }
 // Portfolio nav hidden by default; revealed by /api/config where data exists.
 $('#tab-portfolio').classList.add('hidden');
