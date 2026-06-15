@@ -397,6 +397,58 @@
   .tchips { display:flex; gap:5px; flex-wrap:wrap; }
   .tchip { background:var(--panel2); border:1px solid var(--line); border-radius:7px; padding:2px 8px; font-size:11.5px; font-weight:600; }
   @media (max-width:760px){ .a-kpis { grid-template-columns:repeat(3,1fr); } }
+
+  /* ═══════════════ Artik Copilot — research-report chat ═══════════════ */
+  .cop-brand { display:flex; align-items:center; gap:8px; font-size:15px; }
+  .cop-brand b { letter-spacing:.2px; }
+  .cop-meta { display:flex; flex-wrap:wrap; gap:7px; padding:9px 14px; border-bottom:1px solid var(--line);
+     background:rgba(7,11,18,.4); }
+  .cmeta { display:flex; flex-direction:column; gap:1px; background:var(--panel); border:1px solid var(--line);
+     border-radius:8px; padding:4px 9px; font-size:12px; font-weight:600; }
+  .cmeta i { font-style:normal; color:var(--mut); font-size:9.5px; text-transform:uppercase; letter-spacing:.5px; }
+  .cmeta select { background:transparent; border:0; color:var(--txt); font-size:12px; font-weight:600; padding:0; cursor:pointer; outline:none; }
+  /* pinned context (stock / search) */
+  .cop-stock { background:linear-gradient(150deg,rgba(59,130,246,.12),rgba(99,102,241,.04));
+     border:1px solid var(--glassline); border-radius:13px; padding:13px 14px; margin-bottom:12px; }
+  .cs-top { display:flex; align-items:center; gap:12px; }
+  .cs-tk { font-size:17px; font-weight:800; display:flex; align-items:center; gap:8px; }
+  .cs-co { color:var(--mut); font-size:11.5px; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cs-conv { text-align:right; } .cs-conv .lbl { color:var(--mut); font-size:9.5px; text-transform:uppercase; letter-spacing:.5px; }
+  .cs-conv .v { font-weight:800; font-size:14px; }
+  .cs-row { font-size:12.5px; margin-top:9px; padding:6px 9px; border-radius:8px; }
+  .cs-row.good { color:#9be3b4; background:rgba(34,197,94,.1); } .cs-row.bad { color:#f4a8a8; background:rgba(239,68,68,.1); }
+  .cs-srcs { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+  .srcbadge { font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:6px; background:var(--panel2);
+     border:1px solid var(--line); color:var(--mut); }
+  .srcbadge b { color:#a9c7e6; font-weight:700; }
+  /* assistant = report card (not a chat bubble) */
+  .cop-report { background:var(--panel); border:1px solid var(--line); border-radius:13px; overflow:hidden; }
+  .rep-head { display:flex; align-items:center; gap:8px; padding:8px 13px; border-bottom:1px solid var(--line);
+     background:linear-gradient(90deg,rgba(59,130,246,.12),transparent); font-size:11px; }
+  .rep-badge { font-weight:800; color:#a9c7e6; }
+  .rep-mode { text-transform:capitalize; background:rgba(59,130,246,.16); color:#a9c7e6; padding:1px 8px; border-radius:999px; font-weight:700; }
+  .rep-src { margin-left:auto; color:var(--mut); }
+  .rep-body { padding:12px 14px; font-size:13.5px; line-height:1.55; }
+  .rsec { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.6px; color:var(--acc);
+     margin:14px 0 7px; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,.06); }
+  .rsec:first-child { margin-top:0; }
+  .rsec.good { color:#7ee787; } .rsec.bad { color:#ff9b9b; }
+  .rep-body .rp { margin:6px 0; }
+  .rep-body .rlist { list-style:none; margin:6px 0; padding:0; display:flex; flex-direction:column; gap:5px; }
+  .rep-body .rlist li { position:relative; padding:6px 10px 6px 28px; border-radius:8px; background:rgba(255,255,255,.03);
+     border:1px solid rgba(255,255,255,.05); }
+  .rep-body .rlist li::before { content:"•"; position:absolute; left:11px; color:var(--mut); }
+  .rep-body .rlist.good li { background:rgba(34,197,94,.08); border-color:rgba(34,197,94,.16); }
+  .rep-body .rlist.good li::before { content:"✓"; color:var(--buy); font-weight:800; }
+  .rep-body .rlist.bad li { background:rgba(239,68,68,.08); border-color:rgba(239,68,68,.16); }
+  .rep-body .rlist.bad li::before { content:"⚠"; color:var(--sell); }
+  .rep-body b { color:#fff; }
+  .rcode { background:rgba(59,130,246,.14); color:#a9c7e6; padding:1px 6px; border-radius:5px; font-size:12.5px; font-weight:600; }
+  /* follow-up chips */
+  .cop-fups { display:flex; flex-wrap:wrap; gap:6px; }
+  .fchip { background:var(--panel2); border:1px solid var(--line); color:var(--txt); border-radius:999px;
+     padding:6px 12px; font-size:12px; font-weight:600; cursor:pointer; transition:.12s; }
+  .fchip:hover { border-color:var(--acc); color:#fff; background:rgba(59,130,246,.12); }
 </style>
 </head>
 <body>
@@ -1162,43 +1214,124 @@ function copilotReset(){
     uiMode:'auto', msgs:[], busy:false, provider:null };
   renderCopilot();
 }
+function copConviction(s){ return s>=80?'High':s>=65?'Elevated':s>=50?'Moderate':'Low'; }
+function inlineMd(s){ return escapeHtml(s).replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/`([^`]+)`/g,'<span class="rcode">$1</span>'); }
+
+// Turn the (unchanged) markdown reply into a scannable research report:
+// section headers become coloured labels, bullets become ✓ / ⚠ rows.
+function copReport(md){
+  const lines = (md||'').split('\n');
+  let html='', list=[], listKind='', section='';
+  const flush=()=>{ if(list.length){ html+=`<ul class="rlist ${listKind}">`+list.map(x=>`<li>${x}</li>`).join('')+'</ul>'; list=[]; } };
+  for(const raw of lines){
+    const ln = raw.trim();
+    if(!ln){ flush(); continue; }
+    const hm = ln.match(/^#{1,4}\s+(.+)$/) || ln.match(/^\*\*(.+?)\*\*:?\s*$/);
+    let head = hm ? hm[1].replace(/\*\*/g,'') : null;
+    if(!head && ln.length<=42 && /^[A-Z][\w&/'’ .-]+:?$/.test(ln) && !/[.!?]$/.test(ln) && /[A-Za-z]/.test(ln)) head = ln.replace(/:$/,'');
+    if(head){
+      flush();
+      const low = head.toLowerCase();
+      section = /strength|positive|bull|pros?\b|tailwind|moat|advantage|driver/.test(low) ? 'good'
+              : /risk|concern|flag|negative|bear|caution|watch|headwind|sell|weak/.test(low) ? 'bad' : '';
+      html += `<div class="rsec ${section}">${escapeHtml(head)}</div>`;
+      continue;
+    }
+    const bm = ln.match(/^[-•*]\s+(.*)$/) || ln.match(/^\d+[.)]\s+(.*)$/);
+    if(bm){ list.push(inlineMd(bm[1].replace(/^[✓✅⚠️🔴🟢•]+\s*/,''))); listKind=section; continue; }
+    flush();
+    html += `<p class="rp">${inlineMd(ln)}</p>`;
+  }
+  flush();
+  return html || `<p class="rp">${inlineMd(md)}</p>`;
+}
+function copSourceBadges(c){
+  const prov = c.provider==='gpt'?'GPT':'Claude';
+  const b = [`<span class="srcbadge">Source <b>Artik Engine</b></span>`,
+             `<span class="srcbadge">AI <b>${prov}</b></span>`];
+  if(c.ctxType==='stock' && c.ctx && c.ctx.news_overlay) b.push(`<span class="srcbadge">News <b>Collector</b></span>`);
+  return `<div class="cs-srcs">${b.join('')}</div>`;
+}
+// Pinned context card — rating + score always visible first (from the engine, not the AI text).
+function copContextCard(c){
+  const ctx=c.ctx;
+  if(c.ctxType==='stock'){
+    if(!ctx || ctx.loading) return `<div class="cop-stock"><div class="spin" style="padding:6px">Loading ${escapeHtml((ctx&&ctx.ticker)||'')}…</div></div>`;
+    if(ctx.score==null) return '';
+    return `<div class="cop-stock">
+      <div class="cs-top">${gring(ctx.score)}
+        <div style="flex:1;min-width:0"><div class="cs-tk">${ctx.ticker} <span class="badge ${ctx.status}">${ctx.status}</span></div>
+          <div class="cs-co">${escapeHtml(ctx.company||ctx.sector||'')}</div></div>
+        <div class="cs-conv"><div class="lbl">Conviction</div><div class="v" style="color:${scoreColor(ctx.score)}">${copConviction(ctx.score)}</div></div>
+      </div>
+      ${ctx.strengths&&ctx.strengths[0]?`<div class="cs-row good">✓ ${escapeHtml(ctx.strengths[0])}</div>`:''}
+      ${ctx.risks&&ctx.risks[0]?`<div class="cs-row bad">⚠ ${escapeHtml(ctx.risks[0])}</div>`:''}
+      ${copSourceBadges(c)}
+      <button class="ex-btn" style="margin-top:10px" onclick="detailFor(window._cop.ctx)">Open full research →</button>
+    </div>`;
+  }
+  if(ctx && ctx.count){
+    return `<div class="cop-stock"><div class="cs-co" style="white-space:normal;font-size:12.5px">Analyzing <b style="color:var(--txt)">${ctx.count}</b> result${ctx.count===1?'':'s'}${ctx.summary?` · ${escapeHtml(ctx.summary)}`:''}</div>${copSourceBadges(c)}</div>`;
+  }
+  return '';
+}
+function copFollowups(c){
+  if(c.busy) return '';
+  const set = c.ctxType==='stock'
+    ? [['💬 Compare peers','Compare this stock to its closest peers'],
+       ['📰 Recent news','What is the latest news and how does it affect the thesis?'],
+       ['⚠️ Biggest risk','What is the single biggest risk?'],
+       ['📈 Technicals','Explain the technical setup'],
+       ['🎯 Trade plan','Explain the trade plan'],
+       ['🔻 Make it a SELL?','What would have to change for this to become a SELL?']]
+    : [['🥇 Compare top 3','Compare the top 3 BUY-rated results'],
+       ['💸 Cheaper picks','Find cheaper alternatives with similar quality'],
+       ['🏆 Best quality','Which result has the strongest quality and why?'],
+       ['🟢 Only BUYs','Show only the BUY-rated names'],
+       ['🔎 Explain #1','Why did the top result rank first?']];
+  return `<div class="cop-fups">${set.map(([l,q])=>`<button class="fchip" onclick="copilotAsk(${JSON.stringify(q).replace(/"/g,'&quot;')})">${escapeHtml(l)}</button>`).join('')}</div>`;
+}
 function renderCopilot(){
-  const c = window._cop;
-  const title = c.ctxType==='stock'
-    ? `🤖 Artik Broker AI — ${c.ctx.ticker||'stock'}${c.ctx.status?` · ${c.ctx.status} ${c.ctx.score??''}`:''}`
-    : (c.ctx && c.ctx.count)
-      ? `🤖 Artik Broker AI — ${c.ctx.count} search result${c.ctx.count===1?'':'s'}`
-      : `🤖 Artik Broker AI`;
-  const sugg = c.ctxType==='stock'
-    ? ['Why this rating?','What is the biggest risk?','Explain the trade plan','What does this company do?','Compare to peers']
-    : ['Why did the top stock appear?','Compare the top 3 BUYs','Which has the strongest quality?','Find cheaper alternatives','Show only BUYs'];
+  const c = window._cop, ctx = c.ctx||{};
+  const ctxLabel = c.ctxType==='stock' ? (ctx.ticker||'Stock')
+                 : (c.ctx&&c.ctx.count) ? `${c.ctx.count} Results` : 'General';
+  const prov = c.provider==='gpt'?'GPT':'Claude';
+  const conv = (c.ctxType==='stock'&&ctx.score!=null) ? copConviction(ctx.score) : null;
+  const modeSel = `<select onchange="copilotSetMode(this.value)">`
+    + COP_MODES.map(([v,l])=>`<option value="${v}" ${c.uiMode===v?'selected':''}>${l}</option>`).join('')+`</select>`;
+  const meta = `<div class="cop-meta">
+    <span class="cmeta"><i>Context</i>${escapeHtml(ctxLabel)}</span>
+    <span class="cmeta"><i>Mode</i>${modeSel}</span>
+    <span class="cmeta"><i>Source</i>Engine + ${prov}</span>
+    ${conv?`<span class="cmeta"><i>Conviction</i><b style="color:${scoreColor(ctx.score)}">${conv}</b></span>`:''}
+  </div>`;
+
   let msgs = c.msgs.map(m => {
     if(m.role!=='assistant') return `<div class="cop-msg user"><div class="cop-bubble">${escapeHtml(m.content)}</div></div>`;
-    let inner = '';
-    if(m.mode && m.mode!=='clarification') inner += `<span class="cop-tag">${m.mode}</span>`;
-    inner += mdLite(m.content);
+    let clar='';
     if(m.clar && m.clar.options && m.clar.options.length){
-      inner += `<div class="cop-chips" style="padding:8px 0 0">` + m.clar.options.map(o =>
-        `<button class="chip" title="${escapeHtml(o.description||'')}" onclick="copilotAsk(${JSON.stringify(o.label).replace(/"/g,'&quot;')})">${escapeHtml(o.label)}</button>`).join('') + `</div>`;
+      clar = `<div class="cop-fups" style="padding:0 14px 12px">`+m.clar.options.map(o=>
+        `<button class="fchip" title="${escapeHtml(o.description||'')}" onclick="copilotAsk(${JSON.stringify(o.label).replace(/"/g,'&quot;')})">${escapeHtml(o.label)}</button>`).join('')+`</div>`;
     }
-    return `<div class="cop-msg assistant"><div class="cop-bubble">${inner}</div></div>`;
+    return `<div class="cop-report">
+      <div class="rep-head"><span class="rep-badge">📊 Artik Copilot</span>${m.mode&&m.mode!=='clarification'?`<span class="rep-mode">${escapeHtml(m.mode)}</span>`:''}<span class="rep-src">Engine + ${prov}</span></div>
+      <div class="rep-body">${copReport(m.content)}</div>${clar}</div>`;
   }).join('');
-  if(c.busy) msgs += `<div class="cop-msg assistant"><div class="cop-bubble"><span style="color:var(--mut)">Thinking…</span></div></div>`;
-  const placeholder = `<div class="hint" style="padding:4px 2px">Ask anything about ${c.ctxType==='stock'?'this stock':'these results'} — research, analyze, compare, discover or screen. Artik data is the source of truth.</div>`;
-  const chips = c.msgs.length ? '' :
-    `<div class="cop-chips">${sugg.map(s=>`<button class="chip" onclick="copilotAsk(this.textContent)">${s}</button>`).join('')}</div>`;
-  const modeSel = `<select id="cop-mode" title="Mode" onchange="copilotSetMode(this.value)" style="padding:4px 8px;font-size:12.5px">`
-    + COP_MODES.map(([v,l])=>`<option value="${v}" ${c.uiMode===v?'selected':''}>${l}</option>`).join('') + `</select>`;
+  if(c.busy) msgs += `<div class="cop-report"><div class="rep-body"><span style="color:var(--mut)">⟳ Analyzing with the Artik engine…</span></div></div>`;
+
+  const ctxCard = copContextCard(c);
+  const welcome = c.msgs.length ? '' :
+    `<div class="hint" style="padding:2px 2px 8px">Ask anything about ${c.ctxType==='stock'?'this stock':'these results'} — the Artik engine is the source of truth.</div>`;
+
   $('#copilot').innerHTML = `
-    <div class="cop-head"><b>${title}</b>
-      ${modeSel}
-      ${c.provider?`<span class="pf-meta">via ${c.provider==='gpt'?'GPT':'Claude'}</span>`:''}
+    <div class="cop-head"><div class="cop-brand">🤖 <b>Artik Copilot</b></div>
       <button class="ex-btn" style="margin-left:auto" onclick="copilotReset()" title="New conversation">↺ New</button>
     </div>
-    <div class="cop-body" id="cop-body">${msgs||placeholder}</div>
-    ${chips}
+    ${meta}
+    ${ctxCard?`<div style="padding:12px 14px 0;flex:none">${ctxCard}</div>`:''}
+    <div class="cop-body" id="cop-body">${msgs}${welcome}${copFollowups(c)}</div>
     <div class="cop-in">
-      <input id="cop-input" placeholder="Ask Artik Broker AI…" ${c.busy?'disabled':''}
+      <input id="cop-input" placeholder="Ask Artik Copilot…" ${c.busy?'disabled':''}
         onkeydown="if(event.key==='Enter'){event.preventDefault();copilotAsk();}" />
       <button id="cop-send" onclick="copilotAsk()" ${c.busy?'disabled':''}>Send</button>
     </div>`;
