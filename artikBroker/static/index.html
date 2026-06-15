@@ -511,6 +511,40 @@
   .tl-item::before { content:""; position:absolute; left:-19px; top:9px; width:9px; height:9px; border-radius:50%; background:var(--acc); border:2px solid var(--bg); }
   .tl-item .t { color:var(--mut); font-size:11px; }
   @media (max-width:760px){ .kpibar { grid-template-columns:repeat(2,1fr); } .tmini { margin-left:0; } }
+
+  /* ═══════════════ Analyze results — filters · tiles/list · sort ═══════════════ */
+  .res-toolbar { margin-bottom:18px; }
+  .res-summary { display:flex; gap:10px; flex-wrap:wrap; align-items:center; font-size:12.5px; color:var(--mut); margin-bottom:12px; }
+  .res-summary b { color:var(--txt); }
+  .fbar { display:flex; gap:16px; flex-wrap:wrap; align-items:center; background:var(--glass); border:1px solid var(--glassline);
+     border-radius:12px; padding:10px 14px; backdrop-filter:blur(8px); }
+  .fgrp { display:flex; align-items:center; gap:8px; }
+  .fgrp .lbl { font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--mut); }
+  .seg { display:inline-flex; background:var(--panel2); border:1px solid var(--line); border-radius:9px; overflow:hidden; }
+  .seg button { background:transparent; border:0; color:var(--mut); padding:6px 13px; font-size:12.5px; font-weight:700; cursor:pointer; transition:.12s; border-left:1px solid var(--line); }
+  .seg button:first-child { border-left:0; }
+  .seg button:hover { color:var(--txt); }
+  .seg button.buy { color:var(--buy); } .seg button.hold { color:var(--hold); } .seg button.sell { color:var(--sell); }
+  .seg button.on { background:rgba(59,130,246,.25); color:#fff; }
+  .seg button.buy.on { background:rgba(34,197,94,.22); color:#7ee787; }
+  .seg button.hold.on { background:rgba(234,179,8,.2); color:#f5d97a; }
+  .seg button.sell.on { background:rgba(239,68,68,.2); color:#ff9b9b; }
+  .fbar input[type=number] { background:var(--bg); color:var(--txt); border:1px solid var(--line); border-radius:7px; padding:6px 9px; font-size:12.5px; }
+  .empty-res { text-align:center; padding:54px 20px; background:var(--glass); border:1px solid var(--glassline); border-radius:14px; }
+  .empty-res .ico { font-size:38px; opacity:.8; }
+  .empty-res h3 { margin:12px 0 6px; font-size:17px; }
+  .empty-res button { margin-top:16px; }
+  /* enhanced tiles */
+  .scard .cl { font-size:12.5px; border-radius:9px; padding:7px 10px; margin-bottom:8px; display:flex; gap:6px; align-items:flex-start; }
+  .scard .cl.good { color:#9be3b4; background:rgba(34,197,94,.09); border:1px solid rgba(34,197,94,.16); }
+  .scard .cl.bad { color:#f4a8a8; background:rgba(239,68,68,.09); border:1px solid rgba(239,68,68,.16); }
+  .cardbtns { display:flex; gap:8px; }
+  .cta-sm { flex:1; background:var(--panel2); border:1px solid var(--line); color:var(--txt); padding:8px; border-radius:9px;
+     font-size:12.5px; font-weight:600; cursor:pointer; transition:.12s; }
+  .cta-sm:hover { border-color:#3a4a5e; }
+  .cta-sm.primary { background:linear-gradient(135deg,var(--acc),var(--acc2)); border-color:transparent; }
+  .card-explain { margin:4px 0 12px; padding:12px; background:var(--bg); border:1px solid var(--line); border-radius:10px; }
+  .card-explain .formula { font-family:ui-monospace,Menlo,monospace; font-size:12px; color:var(--mut); }
 </style>
 </head>
 <body>
@@ -840,21 +874,142 @@ function _pageAppend(outId, n){
   st.obs.observe(sent);
 }
 
-// ── Analyze results as premium stock cards ────────────────────────────────────
+// ── Analyze results — premium cards / sortable list, with status + RSI filters ─
+function cap(s){ return (s||'').charAt(0).toUpperCase()+(s||'').slice(1); }
+function getResultView(){ return localStorage.getItem('artik_broker_result_view')||'tiles'; }
+function setResultView(v){ localStorage.setItem('artik_broker_result_view', v); rebuildToolbar(); renderAnalyzeResults(); }
+
 function render(rows, opts){
   opts = opts || {};
   window._rows = rows; window._mode = 'symbol'; window._lastOpts = opts;
-  let pre = '';
-  if(opts.savedNote){ pre += `<div class="grid-banner">📁 ${opts.savedNote}</div>`; }
+  window._resFilters = { status:'', rsi:'', rsiMin:'', rsiMax:'' };   // reset per search
+  window._aSort = { col:'score', dir:-1 };
+  let banner = '';
+  if(opts.savedNote){ banner += `<div class="grid-banner">📁 ${opts.savedNote}</div>`; }
   if(opts.summary){
     const via = opts.provider==='gpt' ? ' · via GPT (fallback)' : opts.provider==='claude' ? ' · via Claude' : '';
-    pre += `<div class="grid-banner">🔎 <b>AI Search:</b> ${escapeHtml(opts.summary)} `
-         + `<span class="muted">— ${rows.length} match${rows.length===1?'':'es'}, ranked by Artik Score${via}</span></div>`;
+    banner += `<div class="grid-banner">🔎 <b>AI Search:</b> ${escapeHtml(opts.summary)} `
+            + `<span class="muted">ranked by Artik Score${via}</span></div>`;
   }
-  const cards = (rows||[]).map((r,i)=> r.error ? errorCard(r) : stockCard(r,i)).join('');
-  $('#out').innerHTML = pre + (cards ? `<div class="cards">${cards}</div>`
-                                     : '<div class="hint">No results.</div>');
+  $('#out').innerHTML = banner
+    + `<div class="res-toolbar" id="res-toolbar-wrap">${analyzeToolbar()}</div>`
+    + `<div id="analyze-results"></div>`;
+  renderAnalyzeResults();
   showDownload();
+}
+function analyzeToolbar(){ return analyzeSummary() + analyzeFbar(); }
+function rebuildToolbar(){ const w=$('#res-toolbar-wrap'); if(w) w.innerHTML = analyzeToolbar(); }
+function analyzeSummary(){
+  const o = window._lastOpts||{}, q = (($('#syms')&&$('#syms').value)||'').trim();
+  const mode = (($('#main-mode')&&$('#main-mode').value)||'auto');
+  const news = (window._newsAvail && window._newsOn) ? 'On' : 'Off';
+  const f = window._resFilters;
+  const fl = `Status: ${f.status||'All'} · RSI: ${f.rsi?({oversold:'<30',neutral:'30–70',overbought:'>70',custom:`${f.rsiMin||'·'}–${f.rsiMax||'·'}`}[f.rsi]):'All'}`;
+  return `<div class="res-summary">
+    <span>Results for <b>${escapeHtml(o.summary || q || '—')}</b></span>
+    <span>· Mode <b>${cap(mode)}</b></span>
+    <span>· News Signals <b>${news}</b></span>
+    <span>· <span id="res-count">—</span></span>
+    <span style="margin-left:auto">Filtered — <b>${fl}</b></span>
+  </div>`;
+}
+function analyzeFbar(){
+  const f = window._resFilters, view = getResultView();
+  const stseg = [['','All',''],['BUY','BUY','buy'],['HOLD','HOLD','hold'],['SELL','SELL','sell']]
+    .map(([v,l,c])=>`<button class="${c} ${f.status===v?'on':''}" onclick="setStatusFilter('${v}')">${l}</button>`).join('');
+  const rsiseg = [['','All RSI'],['oversold','Oversold <30'],['neutral','Neutral 30–70'],['overbought','Overbought >70'],['custom','Custom']]
+    .map(([v,l])=>`<button class="${f.rsi===v?'on':''}" onclick="setRsiFilter('${v}')">${l}</button>`).join('');
+  return `<div class="fbar">
+    <div class="fgrp"><span class="lbl">Status</span><div class="seg">${stseg}</div></div>
+    <div class="fgrp"><span class="lbl">RSI</span><div class="seg">${rsiseg}</div></div>
+    ${f.rsi==='custom' ? `<div class="fgrp">
+      <input type="number" placeholder="Min" value="${f.rsiMin}" style="width:66px" oninput="window._resFilters.rsiMin=this.value;renderAnalyzeResults()">
+      <span class="muted">to</span>
+      <input type="number" placeholder="Max" value="${f.rsiMax}" style="width:66px" oninput="window._resFilters.rsiMax=this.value;renderAnalyzeResults()">
+    </div>` : ''}
+    <div class="vtoggle" style="margin-left:auto">
+      <button class="${view==='tiles'?'on':''}" onclick="setResultView('tiles')">▦ Tiles</button>
+      <button class="${view==='list'?'on':''}" onclick="setResultView('list')">☰ List</button>
+    </div>
+  </div>`;
+}
+function setStatusFilter(v){ window._resFilters.status=v; rebuildToolbar(); renderAnalyzeResults(); }
+function setRsiFilter(v){ window._resFilters.rsi=v; rebuildToolbar(); renderAnalyzeResults(); }
+function clearResFilters(){ window._resFilters={status:'',rsi:'',rsiMin:'',rsiMax:''}; rebuildToolbar(); renderAnalyzeResults(); }
+function passResFilter(r){
+  const f = window._resFilters;
+  if(f.status && r.status!==f.status) return false;
+  if(f.rsi){
+    const rsi = r.rsi;
+    if(rsi==null) return false;
+    if(f.rsi==='oversold' && !(rsi<30)) return false;
+    if(f.rsi==='neutral' && !(rsi>=30 && rsi<=70)) return false;
+    if(f.rsi==='overbought' && !(rsi>70)) return false;
+    if(f.rsi==='custom'){ const mn=parseFloat(f.rsiMin), mx=parseFloat(f.rsiMax);
+      if(!isNaN(mn) && rsi<mn) return false; if(!isNaN(mx) && rsi>mx) return false; }
+  }
+  return true;
+}
+function renderAnalyzeResults(){
+  const all = (window._rows||[]).map((r,i)=>({r,i}));
+  const scorable = all.filter(x=>!x.r.error), errs = all.filter(x=>x.r.error);
+  const view = scorable.filter(x=>passResFilter(x.r));
+  const cnt = $('#res-count');
+  if(cnt) cnt.textContent = `Showing ${view.length} of ${scorable.length} result${scorable.length===1?'':'s'}`;
+  const box = $('#analyze-results'); if(!box) return;
+  if(!view.length){
+    box.innerHTML = (scorable.length===0 && errs.length) ? `<div class="cards">${errs.map(x=>errorCard(x.r)).join('')}</div>` : emptyResState();
+    return;
+  }
+  if(getResultView()==='list'){
+    box.innerHTML = analyzeListTable(view) + (errs.length?`<div class="cards" style="margin-top:14px">${errs.map(x=>errorCard(x.r)).join('')}</div>`:'');
+  } else {
+    box.innerHTML = `<div class="cards">${view.map(x=>stockCard(x.r,x.i)).join('')}${errs.map(x=>errorCard(x.r)).join('')}</div>`;
+  }
+}
+function emptyResState(){
+  return `<div class="empty-res"><div class="ico">🔍</div>
+    <h3>No stocks match your filters</h3>
+    <p class="muted">Try clearing the status filter, widening the RSI range, or switching to all results.</p>
+    <button onclick="clearResFilters()">Clear Filters</button></div>`;
+}
+// List view — sortable table
+function aVal(r,k){ if(k==='archetype') return (r.breakdown&&r.breakdown.archetype)||'';
+  if(k==='news') return r.news_overlay?r.news_overlay.aggregate_score_delta:null; return r[k]; }
+function aSort(col){ const st=window._aSort; if(st.col===col) st.dir*=-1;
+  else { st.col=col; st.dir = {price:1,score:1,rsi:1,news:1}[col]?-1:1; } renderAnalyzeResults(); }
+function aToggle(i){ const d=$('#ald'+i); if(d) d.style.display = d.style.display==='none' ? '' : 'none'; }
+function analyzeListTable(view){
+  const st = window._aSort, num={price:1,score:1,rsi:1,news:1};
+  const sorted = [...view].sort((a,b)=>{
+    let av=aVal(a.r,st.col), bv=aVal(b.r,st.col);
+    if(num[st.col]){ av=av==null?-Infinity:av; bv=bv==null?-Infinity:bv; return (av-bv)*st.dir; }
+    av=(av||'').toString().toUpperCase(); bv=(bv||'').toString().toUpperCase();
+    return av<bv?-st.dir:av>bv?st.dir:0;
+  });
+  const cols=[['_n','#',0,0],['ticker','Ticker',1,0],['company','Company',1,0],['sector','Sector',1,0],
+    ['archetype','Archetype',1,0],['price','Price',1,1],['score','Score',1,1],['rsi','RSI',1,1],
+    ['status','Status',1,0],['news','News',1,1]];
+  const head = cols.map(([k,l,s,n])=> s
+    ? `<th class="sortable ${n?'num':''}" onclick="aSort('${k}')">${l}${st.col===k?`<span class="arr">${st.dir>0?'▲':'▼'}</span>`:''}</th>`
+    : `<th class="${n?'num':''}">${l}</th>`).join('') + '<th></th>';
+  const rows = sorted.map((x,idx)=>{ const r=x.r, i=x.i, arch=(r.breakdown&&r.breakdown.archetype)||'—';
+    const news = r.news_overlay ? `<span class="${r.news_overlay.aggregate_score_delta>=0?'pos':'neg'}">${r.news_overlay.aggregate_score_delta>=0?'+':''}${r.news_overlay.aggregate_score_delta}</span>` : '—';
+    return `<tr class="row">
+      <td>${idx+1}</td><td class="tick">${r.ticker}</td>
+      <td class="muted" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r.company||'')}</td>
+      <td class="muted">${escapeHtml(r.sector||'—')}</td>
+      <td class="muted" style="font-size:12px">${escapeHtml(arch)}</td>
+      <td class="num">$${r.price!=null?r.price.toLocaleString():'—'}</td>
+      <td class="num"><b>${r.score}</b></td>
+      <td class="num">${r.rsi!=null?r.rsi:'—'}</td>
+      <td>${statusCell(r)}</td>
+      <td class="num">${news}</td>
+      <td style="white-space:nowrap"><button class="ex-btn" onclick="aToggle(${i})">Explain ▾</button> <button class="ex-btn" onclick="showDetail(${i})">Details</button></td>
+    </tr>
+    <tr class="detail" id="ald${i}" style="display:none"><td colspan="11">${detail(r)}</td></tr>`;
+  }).join('');
+  return `<table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 function ringColor(s){ return s==='BUY'?'var(--buy)':s==='SELL'?'var(--sell)':'var(--hold)'; }
 // Score → colour using the engine thresholds (BUY≥75 · HOLD 50–74 · SELL<50).
@@ -866,28 +1021,41 @@ function gring(score){
   return `<div class="gring" style="--p:${v};--rc:${scoreColor(score)}"><b>${score==null?'—':Math.round(score)}</b></div>`;
 }
 function stockCard(r,i){
-  const strength = (r.strengths&&r.strengths[0])
-    ? `<div class="strength">💡 <span>${escapeHtml(r.strengths[0])}</span></div>` : '';
+  const strength = (r.strengths&&r.strengths[0]) ? `<div class="cl good">✓ <span>${escapeHtml(r.strengths[0])}</span></div>` : '';
+  const risk = (r.risks&&r.risks[0]) ? `<div class="cl bad">⚠ <span>${escapeHtml(r.risks[0])}</span></div>` : '';
   const why = r.why ? `<div class="co" style="margin-top:6px;white-space:normal">${escapeHtml(r.why)}</div>` : '';
-  return `<div class="scard" onclick="showDetail(${i})">
-    <div class="row1">
+  return `<div class="scard">
+    <div class="row1" onclick="showDetail(${i})" style="cursor:pointer">
       <div style="min-width:0">
         <div class="tk">${r.ticker}${overlayChip(r)}</div>
-        <div class="co">${escapeHtml(r.company||r.sector||'')}</div>
+        <div class="co">${escapeHtml(r.company||'')}</div>
       </div>
       <div class="ring" style="--p:${Math.max(0,Math.min(100,r.score||0))};--rc:${ringColor(r.status)}"><b>${r.score??'—'}</b></div>
     </div>
-    <div style="margin-top:9px">${statusCell(r)} <span class="muted" style="font-size:12px">· ${(r.breakdown&&r.breakdown.archetype)||r.sector||''}</span></div>
+    <div style="margin-top:9px">${statusCell(r)} <span class="muted" style="font-size:12px">· ${(r.breakdown&&r.breakdown.archetype)||''}</span></div>
     ${why}
     <div class="meta">
       <div><div class="k">Price</div><div class="v">$${r.price!=null?r.price.toLocaleString():'—'}</div></div>
       <div><div class="k">RSI</div><div class="v">${r.rsi!=null?r.rsi:'—'}</div></div>
+      <div><div class="k">Sector</div><div class="v" style="font-size:12px">${escapeHtml(r.sector||'—')}</div></div>
       ${r.news_overlay?`<div><div class="k">News</div><div class="v ${r.news_overlay.aggregate_score_delta>=0?'pos':'neg'}">${r.news_overlay.aggregate_score_delta>=0?'+':''}${r.news_overlay.aggregate_score_delta}</div></div>`:''}
     </div>
-    ${strength}
-    <button class="cta" onclick="event.stopPropagation();showDetail(${i})">View Details →</button>
+    ${strength}${risk}
+    <div class="card-explain" id="cx${i}" style="display:none">${miniExplain(r)}</div>
+    <div class="cardbtns">
+      <button class="cta-sm" onclick="cardExplain(${i},this)">Explain</button>
+      <button class="cta-sm primary" onclick="showDetail(${i})">Details →</button>
+    </div>
   </div>`;
 }
+function miniExplain(r){
+  const b = r.breakdown||{};
+  const cats = (b.categories||[]).map(c=>{ const pct=Math.max(0,Math.min(100,(c.score/c.max)*100));
+    return `<div class="catrow"><span class="nm">${c.label}</span><span class="track"><span class="fill" style="width:${pct}%"></span></span><span class="pts">${c.score}/${c.max}</span></div>`;
+  }).join('');
+  return `<div class="formula" style="margin-bottom:8px">( ${b.base} − ${b.penalties} ) × ${b.multiplier}× = <b>${b.final}</b> → ${r.rating}</div>${cats}`;
+}
+function cardExplain(i,btn){ const d=$('#cx'+i); if(!d) return; const open=d.style.display==='none'; d.style.display=open?'':'none'; btn.textContent=open?'Hide':'Explain'; }
 function errorCard(r){
   return `<div class="scard" style="cursor:default"><div class="row1"><div class="tk">${r.ticker}</div></div>
     <div class="err" style="margin-top:12px">${escapeHtml(r.error||'error')}</div></div>`;
