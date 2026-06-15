@@ -37,11 +37,25 @@ import yfinance as yf  # noqa: E402
 import alpha_vantage as av  # noqa: E402  (sibling module; key from env, never exposed)
 import history_store as hist  # noqa: E402  (server-side search history: S3 on AWS, local folder in dev)
 import news_signals  # noqa: E402  (read-only overlay from the news-collector agent; S3 on AWS, local file in dev)
+import agents_store  # noqa: E402  (agent registry + config/agent_schedules.json)
+import agent_runner  # noqa: E402  (non-blocking agent execution)
+import news_runs  # noqa: E402  (run history + results reader)
+from agent_scheduler import get_scheduler, compute_next_run  # noqa: E402
 from fastapi import FastAPI, Query, UploadFile, File, Request, Form  # noqa: E402
 from fastapi.responses import FileResponse, JSONResponse, Response, HTMLResponse, RedirectResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 
 app = FastAPI(title="artikBroker")
+
+
+@app.on_event("startup")
+def _start_agent_scheduler():
+    # Local-first scheduler for managed background agents (Stock News Collector).
+    # AGENT_SCHEDULER=aws|off disables the in-process loop (EventBridge owns firing).
+    try:
+        get_scheduler().start()
+    except Exception:  # noqa: BLE001 — never block app boot on the scheduler
+        pass
 
 HERE = Path(__file__).resolve().parent
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
@@ -1105,7 +1119,160 @@ def api_config():
         "portfolio": _portfolio_enabled(),
         "news_signals": news_signals.available(),
         "news_signals_backend": news_signals.backend(),
+        "agents": True,
     }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Agent Management — configure / schedule / run / monitor background agents.
+# Local-first: schedules persist to config/agent_schedules.json; the collector runs
+# as the standalone agent subprocess. The scheduler abstraction (local thread now,
+# EventBridge/ECS later) lives in agent_scheduler.py. No Artik Score is mutated.
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _agent_status(cfg: dict) -> str:
+    if agent_runner.is_running(cfg["agent_id"]):
+        return "Running"
+    return "Enabled" if cfg.get("enabled") else "Disabled"
+
+
+def _last_result_str(last: dict | None) -> str:
+    if not last:
+        return "—"
+    return (f"{last.get('articles_collected', 0)} articles, "
+            f"{last.get('articles_relevant', 0)} relevant, "
+            f"{last.get('signals_generated', 0)} signals")
+
+
+def _agent_view(agent_id: str) -> dict:
+    cfg = agents_store.get_config(agent_id)
+    if not cfg:
+        return None
+    last = news_runs.latest_run(agents_store.DATA_DIR, agent_id)
+    rstate = agent_runner.state(agent_id)
+    return {
+        "agent_id": cfg["agent_id"],
+        "agent_name": cfg["agent_name"],
+        "agent_type": cfg["agent_type"],
+        "description": cfg["description"],
+        "enabled": cfg.get("enabled", False),
+        "status": _agent_status(cfg),
+        "running": rstate.get("running", False),
+        "schedule": _schedule_label(cfg),
+        "schedule_type": cfg.get("schedule_type"),
+        "interval_value": cfg.get("interval_value"),
+        "interval_unit": cfg.get("interval_unit"),
+        "daily_time": cfg.get("daily_time"),
+        "timezone": cfg.get("timezone"),
+        "tickers": cfg.get("tickers", []),
+        "last_run_at": (last or {}).get("completed_at") or cfg.get("last_run_at"),
+        "next_run_at": cfg.get("next_run_at"),
+        "last_result": _last_result_str(last),
+        "last_status": (last or {}).get("status"),
+        "signals_generated": (last or {}).get("signals_generated"),
+        "errors": (last or {}).get("errors", []),
+        "min_relevance_score": cfg.get("min_relevance_score"),
+        "min_impact_score": cfg.get("min_impact_score"),
+        "retention_days": cfg.get("retention_days"),
+        "dedup": cfg.get("dedup", True),
+        "use_llm": cfg.get("use_llm", True),
+        "sources": agents_store.source_catalog_view(cfg),
+    }
+
+
+def _schedule_label(cfg: dict) -> str:
+    if cfg.get("schedule_type") == "daily_time":
+        return f"Daily at {cfg.get('daily_time', '18:00')} ({cfg.get('timezone', '')})"
+    v, u = cfg.get("interval_value", 1), cfg.get("interval_unit", "hour")
+    return f"Every {v} {u}{'s' if v != 1 else ''}"
+
+
+@app.get("/api/agents")
+def api_agents_list():
+    scheduler = get_scheduler()
+    return {
+        "scheduler_backend": scheduler.backend(),
+        "agents": [_agent_view(aid) for aid in agents_store.REGISTRY],
+    }
+
+
+@app.get("/api/agents/{agent_id}")
+def api_agent_get(agent_id: str):
+    view = _agent_view(agent_id)
+    if not view:
+        return JSONResponse({"error": "unknown agent"}, status_code=404)
+    return view
+
+
+@app.post("/api/agents/{agent_id}/run")
+def api_agent_run(agent_id: str):
+    cfg = agents_store.get_config(agent_id)
+    if not cfg:
+        return JSONResponse({"error": "unknown agent"}, status_code=404)
+    return agent_runner.run_async(agent_id, cfg)
+
+
+@app.post("/api/agents/{agent_id}/schedule")
+async def api_agent_schedule(agent_id: str, request: Request):
+    if agent_id not in agents_store.REGISTRY:
+        return JSONResponse({"error": "unknown agent"}, status_code=404)
+    body = await request.json()
+    allowed = ("agent_name", "description", "enabled", "schedule_type",
+               "interval_value", "interval_unit", "daily_time", "timezone",
+               "tickers", "sources", "min_relevance_score", "min_impact_score",
+               "retention_days", "dedup", "use_llm")
+    patch = {k: body[k] for k in allowed if k in body}
+    if isinstance(patch.get("tickers"), str):
+        patch["tickers"] = [t.strip().upper() for t in patch["tickers"].replace("\n", ",").split(",") if t.strip()]
+    if "tickers" in patch and isinstance(patch["tickers"], list):
+        patch["tickers"] = [str(t).strip().upper() for t in patch["tickers"] if str(t).strip()]
+    cfg = agents_store.save_config(agent_id, patch)
+    # Recompute next run from the new schedule when enabled.
+    nxt = compute_next_run(cfg) if cfg.get("enabled") else None
+    cfg = agents_store.save_config(agent_id, {"next_run_at": nxt})
+    return _agent_view(agent_id)
+
+
+@app.post("/api/agents/{agent_id}/enable")
+def api_agent_enable(agent_id: str):
+    if agent_id not in agents_store.REGISTRY:
+        return JSONResponse({"error": "unknown agent"}, status_code=404)
+    cfg = agents_store.save_config(agent_id, {"enabled": True})
+    agents_store.save_config(agent_id, {"next_run_at": compute_next_run(cfg)})
+    return _agent_view(agent_id)
+
+
+@app.post("/api/agents/{agent_id}/disable")
+def api_agent_disable(agent_id: str):
+    if agent_id not in agents_store.REGISTRY:
+        return JSONResponse({"error": "unknown agent"}, status_code=404)
+    agents_store.save_config(agent_id, {"enabled": False, "next_run_at": None})
+    return _agent_view(agent_id)
+
+
+@app.post("/api/agents/{agent_id}/delete")
+def api_agent_delete(agent_id: str):
+    if agent_id not in agents_store.REGISTRY:
+        return JSONResponse({"error": "unknown agent"}, status_code=404)
+    agents_store.delete_config(agent_id)  # reverts to registry defaults (disabled)
+    return _agent_view(agent_id)
+
+
+@app.get("/api/agents/{agent_id}/results")
+def api_agent_results(agent_id: str):
+    if agent_id not in agents_store.REGISTRY:
+        return JSONResponse({"error": "unknown agent"}, status_code=404)
+    summary = news_runs.results_summary(agents_store.DATA_DIR, agent_id)
+    summary["history"] = news_runs.run_history(agents_store.DATA_DIR, agent_id, limit=20)
+    summary["running"] = agent_runner.is_running(agent_id)
+    return summary
+
+
+@app.get("/api/agents/{agent_id}/logs")
+def api_agent_logs(agent_id: str, lines: int = 200):
+    if agent_id not in agents_store.REGISTRY:
+        return JSONResponse({"error": "unknown agent"}, status_code=404)
+    return {"agent_id": agent_id, "lines": agent_runner.tail_log(agent_id, lines)}
 
 
 @app.get("/api/news_signals/{ticker}")

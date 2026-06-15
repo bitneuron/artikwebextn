@@ -113,6 +113,63 @@
   th.sortable { cursor:pointer; user-select:none; white-space:nowrap; }
   th.sortable:hover { color:var(--txt); }
   th .arr { color:var(--acc); font-size:10px; margin-left:3px; }
+
+  /* ── Agent Management ───────────────────────────────────────────── */
+  .agent-card { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+                padding:18px 20px; margin-bottom:16px; }
+  .agent-head { display:flex; align-items:flex-start; gap:12px; flex-wrap:wrap; }
+  .agent-head h3 { margin:0; font-size:17px; }
+  .agent-type { color:var(--mut); font-size:12.5px; }
+  .agent-desc { color:var(--mut); font-size:13px; margin:6px 0 14px; max-width:760px; }
+  .agent-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+                gap:12px 18px; margin-bottom:14px; }
+  .agent-grid .k { color:var(--mut); font-size:11px; text-transform:uppercase; letter-spacing:.5px; }
+  .agent-grid .v { font-size:14px; margin-top:2px; word-break:break-word; }
+  .agent-actions { display:flex; gap:8px; flex-wrap:wrap; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .chip-t { background:var(--panel2); border:1px solid var(--line); border-radius:999px;
+            padding:2px 10px; font-size:12px; font-weight:600; }
+  .st { padding:3px 10px; border-radius:999px; font-size:11.5px; font-weight:700; white-space:nowrap; }
+  .st.Enabled,.st.success { background:rgba(34,197,94,.15); color:var(--buy); }
+  .st.Disabled { background:rgba(139,148,158,.16); color:var(--mut); }
+  .st.Running,.st.partial { background:rgba(59,130,246,.16); color:#7cb0ff; }
+  .st.failed { background:rgba(239,68,68,.15); color:var(--sell); }
+  /* toggle switch */
+  .sw { position:relative; display:inline-block; width:42px; height:23px; }
+  .sw input { opacity:0; width:0; height:0; }
+  .sw .sl { position:absolute; inset:0; background:var(--panel2); border:1px solid var(--line);
+            border-radius:999px; transition:.15s; cursor:pointer; }
+  .sw .sl:before { content:""; position:absolute; height:17px; width:17px; left:2px; top:2px;
+                   background:var(--mut); border-radius:50%; transition:.15s; }
+  .sw input:checked + .sl { background:rgba(59,130,246,.4); border-color:var(--acc); }
+  .sw input:checked + .sl:before { transform:translateX(19px); background:#fff; }
+  /* modal */
+  .modal { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex;
+           align-items:flex-start; justify-content:center; padding:40px 16px; z-index:50; overflow:auto; }
+  .modal-card { background:var(--panel); border:1px solid var(--line); border-radius:14px;
+                width:100%; max-width:720px; padding:22px 24px; }
+  .modal-card h2 { margin:0 0 4px; font-size:19px; }
+  .modal-card h4 { margin:18px 0 8px; font-size:13px; text-transform:uppercase;
+                   letter-spacing:.5px; color:var(--acc); }
+  .fld { margin-bottom:12px; }
+  .fld label { display:block; font-size:12.5px; color:var(--mut); margin-bottom:4px; }
+  .fld input[type=text], .fld input[type=number], .fld input[type=time], .fld select, .fld textarea {
+    width:100%; background:var(--bg); color:var(--txt); border:1px solid var(--line);
+    border-radius:8px; padding:8px 10px; font-size:14px; }
+  .fld textarea { min-height:48px; resize:vertical; }
+  .row2 { display:flex; gap:12px; flex-wrap:wrap; } .row2 > * { flex:1; min-width:130px; }
+  .inline { display:flex; align-items:center; gap:10px; }
+  .src-tier { border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:10px; }
+  .src-tier .th { font-size:12px; color:var(--mut); margin-bottom:8px; text-transform:uppercase; letter-spacing:.5px; }
+  .src-row { display:flex; align-items:center; gap:10px; padding:5px 0; }
+  .src-row .nm { flex:1; font-size:13.5px; }
+  .src-row .meta { font-size:11.5px; color:var(--mut); }
+  .trust { font-variant-numeric:tabular-nums; }
+  .modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:20px;
+                   border-top:1px solid var(--line); padding-top:16px; }
+  .stat-row { display:flex; gap:22px; flex-wrap:wrap; margin:10px 0 16px; }
+  .stat-row .s b { font-size:22px; } .stat-row .s span { color:var(--mut); font-size:12px; display:block; }
+  .muted { color:var(--mut); }
 </style>
 </head>
 <body>
@@ -127,6 +184,7 @@
   <button class="tab" id="tab-sp500" onclick="showTab('sp500')">S&amp;P 500</button>
   <button class="tab" id="tab-dow" onclick="showTab('dow')">DOW</button>
   <button class="tab" id="tab-history" onclick="showTab('history')">🕘 Past Searches</button>
+  <button class="tab hidden" id="tab-agents" onclick="showTab('agents')">🤖 Agents</button>
 </nav>
 
 <main>
@@ -220,8 +278,23 @@
     <div id="hist-out"></div>
   </section>
 
+  <!-- Agent Management — configure / schedule / run / monitor background agents -->
+  <section id="view-agents" class="hidden">
+    <div class="pf-bar">
+      <span class="up-label">🤖 Agent Management</span>
+      <span class="pf-meta" id="ag-sched-note">Background agents that feed Artik Broker with intelligence signals.</span>
+      <button class="ghost" style="margin-left:auto" onclick="loadAgents()">🔄 Refresh</button>
+    </div>
+    <div id="agents-list"><div class="spin">Loading agents…</div></div>
+  </section>
+
   <!-- Artik Stock Copilot (chat) — shown after a search, or seeded from an Explain panel -->
   <div id="copilot" class="hidden"></div>
+
+  <!-- Agent edit / results / logs modal -->
+  <div id="agent-modal" class="modal hidden" onclick="if(event.target===this)closeAgentModal()">
+    <div class="modal-card" id="agent-modal-card"></div>
+  </div>
 </main>
 
 <script>
@@ -752,7 +825,7 @@ function downloadCSV(){
 // ── Tabs ────────────────────────────────────────────────────────────────────
 let _pfLoaded = false;
 const _idxLoaded = {};
-const _VIEWS = ['analyze','portfolio','sp500','dow','history'];
+const _VIEWS = ['analyze','portfolio','sp500','dow','history','agents'];
 function showTab(name){
   _VIEWS.forEach(v => {
     $('#view-'+v).classList.toggle('hidden', v!==name);
@@ -761,6 +834,7 @@ function showTab(name){
   if(name==='portfolio' && !_pfLoaded){ _pfLoaded = true; loadPortfolioDates(); }
   if((name==='sp500'||name==='dow') && !_idxLoaded[name]){ _idxLoaded[name]=true; loadIndex(name); }
   if(name==='history'){ renderHistory(); }
+  if(name==='agents'){ loadAgents(); }
 }
 
 // ── Search history (persisted server-side: S3 on AWS, local folder in dev) ────
@@ -1098,6 +1172,247 @@ $('#syms').addEventListener('keydown', e => {
   if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); run(); }
 });
 
+// ── Agent Management ─────────────────────────────────────────────────────────
+let _agents = [], _agentPoll = null;
+const _LOCAL_TZ = (Intl.DateTimeFormat().resolvedOptions().timeZone) || 'America/Los_Angeles';
+
+function fmtTime(iso){
+  if(!iso) return '—';
+  try { return new Date(iso).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); }
+  catch(e){ return iso; }
+}
+
+async function loadAgents(){
+  try {
+    const d = await (await fetch('/api/agents')).json();
+    _agents = d.agents||[];
+    $('#ag-sched-note').textContent = `Scheduler: ${d.scheduler_backend} · ${_agents.length} agent(s)`;
+    renderAgents();
+    // Poll while any agent is running so the card reflects completion.
+    const anyRunning = _agents.some(a=>a.running);
+    if(anyRunning && !_agentPoll){ _agentPoll = setInterval(loadAgents, 3000); }
+    if(!anyRunning && _agentPoll){ clearInterval(_agentPoll); _agentPoll=null; }
+  } catch(e){ $('#agents-list').innerHTML = '<div class="err">Could not load agents: '+e+'</div>'; }
+}
+
+function renderAgents(){
+  if(!_agents.length){ $('#agents-list').innerHTML = '<div class="muted">No agents configured.</div>'; return; }
+  $('#agents-list').innerHTML = _agents.map(a=>{
+    const errs = (a.errors&&a.errors.length) ? a.errors.length+' error(s)' : 'None';
+    const errCls = (a.errors&&a.errors.length) ? 'neg' : 'muted';
+    const lastSt = a.last_status ? `<span class="st ${a.last_status}">${a.last_status}</span>` : '';
+    return `<div class="agent-card">
+      <div class="agent-head">
+        <div style="flex:1">
+          <h3>${escapeHtml(a.agent_name)} <span class="st ${a.status}">${a.status}</span></h3>
+          <div class="agent-type">${escapeHtml(a.agent_type)}</div>
+        </div>
+        <label class="sw" title="${a.enabled?'Enabled':'Disabled'}">
+          <input type="checkbox" ${a.enabled?'checked':''} onchange="toggleAgent('${a.agent_id}',this.checked)">
+          <span class="sl"></span>
+        </label>
+      </div>
+      <div class="agent-desc">${escapeHtml(a.description||'')}</div>
+      <div class="agent-grid">
+        <div><div class="k">Schedule</div><div class="v">${escapeHtml(a.schedule)}</div></div>
+        <div><div class="k">Last Run</div><div class="v">${fmtTime(a.last_run_at)} ${lastSt}</div></div>
+        <div><div class="k">Next Run</div><div class="v">${a.enabled?fmtTime(a.next_run_at):'—'}</div></div>
+        <div><div class="k">Stocks Covered</div><div class="v">${(a.tickers||[]).join(', ')||'—'}</div></div>
+        <div><div class="k">Signals Generated</div><div class="v">${a.signals_generated??'—'}</div></div>
+        <div><div class="k">Errors</div><div class="v ${errCls}">${errs}</div></div>
+        <div style="grid-column:1/-1"><div class="k">Last Result</div><div class="v">${escapeHtml(a.last_result||'—')}</div></div>
+      </div>
+      <div class="agent-actions">
+        <button class="ex-btn" onclick="runAgent('${a.agent_id}')" ${a.running?'disabled':''}>${a.running?'⏳ Running…':'▶ Run Now'}</button>
+        <button class="ex-btn" onclick="editAgent('${a.agent_id}')">✏️ Edit</button>
+        <button class="ex-btn" onclick="viewResults('${a.agent_id}')">📊 View Results</button>
+        <button class="ex-btn" onclick="viewLogs('${a.agent_id}')">📜 View Logs</button>
+        <button class="ex-btn" onclick="toggleAgent('${a.agent_id}',${a.enabled?'false':'true'})">${a.enabled?'⏸ Disable':'✅ Enable'}</button>
+        <button class="ex-btn" onclick="deleteAgent('${a.agent_id}')">🗑 Delete Config</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function agentById(id){ return _agents.find(a=>a.agent_id===id); }
+
+async function runAgent(id){
+  const a = agentById(id); if(a){ a.running=true; renderAgents(); }
+  try {
+    const r = await (await fetch(`/api/agents/${id}/run`,{method:'POST'})).json();
+    if(r.started===false){ alert('Agent already running.'); }
+    if(!_agentPoll) _agentPoll = setInterval(loadAgents, 3000);
+    setTimeout(loadAgents, 1500);
+  } catch(e){ alert('Run failed: '+e); loadAgents(); }
+}
+
+async function toggleAgent(id, on){
+  await fetch(`/api/agents/${id}/${on?'enable':'disable'}`,{method:'POST'});
+  loadAgents();
+}
+
+async function deleteAgent(id){
+  if(!confirm('Delete this agent configuration? It resets to defaults (disabled).')) return;
+  await fetch(`/api/agents/${id}/delete`,{method:'POST'});
+  loadAgents();
+}
+
+// ── Edit modal ───────────────────────────────────────────────────────────────
+function closeAgentModal(){ $('#agent-modal').classList.add('hidden'); }
+
+async function editAgent(id){
+  const a = await (await fetch('/api/agents/'+id)).json();
+  const isInt = (a.schedule_type||'interval')!=='daily_time';
+  const tiers = {1:'Tier 1 — Primary filings / issuer',2:'Tier 2 — Top-tier wires & papers',
+                 3:'Tier 3 — Data vendors',4:'Tier 4 — Mainstream finance media',5:'Tier 5 — Social / sentiment'};
+  const byTier = {}; (a.sources||[]).forEach(s=>{ (byTier[s.tier]=byTier[s.tier]||[]).push(s); });
+  const srcHtml = Object.keys(tiers).map(t=>{
+    const list = (byTier[t]||[]).map(s=>`
+      <div class="src-row">
+        <label class="sw" style="transform:scale(.85)"><input type="checkbox" data-src="${s.id}" ${s.enabled?'checked':''} ${s.impl?'':'disabled'}><span class="sl"></span></label>
+        <span class="nm">${escapeHtml(s.name)} ${s.impl?'':'<span class="meta">(roadmap)</span>'}</span>
+        <span class="meta trust">trust ${s.trust.toFixed(2)}</span>
+      </div>`).join('');
+    return `<div class="src-tier"><div class="th">${tiers[t]}</div>${list}</div>`;
+  }).join('');
+
+  $('#agent-modal-card').innerHTML = `
+    <h2>Edit · ${escapeHtml(a.agent_name)}</h2>
+    <div class="muted" style="font-size:12.5px;margin-bottom:6px">${escapeHtml(a.agent_type)}</div>
+    <h4>Basic Settings</h4>
+    <div class="fld"><label>Agent Name</label><input type="text" id="f-name" value="${escapeHtml(a.agent_name)}"></div>
+    <div class="fld"><label>Description</label><textarea id="f-desc">${escapeHtml(a.description||'')}</textarea></div>
+    <div class="fld inline"><label style="margin:0">Enabled</label>
+      <label class="sw"><input type="checkbox" id="f-enabled" ${a.enabled?'checked':''}><span class="sl"></span></label></div>
+
+    <h4>Stocks to Track</h4>
+    <div class="fld"><label>Comma-separated tickers</label>
+      <textarea id="f-tickers">${(a.tickers||[]).join(', ')}</textarea></div>
+
+    <h4>Schedule</h4>
+    <div class="fld inline">
+      <label class="inline" style="margin:0"><input type="radio" name="f-stype" value="interval" ${isInt?'checked':''} onchange="agScheduleMode()"> Interval</label>
+      <label class="inline" style="margin:0"><input type="radio" name="f-stype" value="daily_time" ${isInt?'':'checked'} onchange="agScheduleMode()"> Daily at time</label>
+    </div>
+    <div id="f-interval-box" class="row2 ${isInt?'':'hidden'}">
+      <div class="fld"><label>Every N</label><input type="number" min="1" id="f-ival" value="${a.interval_value||1}"></div>
+      <div class="fld"><label>Unit</label><select id="f-iunit">
+        ${['minute','hour','day'].map(u=>`<option value="${u}" ${a.interval_unit===u?'selected':''}>${u}s</option>`).join('')}
+      </select></div>
+    </div>
+    <div id="f-daily-box" class="row2 ${isInt?'hidden':''}">
+      <div class="fld"><label>Run daily at</label><input type="time" id="f-dtime" value="${a.daily_time||'18:00'}"></div>
+    </div>
+    <div class="fld"><label>Timezone</label><input type="text" id="f-tz" value="${escapeHtml(a.timezone||_LOCAL_TZ)}"></div>
+
+    <h4>Trusted News Sources</h4>
+    <div>${srcHtml}</div>
+
+    <h4>Classification Settings</h4>
+    <div class="row2">
+      <div class="fld"><label>Minimum Relevance Score (0–1)</label><input type="number" step="0.05" min="0" max="1" id="f-minrel" value="${a.min_relevance_score??0.70}"></div>
+      <div class="fld"><label>Minimum Impact Score (0–100)</label><input type="number" min="0" max="100" id="f-minimp" value="${a.min_impact_score??4}"></div>
+    </div>
+    <div class="row2">
+      <div class="fld"><label>Retention Days</label><input type="number" min="1" id="f-ret" value="${a.retention_days??90}"></div>
+      <div class="fld inline" style="align-items:flex-end"><label style="margin:0 8px 8px 0">Deduplication</label>
+        <label class="sw"><input type="checkbox" id="f-dedup" ${a.dedup!==false?'checked':''}><span class="sl"></span></label></div>
+    </div>
+    <div class="fld inline"><label style="margin:0">Use LLM classifier (Claude)</label>
+      <label class="sw"><input type="checkbox" id="f-llm" ${a.use_llm!==false?'checked':''}><span class="sl"></span></label></div>
+
+    <div class="modal-actions">
+      <button class="ghost" onclick="closeAgentModal()">Cancel</button>
+      <button onclick="saveAgent('${a.agent_id}')">Save</button>
+    </div>`;
+  $('#agent-modal').classList.remove('hidden');
+}
+
+function agScheduleMode(){
+  const isInt = document.querySelector('input[name="f-stype"]:checked').value==='interval';
+  $('#f-interval-box').classList.toggle('hidden', !isInt);
+  $('#f-daily-box').classList.toggle('hidden', isInt);
+}
+
+async function saveAgent(id){
+  const sources = {};
+  document.querySelectorAll('#agent-modal-card input[data-src]').forEach(c=>{ sources[c.getAttribute('data-src')] = c.checked; });
+  const body = {
+    agent_name: $('#f-name').value.trim(),
+    description: $('#f-desc').value.trim(),
+    enabled: $('#f-enabled').checked,
+    tickers: $('#f-tickers').value,
+    schedule_type: document.querySelector('input[name="f-stype"]:checked').value,
+    interval_value: parseInt($('#f-ival').value)||1,
+    interval_unit: $('#f-iunit').value,
+    daily_time: $('#f-dtime').value||'18:00',
+    timezone: $('#f-tz').value.trim()||_LOCAL_TZ,
+    sources,
+    min_relevance_score: parseFloat($('#f-minrel').value),
+    min_impact_score: parseInt($('#f-minimp').value),
+    retention_days: parseInt($('#f-ret').value),
+    dedup: $('#f-dedup').checked,
+    use_llm: $('#f-llm').checked,
+  };
+  await fetch(`/api/agents/${id}/schedule`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+  closeAgentModal();
+  loadAgents();
+}
+
+// ── View Results ─────────────────────────────────────────────────────────────
+async function viewResults(id){
+  $('#agent-modal-card').innerHTML = '<div class="spin">Loading results…</div>';
+  $('#agent-modal').classList.remove('hidden');
+  const d = await (await fetch(`/api/agents/${id}/results`)).json();
+  const t = d.totals||{};
+  const brk = o => Object.entries(o||{}).map(([k,v])=>`<span class="chip-t">${escapeHtml(k)}: ${v}</span>`).join(' ')||'<span class="muted">—</span>';
+  const rows = (d.headlines||[]).map(h=>{
+    const sent = h.sentiment==='positive'?'pos':h.sentiment==='negative'?'neg':'';
+    return `<tr class="row">
+      <td class="tick">${escapeHtml(h.ticker||'')}</td>
+      <td style="max-width:320px">${h.url?`<a href="${h.url}" target="_blank" rel="noopener">${escapeHtml((h.headline||'').slice(0,110))}</a>`:escapeHtml((h.headline||'').slice(0,110))}</td>
+      <td class="muted">${escapeHtml((h.source||'').split(':')[0])}</td>
+      <td>${h.relevance_score!=null?Math.round(h.relevance_score*100)+'%':'—'}</td>
+      <td class="${sent}">${escapeHtml(h.sentiment||'—')}</td>
+      <td class="num">${h.impact_score??'—'}</td>
+      <td class="num">${h.confidence!=null?Math.round(h.confidence*100)+'%':'—'}</td>
+      <td>${escapeHtml(h.signal_type||'—')}</td>
+      <td class="muted" style="white-space:nowrap">${escapeHtml((h.published||'').slice(0,16))}</td>
+    </tr>`;
+  }).join('');
+  const last = d.last_run||{};
+  $('#agent-modal-card').innerHTML = `
+    <h2>📊 Results · Stock News Collector</h2>
+    <div class="muted" style="font-size:12.5px;margin-bottom:8px">Last run ${fmtTime(last.completed_at)} · <span class="st ${last.status||''}">${last.status||'—'}</span></div>
+    <div class="stat-row">
+      <div class="s"><b>${t.articles_collected??'—'}</b><span>Collected</span></div>
+      <div class="s"><b>${t.articles_relevant??'—'}</b><span>Relevant</span></div>
+      <div class="s"><b>${t.signals_generated??'—'}</b><span>Signals</span></div>
+      <div class="s"><b class="pos">${t.signals_positive??'—'}</b><span>Positive</span></div>
+      <div class="s"><b class="neg">${t.signals_negative??'—'}</b><span>Negative</span></div>
+    </div>
+    <div class="fld"><div class="k muted" style="font-size:11px;text-transform:uppercase">Ticker breakdown</div><div class="chips" style="margin-top:6px">${brk(d.by_ticker)}</div></div>
+    <div class="fld"><div class="k muted" style="font-size:11px;text-transform:uppercase">Source breakdown</div><div class="chips" style="margin-top:6px">${brk(d.by_source)}</div></div>
+    <h4>Latest relevant headlines</h4>
+    <div style="overflow:auto;max-height:340px">
+      <table><thead><tr><th>Ticker</th><th>Headline</th><th>Source</th><th>Relevance</th><th>Sentiment</th><th class="num">Impact</th><th class="num">Conf</th><th>Signal</th><th>Published</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="9" class="muted">No relevant articles yet — run the agent.</td></tr>'}</tbody></table>
+    </div>
+    <div class="modal-actions"><button class="ghost" onclick="closeAgentModal()">Close</button></div>`;
+}
+
+// ── View Logs ────────────────────────────────────────────────────────────────
+async function viewLogs(id){
+  $('#agent-modal-card').innerHTML = '<div class="spin">Loading logs…</div>';
+  $('#agent-modal').classList.remove('hidden');
+  const d = await (await fetch(`/api/agents/${id}/logs`)).json();
+  const txt = (d.lines||[]).join('\n') || 'No logs yet.';
+  $('#agent-modal-card').innerHTML = `
+    <h2>📜 Logs · ${escapeHtml(id)}</h2>
+    <pre style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px;max-height:440px;overflow:auto;font-size:12px;white-space:pre-wrap">${escapeHtml(txt)}</pre>
+    <div class="modal-actions"><button class="ghost" onclick="closeAgentModal()">Close</button></div>`;
+}
+
 // Show the Portfolio tab only where the backend says portfolio data exists
 // (local now; hidden on AWS until enabled). Hidden by default to avoid a flash.
 $('#tab-portfolio').classList.add('hidden');
@@ -1112,6 +1427,7 @@ $('#tab-portfolio').classList.add('hidden');
     // Reveal the news-collector overlay toggle only when a signals source exists.
     window._newsAvail = !!cfg.news_signals;
     if(window._newsAvail) $('#news-toggle').classList.remove('hidden');
+    if(cfg.agents) $('#tab-agents').classList.remove('hidden');
   } catch(e){ /* leave Portfolio + news toggle hidden if config is unavailable */ }
 })();
 </script>

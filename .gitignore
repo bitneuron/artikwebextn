@@ -57,3 +57,7 @@ memory/*portfolio-snapshot*.md
 artikBroker/cache/
 # Local dev search-history store (S3 is used on AWS)
 artikBroker/search_history/
+# Local agent schedules + generated collector configs
+artikBroker/config/
+# Agent run logs (under the collector data dir)
+**/data/news_collector/logs/
