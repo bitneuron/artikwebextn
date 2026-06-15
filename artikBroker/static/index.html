@@ -20,6 +20,15 @@
   .bar { display:flex; gap:10px; margin-bottom:8px; }
   .bar-actions { display:flex; flex-direction:column; gap:8px; }
   .mode-sel { padding:8px 10px; font-size:13px; }
+  .news-toggle { display:inline-flex; align-items:center; gap:6px; font-size:13px; color:var(--mut); cursor:pointer; user-select:none; white-space:nowrap; }
+  .news-toggle input { accent-color:var(--acc); }
+  .ov-chip { display:inline-block; margin-left:6px; padding:1px 6px; border-radius:999px; font-size:11px; font-weight:700; vertical-align:middle; }
+  .ov-chip.pos { color:#7ee787; background:rgba(63,185,80,.16); }
+  .ov-chip.neg { color:#ff9b9b; background:rgba(248,81,73,.16); }
+  .ov-chip.flat { color:var(--mut); background:rgba(139,148,158,.16); }
+  .ov-box { grid-column:1/-1; border-top:1px solid var(--line); margin-top:8px; padding-top:10px; }
+  .ov-grid { display:flex; gap:18px; flex-wrap:wrap; align-items:baseline; margin:4px 0 8px; }
+  .ov-grid .num { font-size:20px; font-weight:700; }
   textarea { flex:1; min-height:52px; resize:vertical; background:var(--panel); color:var(--txt);
              border:1px solid var(--line); border-radius:10px; padding:12px 14px; font-size:15px; }
   button { background:var(--acc); color:#fff; border:0; border-radius:10px; padding:0 22px;
@@ -134,6 +143,9 @@
           <option value="comparison">Comparison</option>
           <option value="screening">Screening</option>
         </select>
+        <label id="news-toggle" class="news-toggle hidden" title="Overlay optional news-collector signals on top of the Artik Score (base + overlay shown separately; score is never modified)">
+          <input type="checkbox" id="news-on" onchange="window._newsOn=this.checked"> 📰 News signals
+        </label>
         <button id="go" onclick="run()">Search</button>
       </div>
     </div>
@@ -232,7 +244,7 @@ async function run(){
     if(isTickers && mode==='auto'){
       btn.textContent = 'Analyzing…';
       $('#out').innerHTML = '<div class="spin">Running live analysis…</div>';
-      const res = await fetch('/api/analyze?symbols=' + encodeURIComponent(tokens.join(',')));
+      const res = await fetch('/api/analyze?symbols=' + encodeURIComponent(tokens.join(',')) + _newsParam());
       const data = await res.json();
       if(data.error){ $('#out').innerHTML = '<div class="err">'+data.error+'</div>'; return; }
       render(data.results);
@@ -241,7 +253,7 @@ async function run(){
     } else {
       btn.textContent = 'Searching…';
       $('#out').innerHTML = '<div class="spin">🔎 AI Search — interpreting your query and scoring candidates live… (this can take ~15s)</div>';
-      const res = await fetch('/api/search?q=' + encodeURIComponent(raw));
+      const res = await fetch('/api/search?q=' + encodeURIComponent(raw) + _newsParam());
       const data = await res.json();
       if(data.error){ $('#out').innerHTML = '<div class="err">'+data.error+'</div>'; return; }
       render(data.results, {summary:data.summary, provider:data.provider});
@@ -289,6 +301,17 @@ async function runCopilotQuery(query, mode){
 function statusCell(r){
   return r.status ? `<span class="badge ${r.status}">${r.status}</span>`
                   : `<span style="color:var(--mut)">${r.error?'—':''}</span>`;
+}
+
+// "&news=1" when the user opted into the news-collector overlay (only when available).
+function _newsParam(){ return (window._newsAvail && window._newsOn) ? '&news=1' : ''; }
+
+// Inline chip next to the base score: "82 +3" / "82 −2".
+function overlayChip(r){
+  const ov = r.news_overlay; if(!ov) return '';
+  const d = ov.aggregate_score_delta||0;
+  const cls = d>0?'pos':d<0?'neg':'flat', sg = d>0?'+':d<0?'−':'±';
+  return ` <span class="ov-chip ${cls}" title="News overlay: ${ov.signal_count} signal(s), ${ov.net_sentiment}. Adjusted ${ov.adjusted_score}. Base score is unchanged.">${sg}${Math.abs(d)} 📰</span>`;
 }
 
 // ── Shared sortable-table helpers (Analyze · S&P 500 · DOW) ──────────────────
@@ -391,7 +414,7 @@ function render(rows, opts){
         <td class="tick">${r.ticker}${why}</td>
         <td style="color:var(--mut)">${r.sector||'—'}</td>
         <td class="num">$${r.price!=null?r.price.toLocaleString():'—'}</td>
-        <td class="num"><b>${r.score}</b></td>
+        <td class="num"><b>${r.score}</b>${overlayChip(r)}</td>
         <td class="num">${r.rsi!=null?r.rsi:'—'}</td>
         <td>${statusCell(r)}</td>
         <td><button class="ex-btn" onclick="toggle(${i})">Explain ▾</button></td>
@@ -502,10 +525,36 @@ function detail(r){
         <span class="k">Size</span><span>${tp.position_size??'—'}</span>
       </div>
     </div>
+    ${newsOverlayBlock(r)}
     <div style="grid-column:1/-1;border-top:1px solid var(--line);margin-top:8px;padding-top:10px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="ex-btn" onclick="askCopilotStock('${r.ticker}')">💬 Ask Copilot about ${r.ticker}</button>
       <span class="av-slot"><button class="ex-btn" onclick="loadEnrich('${r.ticker}', this)">📊 Alpha Vantage — Bollinger Bands + fundamentals</button></span>
     </div>
+  </div>`;
+}
+
+// Base / News Overlay / Adjusted — shown separately; the engine score is never changed.
+function newsOverlayBlock(r){
+  const ov = r.news_overlay; if(!ov) return '';
+  const d = ov.aggregate_score_delta||0;
+  const cls = d>0?'pos':d<0?'neg':'flat', sg = d>0?'+':d<0?'−':'±';
+  const sigs = (ov.signals||[]).slice(0,5).map(s=>{
+    const ssg = s.sentiment==='positive'?'▲':s.sentiment==='negative'?'▼':'•';
+    const sd = s.recommended_score_delta||0, sds = sd>0?'+'+sd:(''+sd);
+    const url = s.url ? `<a href="${s.url}" target="_blank" rel="noopener">↗</a>` : '';
+    return `<li class="${s.sentiment==='positive'?'s':s.sentiment==='negative'?'r':''}">${ssg} <b>${s.signal_type}</b>
+      · impact ${s.impact_score} · conf ${Math.round((s.confidence||0)*100)}% · overlay ${sds}
+      <span style="color:var(--mut)"> — ${escapeHtml((s.headline||'').slice(0,90))}</span> ${url}</li>`;
+  }).join('');
+  return `<div class="ov-box">
+    <h4>📰 News Signal Overlay <span style="color:var(--mut);font-weight:400">(optional — does not modify the Artik Score)</span></h4>
+    <div class="ov-grid">
+      <span><span style="color:var(--mut)">Base Artik Score</span><br><span class="num">${ov.base_score}</span></span>
+      <span><span style="color:var(--mut)">News Overlay</span><br><span class="num ${cls==='pos'?'pos':cls==='neg'?'neg':''}">${sg}${Math.abs(d)}</span></span>
+      <span><span style="color:var(--mut)">Adjusted Score</span><br><span class="num">${ov.adjusted_score}</span></span>
+      <span style="color:var(--mut);font-size:12px">${ov.signal_count} active signal(s) · net ${ov.net_sentiment} · capped ±${ov.overlay_cap}</span>
+    </div>
+    <ul style="margin:4px 0 0;font-size:12.5px">${sigs||'<li>—</li>'}</ul>
   </div>`;
 }
 
@@ -870,7 +919,7 @@ function drawIndex(pfx){
         <td style="color:var(--mut);font-size:12px">${arch}</td>
         <td style="color:var(--mut)">${r.sector||'—'}</td>
         <td class="num">$${r.price!=null?r.price.toLocaleString():'—'}</td>
-        <td class="num"><b>${r.score}</b></td>
+        <td class="num"><b>${r.score}</b>${overlayChip(r)}</td>
         <td class="num">${r.rsi!=null?r.rsi:'—'}</td>
         <td>${statusCell(r)}</td>
         <td><button class="ex-btn" onclick="toggleGen('${pfx}',${i})">Explain ▾</button></td>
@@ -1060,7 +1109,10 @@ $('#tab-portfolio').classList.add('hidden');
     } else if(!$('#view-portfolio').classList.contains('hidden')){
       showTab('analyze');   // never land on a hidden tab
     }
-  } catch(e){ /* leave Portfolio hidden if config is unavailable */ }
+    // Reveal the news-collector overlay toggle only when a signals source exists.
+    window._newsAvail = !!cfg.news_signals;
+    if(window._newsAvail) $('#news-toggle').classList.remove('hidden');
+  } catch(e){ /* leave Portfolio + news toggle hidden if config is unavailable */ }
 })();
 </script>
 </body>

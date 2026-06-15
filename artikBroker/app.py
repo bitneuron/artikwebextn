@@ -36,6 +36,7 @@ from artik_engine import scoring  # noqa: E402
 import yfinance as yf  # noqa: E402
 import alpha_vantage as av  # noqa: E402  (sibling module; key from env, never exposed)
 import history_store as hist  # noqa: E402  (server-side search history: S3 on AWS, local folder in dev)
+import news_signals  # noqa: E402  (read-only overlay from the news-collector agent; S3 on AWS, local file in dev)
 from fastapi import FastAPI, Query, UploadFile, File, Request, Form  # noqa: E402
 from fastapi.responses import FileResponse, JSONResponse, Response, HTMLResponse, RedirectResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
@@ -255,7 +256,10 @@ def analyze_one(ticker: str) -> dict:
 
 
 @app.get("/api/analyze")
-def api_analyze(symbols: str = Query(..., description="comma-separated tickers")):
+def api_analyze(
+    symbols: str = Query(..., description="comma-separated tickers"),
+    news: int = Query(0, description="1 = attach optional news-collector signal overlays"),
+):
     syms, seen = [], set()
     for raw in symbols.replace("\n", ",").split(","):
         t = raw.strip().upper()
@@ -269,6 +273,10 @@ def api_analyze(symbols: str = Query(..., description="comma-separated tickers")
 
     results = [analyze_one(t) for t in syms]
     results = [r for r in results if r]
+    # Optional, opt-in news overlay — never mutates the engine score.
+    if news:
+        for r in results:
+            news_signals.apply_overlay(r)
     # rank scorable rows by score desc, keep errors at the end
     results.sort(key=lambda r: (r.get("score") is None, -(r.get("score") or 0)))
     return {"count": len(results), "results": results}
@@ -426,7 +434,10 @@ def _parse_openai(query: str, key: str) -> dict | None:
 
 
 @app.get("/api/search")
-def api_search(q: str = Query(..., description="natural-language stock search")):
+def api_search(
+    q: str = Query(..., description="natural-language stock search"),
+    news: int = Query(0, description="1 = attach optional news-collector signal overlays"),
+):
     query = (q or "").strip()
     if not query:
         return JSONResponse({"error": "empty query"}, status_code=400)
@@ -464,6 +475,9 @@ def api_search(q: str = Query(..., description="natural-language stock search"))
         matched = [r for r in rows if not r.get("error") and r.get("score") is not None]
     for r in matched:
         r["why"] = reasons.get(r["ticker"], "")
+    if news:
+        for r in matched:
+            news_signals.apply_overlay(r)
     matched.sort(key=lambda r: -(r.get("score") or 0))
 
     return {
@@ -1087,7 +1101,21 @@ def _portfolio_enabled() -> bool:
 
 @app.get("/api/config")
 def api_config():
-    return {"portfolio": _portfolio_enabled()}
+    return {
+        "portfolio": _portfolio_enabled(),
+        "news_signals": news_signals.available(),
+        "news_signals_backend": news_signals.backend(),
+    }
+
+
+@app.get("/api/news_signals/{ticker}")
+def api_news_signals(ticker: str):
+    """Read-only: the active news overlay for one ticker (or available=false)."""
+    ov = news_signals.overlay_for(ticker)
+    if not ov:
+        return {"available": False, "ticker": ticker.upper(),
+                "backend": news_signals.backend()}
+    return {"available": True, "backend": news_signals.backend(), **ov}
 
 
 @app.get("/")
