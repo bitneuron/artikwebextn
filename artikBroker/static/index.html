@@ -232,7 +232,10 @@
      width:auto; margin:0; border:0; border-radius:0; background:transparent; box-shadow:none; }
   .copilot-col .cop-head { background:linear-gradient(90deg,rgba(59,130,246,.14),transparent);
      border-bottom:1px solid var(--line); flex:none; }
-  .copilot-col .cop-body { max-height:none !important; flex:1; }
+  .copilot-col .cop-body { max-height:none !important; flex:1; min-height:0; }
+  .rep-body table { width:100%; border-collapse:collapse; margin:8px 0; font-size:12.5px; }
+  .rep-body th,.rep-body td { border:1px solid var(--line); padding:6px 9px; text-align:left; }
+  .rep-body th { background:rgba(59,130,246,.1); color:#a9c7e6; font-size:11px; text-transform:uppercase; letter-spacing:.4px; }
   .copilot-col .cop-in { flex:none; }
 
   /* hero search */
@@ -1221,19 +1224,33 @@ function inlineMd(s){ return escapeHtml(s).replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>
 // section headers become coloured labels, bullets become ✓ / ⚠ rows.
 function copReport(md){
   const lines = (md||'').split('\n');
-  let html='', list=[], listKind='', section='';
+  let html='', list=[], listKind='', section='', tbl=[];
   const flush=()=>{ if(list.length){ html+=`<ul class="rlist ${listKind}">`+list.map(x=>`<li>${x}</li>`).join('')+'</ul>'; list=[]; } };
+  const flushTbl=()=>{
+    if(!tbl.length) return;
+    const rows = tbl.map(r => r.replace(/^\||\|$/g,'').split('|').map(c=>c.trim()))
+                    .filter(cells => !cells.every(c => /^:?-{2,}:?$/.test(c) || c===''));
+    if(rows.length){
+      const head = rows.shift();
+      html += '<table><thead><tr>'+head.map(c=>`<th>${inlineMd(c)}</th>`).join('')+'</tr></thead><tbody>'
+            + rows.map(r=>'<tr>'+r.map(c=>`<td>${inlineMd(c)}</td>`).join('')+'</tr>').join('')+'</tbody></table>';
+    }
+    tbl=[];
+  };
   for(const raw of lines){
     const ln = raw.trim();
+    if(/^\|.*\|?$/.test(ln) && ln.includes('|')){ flush(); tbl.push(ln); continue; }
+    flushTbl();
     if(!ln){ flush(); continue; }
     const hm = ln.match(/^#{1,4}\s+(.+)$/) || ln.match(/^\*\*(.+?)\*\*:?\s*$/);
     let head = hm ? hm[1].replace(/\*\*/g,'') : null;
-    if(!head && ln.length<=42 && /^[A-Z][\w&/'’ .-]+:?$/.test(ln) && !/[.!?]$/.test(ln) && /[A-Za-z]/.test(ln)) head = ln.replace(/:$/,'');
+    if(!head && ln.length<=42 && /^[A-Z][\w&/'’ ().-]+:?$/.test(ln) && !/[.!?]$/.test(ln) && /[A-Za-z]/.test(ln)) head = ln.replace(/:$/,'');
     if(head){
       flush();
       const low = head.toLowerCase();
-      section = /strength|positive|bull|pros?\b|tailwind|moat|advantage|driver/.test(low) ? 'good'
-              : /risk|concern|flag|negative|bear|caution|watch|headwind|sell|weak/.test(low) ? 'bad' : '';
+      // risk keywords take precedence (e.g. "Risks (the drivers of the sell)")
+      section = /risk|concern|flag|negative|bear|caution|watch|headwind|sell|weak|downside/.test(low) ? 'bad'
+              : /strength|positive|bull|pros?\b|tailwind|moat|advantage/.test(low) ? 'good' : '';
       html += `<div class="rsec ${section}">${escapeHtml(head)}</div>`;
       continue;
     }
@@ -1242,7 +1259,7 @@ function copReport(md){
     flush();
     html += `<p class="rp">${inlineMd(ln)}</p>`;
   }
-  flush();
+  flush(); flushTbl();
   return html || `<p class="rp">${inlineMd(md)}</p>`;
 }
 function copSourceBadges(c){
