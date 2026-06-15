@@ -6,8 +6,10 @@
 <title>artikBroker — Stock Analyzer</title>
 <style>
   :root {
-    --bg:#0b0f17; --panel:#141b27; --panel2:#1b2433; --line:#26313f;
+    --bg:#070b12; --panel:#111824; --panel2:#1b2433; --line:#26313f;
     --txt:#e6edf3; --mut:#8b98a9; --buy:#22c55e; --hold:#eab308; --sell:#ef4444; --acc:#3b82f6;
+    --side:#0a0f18; --glass:rgba(20,27,39,.62); --glassline:rgba(255,255,255,.07);
+    --acc2:#6366f1; --shadow:0 8px 30px rgba(0,0,0,.35); --r:14px;
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--txt);
@@ -171,61 +173,270 @@
   .stat-row { display:flex; gap:22px; flex-wrap:wrap; margin:10px 0 16px; }
   .stat-row .s b { font-size:22px; } .stat-row .s span { color:var(--mut); font-size:12px; display:block; }
   .muted { color:var(--mut); }
+
+  /* ═══════════════ PREMIUM REDESIGN — shell + design system ═══════════════ */
+  body { background:
+      radial-gradient(900px 500px at 12% -8%, rgba(99,102,241,.10), transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, rgba(59,130,246,.08), transparent 55%),
+      var(--bg); }
+  .app { display:grid; grid-template-columns:236px minmax(0,1fr) 360px; height:100vh; }
+  .app.collapsed { grid-template-columns:66px minmax(0,1fr) 360px; }
+  .app.nocop { grid-template-columns:236px minmax(0,1fr); }
+  .app.collapsed.nocop { grid-template-columns:66px minmax(0,1fr); }
+
+  /* sidebar */
+  .sidebar { background:linear-gradient(180deg,#0b1119,#080c14); border-right:1px solid var(--line);
+             display:flex; flex-direction:column; overflow:hidden; }
+  .brand { display:flex; align-items:center; gap:10px; padding:18px 18px 14px; }
+  .brand .logo { width:30px; height:30px; border-radius:9px; flex:none;
+     background:linear-gradient(135deg,var(--acc),var(--acc2)); display:grid; place-items:center;
+     font-weight:800; color:#fff; box-shadow:0 4px 14px rgba(59,130,246,.4); }
+  .brand .name { font-weight:700; font-size:15.5px; letter-spacing:.2px; white-space:nowrap; }
+  .brand .name span { color:var(--acc); }
+  .brand .collapse { margin-left:auto; background:transparent; border:0; color:var(--mut);
+     padding:4px; font-size:16px; cursor:pointer; border-radius:6px; }
+  .app.collapsed .brand .name, .app.collapsed .side-foot span, .app.collapsed .nav-item span { display:none; }
+  .side-nav { display:flex; flex-direction:column; gap:2px; padding:6px 10px; overflow-y:auto; }
+  .nav-sec { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#5b6677;
+             padding:12px 12px 5px; }
+  .app.collapsed .nav-sec { text-align:center; font-size:8px; }
+  .nav-item { display:flex; align-items:center; gap:11px; width:100%; text-align:left;
+     background:transparent; border:0; color:#aab4c2; padding:9px 12px; border-radius:9px;
+     font-size:14px; font-weight:500; cursor:pointer; transition:.12s; white-space:nowrap; }
+  .nav-item .ic { width:18px; text-align:center; font-size:15px; flex:none; }
+  .nav-item:hover { background:rgba(255,255,255,.05); color:var(--txt); }
+  .nav-item.active { background:linear-gradient(90deg,rgba(59,130,246,.20),rgba(99,102,241,.06));
+     color:#fff; box-shadow:inset 2px 0 0 var(--acc); }
+  .side-foot { margin-top:auto; padding:12px; border-top:1px solid var(--line); }
+  .side-foot a { display:flex; align-items:center; gap:10px; color:var(--mut); text-decoration:none;
+     font-size:13px; padding:8px 12px; border-radius:8px; }
+  .side-foot a:hover { background:rgba(255,255,255,.05); color:var(--txt); }
+
+  /* workspace */
+  main.workspace { max-width:none; margin:0; padding:0; overflow-y:auto; height:100vh; }
+  .wtop { position:sticky; top:0; z-index:8; display:flex; align-items:center; gap:12px;
+     padding:14px 26px; background:rgba(7,11,18,.72); backdrop-filter:blur(12px);
+     border-bottom:1px solid var(--line); }
+  .wtop h2 { margin:0; font-size:16px; font-weight:700; }
+  .wtop .crumb { color:var(--mut); font-size:12.5px; }
+  .wtop .sp { flex:1; }
+  .icon-btn { background:var(--panel2); border:1px solid var(--line); color:var(--txt);
+     width:34px; height:34px; border-radius:9px; cursor:pointer; font-size:15px; display:none; }
+  .wviews { padding:24px 26px 90px; }
+
+  /* copilot column */
+  .copilot-col { border-left:1px solid var(--line); background:linear-gradient(180deg,#0a0f18,#080c14);
+     height:100vh; overflow:hidden; display:flex; flex-direction:column; }
+  .app.nocop .copilot-col { display:none; }
+  #copilot { position:static !important; display:flex; flex-direction:column; height:100%;
+     width:auto; margin:0; border:0; border-radius:0; background:transparent; box-shadow:none; }
+  .copilot-col .cop-head { background:linear-gradient(90deg,rgba(59,130,246,.14),transparent);
+     border-bottom:1px solid var(--line); flex:none; }
+  .copilot-col .cop-body { max-height:none !important; flex:1; }
+  .copilot-col .cop-in { flex:none; }
+
+  /* hero search */
+  .hero { margin:6px 0 22px; }
+  .hero h1 { font-size:26px; font-weight:800; letter-spacing:-.3px; margin:0 0 4px;
+     background:linear-gradient(90deg,#fff,#9fb4cc); -webkit-background-clip:text; background-clip:text;
+     -webkit-text-fill-color:transparent; }
+  .hero .tag { color:var(--mut); font-size:13.5px; margin-bottom:16px; }
+  .search-wrap { display:flex; gap:10px; background:var(--glass); border:1px solid var(--glassline);
+     border-radius:16px; padding:8px 8px 8px 18px; box-shadow:var(--shadow); backdrop-filter:blur(10px);
+     transition:.15s; align-items:center; }
+  .search-wrap:focus-within { border-color:rgba(59,130,246,.6); box-shadow:0 0 0 4px rgba(59,130,246,.12),var(--shadow); }
+  .search-wrap .sicon { color:var(--mut); font-size:18px; }
+  #syms { flex:1; min-height:auto; background:transparent; border:0; resize:none; padding:12px 4px;
+     font-size:16px; color:var(--txt); outline:none; }
+  #syms::placeholder { color:#5f6b7a; }
+  #go { border-radius:12px; padding:0 26px; height:46px; font-weight:700;
+     background:linear-gradient(135deg,var(--acc),var(--acc2)); box-shadow:0 6px 18px rgba(59,130,246,.35); }
+  .chiprow { display:flex; gap:8px; flex-wrap:wrap; margin:14px 0 4px; }
+  .mchip { background:var(--panel2); border:1px solid var(--line); color:var(--mut); padding:7px 16px;
+     border-radius:999px; font-size:13px; font-weight:600; cursor:pointer; transition:.12s; }
+  .mchip:hover { color:var(--txt); border-color:#3a4a5e; }
+  .mchip.active { background:linear-gradient(135deg,var(--acc),var(--acc2)); color:#fff; border-color:transparent;
+     box-shadow:0 4px 12px rgba(59,130,246,.3); }
+  .mini-up { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:14px;
+     font-size:12.5px; color:var(--mut); }
+
+  /* stock card grid */
+  .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:16px; }
+  .scard { background:var(--glass); border:1px solid var(--glassline); border-radius:var(--r);
+     padding:16px 17px; cursor:pointer; transition:.15s; backdrop-filter:blur(8px); position:relative;
+     overflow:hidden; }
+  .scard:hover { transform:translateY(-3px); border-color:rgba(59,130,246,.45); box-shadow:var(--shadow); }
+  .scard .row1 { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+  .scard .tk { font-size:19px; font-weight:800; letter-spacing:.3px; }
+  .scard .co { color:var(--mut); font-size:11.5px; margin-top:1px; max-width:150px;
+     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .scard .ring { width:54px; height:54px; border-radius:50%; flex:none; display:grid; place-items:center;
+     font-weight:800; font-size:17px; background:conic-gradient(var(--rc) calc(var(--p)*1%),rgba(255,255,255,.07) 0);
+     position:relative; }
+  .scard .ring::after { content:""; position:absolute; inset:4px; border-radius:50%; background:#0d1420; }
+  .scard .ring b { position:relative; z-index:1; }
+  .scard .meta { display:flex; gap:14px; flex-wrap:wrap; margin:14px 0 12px; font-size:12.5px; }
+  .scard .meta .k { color:var(--mut); font-size:10.5px; text-transform:uppercase; letter-spacing:.4px; }
+  .scard .meta .v { font-weight:700; margin-top:1px; }
+  .scard .strength { font-size:12.5px; color:#a9c7e6; background:rgba(59,130,246,.09);
+     border:1px solid rgba(59,130,246,.16); border-radius:9px; padding:7px 10px; margin-bottom:12px;
+     display:flex; gap:6px; align-items:flex-start; }
+  .scard .cta { width:100%; background:var(--panel2); border:1px solid var(--line); color:var(--txt);
+     padding:9px; border-radius:10px; font-size:13px; font-weight:600; }
+  .scard:hover .cta { background:rgba(59,130,246,.16); border-color:rgba(59,130,246,.4); }
+  .scard .err { color:var(--sell); font-size:12.5px; }
+  .grid-banner { background:rgba(59,130,246,.08); border:1px solid rgba(59,130,246,.18);
+     border-radius:12px; padding:12px 16px; margin-bottom:16px; font-size:13.5px; }
+
+  /* stock detail */
+  .det-head { display:flex; align-items:flex-start; gap:18px; flex-wrap:wrap;
+     background:var(--glass); border:1px solid var(--glassline); border-radius:var(--r);
+     padding:20px 22px; box-shadow:var(--shadow); margin-bottom:18px; }
+  .det-head .tk { font-size:30px; font-weight:800; letter-spacing:.3px; }
+  .det-head .co { color:var(--mut); font-size:14px; margin-top:2px; }
+  .det-head .schips { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .det-score { margin-left:auto; text-align:center; }
+  .det-score .big { font-size:42px; font-weight:800; line-height:1; }
+  .det-score .lbl { color:var(--mut); font-size:11px; text-transform:uppercase; letter-spacing:.6px; }
+  .pill { padding:4px 12px; border-radius:999px; font-size:12px; font-weight:700; border:1px solid var(--line);
+     background:var(--panel2); color:var(--mut); }
+  .pill.acc { color:#a9c7e6; border-color:rgba(59,130,246,.3); background:rgba(59,130,246,.1); }
+  .dtabs { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:18px; }
+  .dtab { background:var(--panel2); border:1px solid var(--line); color:var(--mut); padding:8px 16px;
+     border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; transition:.12s; }
+  .dtab:hover { color:var(--txt); }
+  .dtab.active { background:linear-gradient(135deg,var(--acc),var(--acc2)); color:#fff; border-color:transparent; }
+  .panel-card { background:var(--glass); border:1px solid var(--glassline); border-radius:var(--r);
+     padding:18px 20px; margin-bottom:16px; backdrop-filter:blur(8px); }
+  .panel-card h3 { margin:0 0 12px; font-size:14px; text-transform:uppercase; letter-spacing:.6px; color:var(--acc); }
+  .ai-summary { font-size:15px; line-height:1.6; }
+  .twrap { display:grid; grid-template-columns:repeat(2,1fr); gap:14px; }
+  .kpi-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; }
+  .kpi { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 15px; }
+  .kpi .lbl { color:var(--mut); font-size:11px; text-transform:uppercase; letter-spacing:.5px; }
+  .kpi .val { font-size:24px; font-weight:800; margin:4px 0 8px; }
+  .kpi .val small { font-size:14px; color:var(--mut); font-weight:600; }
+  .kpi .bar { height:6px; border-radius:4px; background:rgba(255,255,255,.08); overflow:hidden; }
+  .kpi .bar i { display:block; height:100%; border-radius:4px; background:linear-gradient(90deg,var(--acc),var(--acc2)); }
+  .cardlist { display:grid; gap:10px; }
+  .litem { background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:11px 14px;
+     font-size:13.5px; display:flex; gap:9px; align-items:flex-start; }
+  .litem.good { border-left:3px solid var(--buy); } .litem.bad { border-left:3px solid var(--sell); }
+  .chart-box { border:1px solid var(--line); border-radius:12px; overflow:hidden; height:420px; background:#0d1420; }
+  .news-card .nstat { display:flex; gap:22px; flex-wrap:wrap; margin-bottom:12px; }
+  .news-card .nstat b { font-size:22px; } .news-card .nstat span { display:block; color:var(--mut); font-size:11px; }
+
+  @media (max-width:1100px){
+    .app, .app.collapsed { grid-template-columns:236px minmax(0,1fr); }
+    .app .copilot-col { position:fixed; top:0; right:0; width:360px; max-width:88vw; z-index:40;
+       box-shadow:-12px 0 40px rgba(0,0,0,.5); transform:translateX(100%); transition:.2s; }
+    .app.copopen .copilot-col { transform:translateX(0); display:flex; }
+    .icon-btn.cop { display:block; }
+    .twrap, .kpi-grid { grid-template-columns:1fr 1fr; }
+  }
+  @media (max-width:760px){
+    .app, .app.collapsed { grid-template-columns:1fr; }
+    .sidebar { position:fixed; top:0; left:0; bottom:0; width:230px; z-index:45; transform:translateX(-100%); transition:.2s; }
+    .app.navopen .sidebar { transform:translateX(0); }
+    .icon-btn.nav { display:block; }
+    .wviews { padding:16px 14px 80px; }
+    .det-head .det-score { margin-left:0; }
+    .twrap { grid-template-columns:1fr; }
+  }
+  .scrim { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:38; display:none; }
+  .app.navopen .scrim, .app.copopen .scrim { display:block; }
 </style>
 </head>
 <body>
-<header>
-  <h1>artik<span>_broker</span></h1>
-  <div class="sub">Live 100-point analysis · BUY ≥ 75 · HOLD 50–74 · SELL &lt; 50</div>
-  <a href="/logout" style="position:absolute;top:16px;right:18px;font-size:12px;color:var(--mut);text-decoration:none">Sign out ↪</a>
-</header>
-<nav class="tabs">
-  <button class="tab active" id="tab-analyze" onclick="showTab('analyze')">Analyze</button>
-  <button class="tab" id="tab-portfolio" onclick="showTab('portfolio')">Portfolio</button>
-  <button class="tab" id="tab-sp500" onclick="showTab('sp500')">S&amp;P 500</button>
-  <button class="tab" id="tab-dow" onclick="showTab('dow')">DOW</button>
-  <button class="tab" id="tab-history" onclick="showTab('history')">🕘 Past Searches</button>
-  <button class="tab hidden" id="tab-agents" onclick="showTab('agents')">🤖 Agents</button>
-</nav>
+<div class="app" id="app">
+  <div class="scrim" onclick="$('#app').classList.remove('navopen','copopen')"></div>
 
-<main>
+  <!-- LEFT SIDEBAR -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">A</div>
+      <div class="name">artik<span>_broker</span></div>
+      <button class="collapse" title="Collapse" onclick="$('#app').classList.toggle('collapsed')">‹</button>
+    </div>
+    <nav class="side-nav">
+      <div class="nav-sec">Workspace</div>
+      <button class="nav-item active" id="nav-dashboard" onclick="showTab('analyze','nav-dashboard')"><span class="ic">🏠</span><span>Dashboard</span></button>
+      <button class="nav-item" id="tab-analyze" onclick="showTab('analyze')"><span class="ic">🔍</span><span>Analyze</span></button>
+      <button class="nav-item" id="nav-research" onclick="goResearch()"><span class="ic">🧭</span><span>Research</span></button>
+      <div class="nav-sec">Markets</div>
+      <button class="nav-item" id="tab-portfolio" onclick="showTab('portfolio')"><span class="ic">💼</span><span>Portfolio</span></button>
+      <button class="nav-item" id="tab-sp500" onclick="showTab('sp500')"><span class="ic">🏛️</span><span>S&amp;P 500</span></button>
+      <button class="nav-item" id="tab-dow" onclick="showTab('dow')"><span class="ic">🎩</span><span>Dow</span></button>
+      <div class="nav-sec">Intelligence</div>
+      <button class="nav-item hidden" id="tab-agents" onclick="showTab('agents')"><span class="ic">🤖</span><span>Agents</span></button>
+      <button class="nav-item" id="tab-history" onclick="showTab('history')"><span class="ic">🕘</span><span>History</span></button>
+      <button class="nav-item" id="tab-settings" onclick="showTab('settings')"><span class="ic">⚙️</span><span>Settings</span></button>
+    </nav>
+    <div class="side-foot"><a href="/logout"><span class="ic">↪</span><span>Sign out</span></a></div>
+  </aside>
+
+  <!-- MAIN WORKSPACE -->
+  <main class="workspace">
+    <div class="wtop">
+      <button class="icon-btn nav" onclick="$('#app').classList.toggle('navopen')">☰</button>
+      <h2 id="wtitle">Dashboard</h2>
+      <span class="crumb" id="wcrumb">Live 100-point analysis · BUY ≥ 75 · HOLD 50–74 · SELL &lt; 50</span>
+      <span class="sp"></span>
+      <button class="icon-btn cop" title="AI Copilot" onclick="$('#app').classList.toggle('copopen')">🤖</button>
+    </div>
+    <div class="wviews">
   <!-- ANALYZE VIEW -->
   <section id="view-analyze">
-    <div class="bar">
-      <textarea id="syms" placeholder="Search stocks in plain English  —  or enter tickers.   e.g.  'oversold semiconductors with RSI below 30'  ·  'Buffett-style compounders'  ·  NVDA, GOOGL, TSM"></textarea>
-      <div class="bar-actions">
-        <select id="main-mode" class="mode-sel" title="Mode — how Artik Broker AI handles your query">
-          <option value="auto">Auto</option>
-          <option value="research">Research</option>
-          <option value="analysis">Analysis</option>
-          <option value="discovery">Discovery</option>
-          <option value="comparison">Comparison</option>
-          <option value="screening">Screening</option>
-        </select>
+    <div class="hero">
+      <h1>Ask Artik Broker</h1>
+      <div class="tag">Search in plain English, screen by criteria, or enter tickers — scored live by the Artik engine, reasoned by AI.</div>
+      <div class="search-wrap">
+        <span class="sicon">🔍</span>
+        <textarea id="syms" rows="1" placeholder="Find AI infrastructure stocks with RSI below 30 and a MACD crossover…"></textarea>
+        <input type="hidden" id="main-mode" value="auto">
+        <button id="go" onclick="run()">Search</button>
+      </div>
+      <div class="chiprow" id="modechips"></div>
+      <div class="mini-up">
         <label id="news-toggle" class="news-toggle hidden" title="Overlay optional news-collector signals on top of the Artik Score (base + overlay shown separately; score is never modified)">
           <input type="checkbox" id="news-on" onchange="window._newsOn=this.checked"> 📰 News signals
         </label>
-        <button id="go" onclick="run()">Search</button>
+        <span style="opacity:.4">·</span>
+        <span>📁 Portfolio CSV</span>
+        <input type="file" id="files" accept=".csv" multiple />
+        <button id="goPf" class="ghost" onclick="runPortfolio()">Analyze</button>
+        <span class="muted">e*Trade / Schwab export</span>
       </div>
-    </div>
-    <div class="hint">
-      Try:
-      <a onclick="fill('AI infrastructure stocks')">AI infrastructure stocks</a> ·
-      <a onclick="fill('industrial stocks with RSI below 30')">oversold industrials (RSI&lt;30)</a> ·
-      <a onclick="fill('Buffett-style compounders with score above 80')">Buffett compounders, score&gt;80</a> ·
-      <a onclick="fill('stocks similar to Costco')">similar to Costco</a> ·
-      <a onclick="fill('NVDA, GOOGL, TSM, MU, TSLA')">NVDA, GOOGL, TSM…</a>
-    </div>
-
-    <div class="upload">
-      <span class="up-label">📁 Or analyze a whole portfolio:</span>
-      <input type="file" id="files" accept=".csv" multiple />
-      <button id="goPf" class="ghost" onclick="runPortfolio()">Analyze Portfolio</button>
-      <span class="hint" style="margin:0">e*Trade or Schwab CSV export(s)</span>
+      <div class="hint" style="margin-top:14px">
+        Try:
+        <a onclick="fill('AI infrastructure stocks')">AI infrastructure stocks</a> ·
+        <a onclick="fill('industrial stocks with RSI below 30')">oversold industrials (RSI&lt;30)</a> ·
+        <a onclick="fill('Buffett-style compounders with score above 80')">Buffett compounders, score&gt;80</a> ·
+        <a onclick="fill('stocks similar to Costco')">similar to Costco</a> ·
+        <a onclick="fill('NVDA, GOOGL, TSM, MU, TSLA')">NVDA, GOOGL, TSM…</a>
+      </div>
     </div>
 
     <div id="topbar"></div>
     <div id="out"></div>
+  </section>
+
+  <!-- STOCK DETAIL VIEW -->
+  <section id="view-detail" class="hidden"></section>
+
+  <!-- SETTINGS VIEW -->
+  <section id="view-settings" class="hidden">
+    <div class="panel-card" style="max-width:640px">
+      <h3>Settings</h3>
+      <div class="kv">
+        <span class="k">News Collector overlay</span><span id="set-news">—</span>
+        <span class="k">Signals backend</span><span id="set-backend">—</span>
+        <span class="k">Scheduler</span><span id="set-sched">—</span>
+        <span class="k">Timezone</span><span id="set-tz">—</span>
+      </div>
+      <p class="muted" style="font-size:12.5px;margin-top:14px">Dark theme · institutional layout. The Artik scoring engine, rankings, and all business logic are unchanged — this is the redesigned presentation layer.</p>
+      <a href="/logout"><button class="ghost" style="margin-top:6px">Sign out ↪</button></a>
+    </div>
   </section>
 
   <!-- PORTFOLIO VIEW (saved snapshots by date) -->
@@ -289,14 +500,19 @@
     <div id="agents-list"><div class="spin">Loading agents…</div></div>
   </section>
 
-  <!-- Artik Stock Copilot (chat) — shown after a search, or seeded from an Explain panel -->
-  <div id="copilot" class="hidden"></div>
+    </div><!-- /.wviews -->
+  </main>
 
-  <!-- Agent edit / results / logs modal -->
-  <div id="agent-modal" class="modal hidden" onclick="if(event.target===this)closeAgentModal()">
-    <div class="modal-card" id="agent-modal-card"></div>
-  </div>
-</main>
+  <!-- RIGHT: persistent AI Copilot (Perplexity-style, always available) -->
+  <aside class="copilot-col" id="copilot-col">
+    <div id="copilot"></div>
+  </aside>
+</div><!-- /.app -->
+
+<!-- Agent edit / results / logs modal -->
+<div id="agent-modal" class="modal hidden" onclick="if(event.target===this)closeAgentModal()">
+  <div class="modal-card" id="agent-modal-card"></div>
+</div>
 
 <script>
 const $ = s => document.querySelector(s);
@@ -458,45 +674,212 @@ function _pageAppend(outId, n){
   st.obs.observe(sent);
 }
 
+// ── Analyze results as premium stock cards ────────────────────────────────────
 function render(rows, opts){
   opts = opts || {};
   window._rows = rows; window._mode = 'symbol'; window._lastOpts = opts;
-  if(!window._mainSort) window._mainSort = {col:'score', dir:-1};
-  const st = window._mainSort;
-  const view = sortRows(rows, st.col, st.dir);
   let pre = '';
-  if(opts.savedNote){
-    pre += `<div style="margin:0 0 12px;padding:10px 14px;border:1px solid var(--line);border-radius:8px;background:rgba(210,153,34,.12)">${opts.savedNote}</div>`;
-  }
+  if(opts.savedNote){ pre += `<div class="grid-banner">📁 ${opts.savedNote}</div>`; }
   if(opts.summary){
     const via = opts.provider==='gpt' ? ' · via GPT (fallback)' : opts.provider==='claude' ? ' · via Claude' : '';
-    pre += `<div style="margin:0 0 12px;padding:10px 14px;border:1px solid var(--line);border-radius:8px;background:rgba(56,139,253,.08)">`
-         + `🔎 <b>AI Search:</b> ${opts.summary} <span style="color:var(--mut)">— ${rows.length} match${rows.length===1?'':'es'}, ranked by Artik Score${via}</span></div>`;
+    pre += `<div class="grid-banner">🔎 <b>AI Search:</b> ${escapeHtml(opts.summary)} `
+         + `<span class="muted">— ${rows.length} match${rows.length===1?'':'es'}, ranked by Artik Score${via}</span></div>`;
   }
-  renderPaged('out', {
-    pre,
-    head: `<tr>${sortHead(ANALYZE_COLS, st, k=>`sortMain('${k}')`)}</tr>`,
-    rows: view,
-    rowHtml: (r,i) => {
-      if(r.error){
-        return `<tr class="row"><td>${i+1}</td><td class="tick">${r.ticker}</td>`
-             + `<td colspan="6" class="err">${r.error}</td></tr>`;
-      }
-      const why = r.why ? `<div style="font-weight:400;font-size:12px;color:var(--mut);margin-top:2px;max-width:340px;white-space:normal">${r.why}</div>` : '';
-      return `<tr class="row">
-        <td>${i+1}</td>
-        <td class="tick">${r.ticker}${why}</td>
-        <td style="color:var(--mut)">${r.sector||'—'}</td>
-        <td class="num">$${r.price!=null?r.price.toLocaleString():'—'}</td>
-        <td class="num"><b>${r.score}</b>${overlayChip(r)}</td>
-        <td class="num">${r.rsi!=null?r.rsi:'—'}</td>
-        <td>${statusCell(r)}</td>
-        <td><button class="ex-btn" onclick="toggle(${i})">Explain ▾</button></td>
-      </tr>
-      <tr class="detail" id="d${i}" style="display:none"><td colspan="8">${detail(r)}</td></tr>`;
-    },
-  });
+  const cards = (rows||[]).map((r,i)=> r.error ? errorCard(r) : stockCard(r,i)).join('');
+  $('#out').innerHTML = pre + (cards ? `<div class="cards">${cards}</div>`
+                                     : '<div class="hint">No results.</div>');
   showDownload();
+}
+function ringColor(s){ return s==='BUY'?'var(--buy)':s==='SELL'?'var(--sell)':'var(--hold)'; }
+function stockCard(r,i){
+  const strength = (r.strengths&&r.strengths[0])
+    ? `<div class="strength">💡 <span>${escapeHtml(r.strengths[0])}</span></div>` : '';
+  const why = r.why ? `<div class="co" style="margin-top:6px;white-space:normal">${escapeHtml(r.why)}</div>` : '';
+  return `<div class="scard" onclick="showDetail(${i})">
+    <div class="row1">
+      <div style="min-width:0">
+        <div class="tk">${r.ticker}${overlayChip(r)}</div>
+        <div class="co">${escapeHtml(r.company||r.sector||'')}</div>
+      </div>
+      <div class="ring" style="--p:${Math.max(0,Math.min(100,r.score||0))};--rc:${ringColor(r.status)}"><b>${r.score??'—'}</b></div>
+    </div>
+    <div style="margin-top:9px">${statusCell(r)} <span class="muted" style="font-size:12px">· ${(r.breakdown&&r.breakdown.archetype)||r.sector||''}</span></div>
+    ${why}
+    <div class="meta">
+      <div><div class="k">Price</div><div class="v">$${r.price!=null?r.price.toLocaleString():'—'}</div></div>
+      <div><div class="k">RSI</div><div class="v">${r.rsi!=null?r.rsi:'—'}</div></div>
+      ${r.news_overlay?`<div><div class="k">News</div><div class="v ${r.news_overlay.aggregate_score_delta>=0?'pos':'neg'}">${r.news_overlay.aggregate_score_delta>=0?'+':''}${r.news_overlay.aggregate_score_delta}</div></div>`:''}
+    </div>
+    ${strength}
+    <button class="cta" onclick="event.stopPropagation();showDetail(${i})">View Details →</button>
+  </div>`;
+}
+function errorCard(r){
+  return `<div class="scard" style="cursor:default"><div class="row1"><div class="tk">${r.ticker}</div></div>
+    <div class="err" style="margin-top:12px">${escapeHtml(r.error||'error')}</div></div>`;
+}
+
+// ── Stock Detail page (tabs · KPI score cards · chart · news) ──────────────────
+function showDetail(i){
+  const r = (window._rows||[])[i]; if(!r || r.error) return;
+  detailFor(r);
+}
+// Direct research-page link: fetch one ticker live and open its detail.
+async function openStockDetail(ticker){
+  $('#view-detail').innerHTML = '<div class="spin">Loading '+escapeHtml(ticker)+'…</div>';
+  showTab('detail','tab-analyze');
+  try {
+    const d = await (await fetch('/api/analyze?symbols='+encodeURIComponent(ticker)+_newsParam())).json();
+    const r = (d.results||[])[0];
+    if(!r || r.error){ $('#view-detail').innerHTML = '<div class="err">'+escapeHtml((r&&r.error)||'No data for '+ticker)+'</div>'; return; }
+    window._rows = [r];
+    detailFor(r);
+  } catch(e){ $('#view-detail').innerHTML = '<div class="err">Failed: '+e+'</div>'; }
+}
+function detailFor(r){
+  window._detR = r; window._detTab = 'overview';
+  const sc = r.breakdown||{};
+  const chips = [r.sector, sc.archetype].filter(Boolean)
+    .map(c=>`<span class="pill acc">${escapeHtml(c)}</span>`).join('');
+  const ni = r.news_overlay ? `<span class="pill ${r.news_overlay.aggregate_score_delta>=0?'acc':''}">${r.news_overlay.aggregate_score_delta>=0?'+':''}${r.news_overlay.aggregate_score_delta} News Impact</span>` : '';
+  const TABS = [['overview','Overview'],['technicals','Technicals'],['fundamentals','Fundamentals'],
+                ['news','News'],['signals','Signals'],['peers','Peers'],['trade','Trade Plan']];
+  $('#view-detail').innerHTML = `
+    <button class="ghost" style="margin-bottom:14px" onclick="showTab('analyze','tab-analyze')">← Back to results</button>
+    <div class="det-head">
+      <div style="min-width:0">
+        <div class="tk">${r.ticker}</div>
+        <div class="co">${escapeHtml(r.company||'')}</div>
+        <div class="schips">${statusCell(r)} ${chips} ${ni}</div>
+      </div>
+      <div class="det-score">
+        <div class="big" style="color:${ringColor(r.status)}">${r.score??'—'}</div>
+        <div class="lbl">Artik Score</div>
+        ${r.price!=null?`<div class="muted" style="margin-top:8px;font-size:13px">$${r.price.toLocaleString()}</div>`:''}
+      </div>
+    </div>
+    <div class="dtabs">${TABS.map(([t,l])=>`<button class="dtab ${t==='overview'?'active':''}" data-t="${t}" onclick="detTab('${t}')">${l}</button>`).join('')}</div>
+    <div id="det-body"></div>`;
+  showTab('detail','tab-analyze');
+  document.querySelector('.workspace').scrollTo(0,0);
+  detTab('overview');
+}
+function detTab(name){
+  window._detTab = name;
+  document.querySelectorAll('#view-detail .dtab').forEach(b=>b.classList.toggle('active', b.dataset.t===name));
+  $('#det-body').innerHTML = detContent(window._detR, name);
+  if(name==='overview') mountChart(window._detR.ticker);
+  if(name==='news' || name==='signals') loadDetailNews(window._detR, name);
+}
+function kpiCards(cats){
+  return `<div class="kpi-grid">${(cats||[]).map(c=>{
+    const pct = Math.max(0,Math.min(100,(c.score/c.max)*100));
+    return `<div class="kpi"><div class="lbl">${c.label}</div>
+      <div class="val">${c.score}<small> / ${c.max}</small></div>
+      <div class="bar"><i style="width:${pct}%"></i></div></div>`;
+  }).join('')}</div>`;
+}
+function listCards(items, cls){
+  if(!items || !items.length) return '<div class="muted">None reported.</div>';
+  return `<div class="cardlist">${items.map(s=>`<div class="litem ${cls}">${cls==='good'?'✅':'⚠️'} <span>${escapeHtml(s)}</span></div>`).join('')}</div>`;
+}
+function detContent(r, name){
+  const b = r.breakdown||{}, t = r.technicals||{}, tp = r.trade_plan||{};
+  if(name==='overview'){
+    const arch = b.archetype ? `a <b>${escapeHtml(b.archetype)}</b>` : 'a company';
+    const summary = `${r.ticker}${r.company?` (${escapeHtml(r.company)})`:''} scores <b>${r.score}</b> — <b>${r.status}</b> — as ${arch} in ${escapeHtml(r.sector||'its sector')}.`
+      + (r.strengths&&r.strengths[0]?` Its standout strength is ${escapeHtml(r.strengths[0].toLowerCase())}.`:'')
+      + (r.risks&&r.risks[0]?` The key risk to watch is ${escapeHtml(r.risks[0].toLowerCase())}.`:'')
+      + (b.multiplier_reason?` Archetype multiplier: ${escapeHtml(b.multiplier_reason)}.`:'');
+    return `
+      <div class="panel-card"><h3>📈 Price Chart</h3><div class="chart-box" id="tvchart"></div></div>
+      <div class="panel-card"><h3>🤖 AI Summary</h3>
+        <div class="ai-summary">${summary}</div>
+        <button class="ex-btn" style="margin-top:12px" onclick="askCopilotStock('${r.ticker}')">💬 Ask Artik Broker AI for deeper analysis</button>
+      </div>
+      <div class="panel-card"><h3>Score Breakdown</h3>${kpiCards(b.categories)}
+        <div class="formula" style="margin-top:14px">final = ( base − penalties ) × multiplier = ( <b>${b.base}</b> − <b>${b.penalties}</b> ) × <b>${b.multiplier}×</b> = <b>${b.final}</b> → <b>${r.rating}</b></div>
+      </div>
+      <div class="twrap">
+        <div class="panel-card"><h3>Key Strengths</h3>${listCards(r.strengths,'good')}</div>
+        <div class="panel-card"><h3>Key Risks</h3>${listCards(r.risks,'bad')}</div>
+      </div>`;
+  }
+  if(name==='technicals'){
+    const k = [['RSI',t.rsi],['MACD',t.macd_state],['RS rank',t.rs_rank],
+               ['% off 52w high',t.off_52w_hi_pct!=null?t.off_52w_hi_pct+'%':null],
+               ['MA 20',t.ma20!=null?'$'+t.ma20:null],['MA 50',t.ma50!=null?'$'+t.ma50:null],
+               ['MA 200',t.ma200!=null?'$'+t.ma200:null],['Price',r.price!=null?'$'+r.price:null]];
+    return `<div class="panel-card"><h3>Technical Indicators</h3>
+      <div class="kpi-grid">${k.map(([l,v])=>`<div class="kpi"><div class="lbl">${l}</div><div class="val" style="font-size:20px">${v??'—'}</div></div>`).join('')}</div></div>`;
+  }
+  if(name==='fundamentals'){
+    const used = (b.base_metrics_used&&b.base_metrics_used.length)
+      ? `<div style="margin-bottom:12px;font-size:13px"><b style="color:var(--buy)">Sector basis used:</b> ${b.base_metrics_used.join(', ')}${(b.base_metrics_skipped&&b.base_metrics_skipped.length)?`<br><b style="color:#fca5a5">skipped:</b> ${b.base_metrics_skipped.join(', ')}`:''}</div>` : '';
+    return `<div class="panel-card"><h3>Fundamentals</h3>${used}
+      <span class="av-slot"><button class="ex-btn" onclick="loadEnrich('${r.ticker}', this)">📊 Load Alpha Vantage — Bollinger Bands + fundamentals</button></span></div>`;
+  }
+  if(name==='news' || name==='signals'){
+    return `<div class="panel-card news-card"><h3>📰 News Intelligence</h3><div id="det-news"><div class="spin">Loading news signals…</div></div></div>`;
+  }
+  if(name==='peers'){
+    const pe = (b.peer_explanation&&b.peer_explanation.length)
+      ? `<div class="cardlist">${b.peer_explanation.map(p=>`<div class="litem">${escapeHtml(p)}</div>`).join('')}</div>`
+      : `<div class="muted">${b.peer_normalized===false?'Peer data unavailable — sector thresholds were used.':'No peer detail available.'}</div>`;
+    return `<div class="panel-card"><h3>Peer-Relative (S&amp;P 500 sector)</h3>${pe}</div>`;
+  }
+  if(name==='trade'){
+    const k = [['Entry',tp.entry],['Stop',tp.stop],['Target 1',tp.target1],
+               ['Target 2',(tp.target2&&tp.target2!=='—')?tp.target2:null],['Position size',tp.position_size]];
+    return `<div class="panel-card"><h3>Trade Plan</h3>
+      <div class="kpi-grid">${k.map(([l,v])=>`<div class="kpi"><div class="lbl">${l}</div><div class="val" style="font-size:20px">${v??'—'}</div></div>`).join('')}</div>
+      <p class="muted" style="font-size:12px;margin-top:12px">Engine-generated levels — informational, not advice.</p></div>`;
+  }
+  return '';
+}
+let _tvLoaded = {};
+function mountChart(ticker){
+  const box = document.getElementById('tvchart'); if(!box) return;
+  box.innerHTML = `<div style="position:absolute;inset:0;display:grid;place-items:center;color:var(--mut);font-size:13px">📈 Loading interactive chart for ${escapeHtml(ticker)}…</div>`;
+  box.style.position = 'relative';
+  const cont = document.createElement('div'); cont.className='tradingview-widget-container';
+  cont.style.height='100%'; const inner = document.createElement('div'); inner.style.height='100%';
+  cont.appendChild(inner); box.appendChild(cont);
+  const s = document.createElement('script');
+  s.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+  s.async = true;
+  s.innerHTML = JSON.stringify({symbol:ticker, theme:'dark', style:'1', interval:'D',
+    autosize:true, hide_side_toolbar:true, allow_symbol_change:false, save_image:false,
+    backgroundColor:'#0d1420', withdateranges:false});
+  cont.appendChild(s);
+}
+async function loadDetailNews(r, mode){
+  const box = document.getElementById('det-news'); if(!box) return;
+  let ov = r.news_overlay;
+  if(!ov){
+    try { const d = await (await fetch('/api/news_signals/'+encodeURIComponent(r.ticker))).json();
+          if(d && d.available) ov = d; } catch(e){}
+  }
+  if(!ov){ box.innerHTML = `<div class="muted">No active news signals for ${r.ticker}. Enable the Stock News Collector (Agents) and run it to populate signals.</div>`; return; }
+  const sigs = ov.signals||[];
+  const pos = sigs.filter(s=>s.sentiment==='positive').length, neg = sigs.filter(s=>s.sentiment==='negative').length;
+  const d = ov.aggregate_score_delta||0;
+  const latest = sigs[0];
+  const list = sigs.slice(0, mode==='signals'?30:5).map(s=>{
+    const sg = s.sentiment==='positive'?'▲':s.sentiment==='negative'?'▼':'•';
+    const cls = s.sentiment==='positive'?'good':s.sentiment==='negative'?'bad':'';
+    return `<div class="litem ${cls}"><span>${sg} <b>${escapeHtml(s.signal_type||'signal')}</b> · impact ${s.impact_score} · conf ${Math.round((s.confidence||0)*100)}%<br><span class="muted">${escapeHtml((s.headline||'').slice(0,120))}</span> ${s.url?`<a href="${s.url}" target="_blank" rel="noopener">↗</a>`:''}</span></div>`;
+  }).join('');
+  box.innerHTML = `
+    <div class="nstat">
+      <div><b class="pos">${pos}</b><span>Positive</span></div>
+      <div><b class="neg">${neg}</b><span>Negative</span></div>
+      <div><b class="${d>=0?'pos':'neg'}">${d>=0?'+':''}${d}</b><span>Net Impact</span></div>
+      <div><b>${ov.signal_count??sigs.length}</b><span>Signals</span></div>
+    </div>
+    ${latest?`<div style="margin-bottom:12px;font-size:13.5px"><span class="muted">Latest:</span> ${escapeHtml(latest.headline||'')}</div>`:''}
+    <div class="cardlist">${list||'<div class="muted">—</div>'}</div>
+    <p class="muted" style="font-size:12px;margin-top:12px">Overlay only — the base Artik Score (${r.score}) is never modified.</p>`;
 }
 function sortMain(col){
   const st = window._mainSort || (window._mainSort={col:'score',dir:-1});
@@ -697,6 +1080,7 @@ function openCopilotSearch(mode){
 }
 async function askCopilotStock(ticker){
   $('#copilot').classList.remove('hidden');
+  $('#app').classList.add('copopen');   // slide the rail in on tablet/mobile
   window._cop = { ctxType:'stock', ctx:{ticker, loading:true}, uiMode:'auto', msgs:[], busy:false, provider:null };
   renderCopilot();
   $('#copilot').scrollIntoView({behavior:'smooth', block:'nearest'});
@@ -708,11 +1092,19 @@ async function askCopilotStock(ticker){
   renderCopilot();
 }
 function copilotSetMode(m){ window._cop.uiMode = m; }
+function copilotReset(){
+  window._cop = { ctxType:'search',
+    ctx:((window._rows||[]).length ? copilotSearchContext() : null),
+    uiMode:'auto', msgs:[], busy:false, provider:null };
+  renderCopilot();
+}
 function renderCopilot(){
   const c = window._cop;
   const title = c.ctxType==='stock'
     ? `🤖 Artik Broker AI — ${c.ctx.ticker||'stock'}${c.ctx.status?` · ${c.ctx.status} ${c.ctx.score??''}`:''}`
-    : `🤖 Artik Broker AI — ${(c.ctx&&c.ctx.count)||0} search result${((c.ctx&&c.ctx.count)===1)?'':'s'}`;
+    : (c.ctx && c.ctx.count)
+      ? `🤖 Artik Broker AI — ${c.ctx.count} search result${c.ctx.count===1?'':'s'}`
+      : `🤖 Artik Broker AI`;
   const sugg = c.ctxType==='stock'
     ? ['Why this rating?','What is the biggest risk?','Explain the trade plan','What does this company do?','Compare to peers']
     : ['Why did the top stock appear?','Compare the top 3 BUYs','Which has the strongest quality?','Find cheaper alternatives','Show only BUYs'];
@@ -737,7 +1129,7 @@ function renderCopilot(){
     <div class="cop-head"><b>${title}</b>
       ${modeSel}
       ${c.provider?`<span class="pf-meta">via ${c.provider==='gpt'?'GPT':'Claude'}</span>`:''}
-      <button class="ex-btn" style="margin-left:auto" onclick="$('#copilot').classList.add('hidden')">✕ Close</button>
+      <button class="ex-btn" style="margin-left:auto" onclick="copilotReset()" title="New conversation">↺ New</button>
     </div>
     <div class="cop-body" id="cop-body">${msgs||placeholder}</div>
     ${chips}
@@ -826,17 +1218,31 @@ function downloadCSV(){
 // ── Tabs ────────────────────────────────────────────────────────────────────
 let _pfLoaded = false;
 const _idxLoaded = {};
-const _VIEWS = ['analyze','portfolio','sp500','dow','history','agents'];
-function showTab(name){
-  _VIEWS.forEach(v => {
-    $('#view-'+v).classList.toggle('hidden', v!==name);
-    $('#tab-'+v).classList.toggle('active', v===name);
-  });
+const _VIEWS = ['analyze','detail','portfolio','sp500','dow','history','agents','settings'];
+const _TITLES = {analyze:'Analyze', detail:'Stock Detail', portfolio:'Portfolio', sp500:'S&P 500',
+                 dow:'Dow Jones', history:'History', agents:'Agents', settings:'Settings'};
+function showTab(name, navId){
+  _VIEWS.forEach(v => { const el=$('#view-'+v); if(el) el.classList.toggle('hidden', v!==name); });
+  document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
+  const nav = $('#'+(navId || ('tab-'+name))); if(nav) nav.classList.add('active');
+  if($('#wtitle')) $('#wtitle').textContent = _TITLES[name] || 'Artik Broker';
+  $('#app').classList.remove('navopen');
   if(name==='portfolio' && !_pfLoaded){ _pfLoaded = true; loadPortfolioDates(); }
   if((name==='sp500'||name==='dow') && !_idxLoaded[name]){ _idxLoaded[name]=true; loadIndex(name); }
   if(name==='history'){ renderHistory(); }
   if(name==='agents'){ loadAgents(); }
 }
+function goResearch(){ setMainMode('research'); showTab('analyze','nav-research'); const s=$('#syms'); if(s) s.focus(); }
+
+// Mode chips replace the old <select>; they drive the hidden #main-mode value run() reads.
+const _MODES = [['auto','Auto'],['research','Research'],['analysis','Analysis'],
+                ['discovery','Discovery'],['comparison','Comparison'],['screening','Screening']];
+function renderModeChips(){
+  const box = $('#modechips'); if(!box) return;
+  const cur = ($('#main-mode')||{}).value || 'auto';
+  box.innerHTML = _MODES.map(([v,l])=>`<button class="mchip ${v===cur?'active':''}" onclick="setMainMode('${v}')">${l}</button>`).join('');
+}
+function setMainMode(m){ const el=$('#main-mode'); if(el) el.value=m; renderModeChips(); }
 
 // ── Search history (persisted server-side: S3 on AWS, local folder in dev) ────
 let _histList = [];
@@ -1414,8 +1820,18 @@ async function viewLogs(id){
     <div class="modal-actions"><button class="ghost" onclick="closeAgentModal()">Close</button></div>`;
 }
 
-// Show the Portfolio tab only where the backend says portfolio data exists
-// (local now; hidden on AWS until enabled). Hidden by default to avoid a flash.
+// ── Boot ──────────────────────────────────────────────────────────────────────
+renderModeChips();          // mode pills under the hero
+renderCopilot();            // persistent right-rail AI panel (empty welcome state)
+// Shareable deep-link: #q=NVDA,GOOGL  or  #q=AI%20infrastructure%20stocks
+if(location.hash.startsWith('#q=')){
+  const q = decodeURIComponent(location.hash.slice(3));
+  if(q){ const s=$('#syms'); if(s){ s.value=q; run(); } }
+} else if(location.hash.startsWith('#stock=')){
+  const tk = decodeURIComponent(location.hash.slice(7)).toUpperCase();
+  if(tk) openStockDetail(tk);
+}
+// Portfolio nav hidden by default; revealed by /api/config where data exists.
 $('#tab-portfolio').classList.add('hidden');
 (async function initConfig(){
   try {
@@ -1423,12 +1839,19 @@ $('#tab-portfolio').classList.add('hidden');
     if(cfg.portfolio){
       $('#tab-portfolio').classList.remove('hidden');
     } else if(!$('#view-portfolio').classList.contains('hidden')){
-      showTab('analyze');   // never land on a hidden tab
+      showTab('analyze','nav-dashboard');   // never land on a hidden tab
     }
-    // Reveal the news-collector overlay toggle only when a signals source exists.
     window._newsAvail = !!cfg.news_signals;
     if(window._newsAvail) $('#news-toggle').classList.remove('hidden');
     if(cfg.agents) $('#tab-agents').classList.remove('hidden');
+    // Settings view read-outs.
+    if($('#set-news')) $('#set-news').textContent = cfg.news_signals ? 'Available' : 'Not configured';
+    if($('#set-backend')) $('#set-backend').textContent = cfg.news_signals_backend || '—';
+    if($('#set-tz')) $('#set-tz').textContent = _LOCAL_TZ;
+    if(cfg.agents){
+      try { const a = await (await fetch('/api/agents')).json();
+            if($('#set-sched')) $('#set-sched').textContent = a.scheduler_backend || '—'; } catch(e){}
+    }
   } catch(e){ /* leave Portfolio + news toggle hidden if config is unavailable */ }
 })();
 </script>
