@@ -18,6 +18,8 @@
   .sub { color:var(--mut); font-size:13px; margin-top:4px; }
   main { max-width:1100px; margin:0 auto; padding:24px 28px 80px; }
   .bar { display:flex; gap:10px; margin-bottom:8px; }
+  .bar-actions { display:flex; flex-direction:column; gap:8px; }
+  .mode-sel { padding:8px 10px; font-size:13px; }
   textarea { flex:1; min-height:52px; resize:vertical; background:var(--panel); color:var(--txt);
              border:1px solid var(--line); border-radius:10px; padding:12px 14px; font-size:15px; }
   button { background:var(--acc); color:#fff; border:0; border-radius:10px; padding:0 22px;
@@ -123,7 +125,17 @@
   <section id="view-analyze">
     <div class="bar">
       <textarea id="syms" placeholder="Search stocks in plain English  —  or enter tickers.   e.g.  'oversold semiconductors with RSI below 30'  ·  'Buffett-style compounders'  ·  NVDA, GOOGL, TSM"></textarea>
-      <button id="go" onclick="run()">Search</button>
+      <div class="bar-actions">
+        <select id="main-mode" class="mode-sel" title="Mode — how Artik Broker AI handles your query">
+          <option value="auto">Auto</option>
+          <option value="research">Research</option>
+          <option value="analysis">Analysis</option>
+          <option value="discovery">Discovery</option>
+          <option value="comparison">Comparison</option>
+          <option value="screening">Screening</option>
+        </select>
+        <button id="go" onclick="run()">Search</button>
+      </div>
     </div>
     <div class="hint">
       Try:
@@ -207,12 +219,17 @@ function fill(v){ $('#syms').value = v; run(); }
 async function run(){
   const raw = $('#syms').value.trim();
   if(!raw){ return; }
-  // Pure ticker list (commas/spaces, each 1-6 letters) -> fast engine; else -> AI search.
+  const mode = ($('#main-mode') && $('#main-mode').value) || 'auto';
+  // Conversational modes are answered by the copilot, not the screener table.
+  if(mode==='research' || mode==='analysis' || mode==='comparison'){
+    return runCopilotQuery(raw, mode);
+  }
+  // Auto / Discovery / Screening -> run the engine and show the scored table.
   const tokens = raw.split(/[\s,]+/).filter(Boolean);
   const isTickers = tokens.length>0 && tokens.every(t => /^[A-Za-z][A-Za-z.\-]{0,5}$/.test(t));
   const btn = $('#go'); btn.disabled = true;
   try {
-    if(isTickers){
+    if(isTickers && mode==='auto'){
       btn.textContent = 'Analyzing…';
       $('#out').innerHTML = '<div class="spin">Running live analysis…</div>';
       const res = await fetch('/api/analyze?symbols=' + encodeURIComponent(tokens.join(',')));
@@ -220,7 +237,7 @@ async function run(){
       if(data.error){ $('#out').innerHTML = '<div class="err">'+data.error+'</div>'; return; }
       render(data.results);
       addHist({type:'tickers', query: tokens.join(', '), count:(data.results||[]).length, results:data.results});
-      openCopilotSearch();
+      openCopilotSearch('auto');
     } else {
       btn.textContent = 'Searching…';
       $('#out').innerHTML = '<div class="spin">🔎 AI Search — interpreting your query and scoring candidates live… (this can take ~15s)</div>';
@@ -229,13 +246,44 @@ async function run(){
       if(data.error){ $('#out').innerHTML = '<div class="err">'+data.error+'</div>'; return; }
       render(data.results, {summary:data.summary, provider:data.provider});
       addHist({type:'ai', query: raw, summary:data.summary, provider:data.provider, count:(data.results||[]).length, results:data.results});
-      openCopilotSearch();
+      openCopilotSearch(mode);   // 'auto' | 'discovery' | 'screening' carries into the copilot
     }
   } catch(e){
     $('#out').innerHTML = '<div class="err">Request failed: '+e+'</div>';
   } finally {
     btn.disabled = false; btn.textContent = 'Search';
   }
+}
+
+// Research / Analysis / Comparison: answer via the copilot. Pull any tickers out of
+// the query to attach live Artik data as context (so analysis cites real scores).
+const _COP_STOP = new Set(('A I IS IT IN ON OF TO OR AN AS BY IF GO UP WE OK NO AND THE FOR ARE DO DOES '
+  +'WHY HOW WHO WHEN WHAT BUY SELL HOLD ME MY US AT BE SO VS CAN ALL NEW YES SHOULD INVEST ABOUT LIKE '
+  +'THAN THIS THAT WITH FROM INTO GOOD BEST TOP STOCK STOCKS COMPARE ANALYZE RESEARCH VERSUS').split(/\s+/));
+async function runCopilotQuery(query, mode){
+  const btn = $('#go'); btn.disabled = true; const old = btn.textContent; btn.textContent = 'Asking…';
+  let ctx = {}, ctxType = '';
+  try {
+    const cands = [...new Set(query.split(/[^A-Za-z]+/).filter(Boolean)
+      .map(t => t.toUpperCase()).filter(t => t.length>=1 && t.length<=5 && !_COP_STOP.has(t)))].slice(0,4);
+    if(cands.length){
+      const d = await (await fetch('/api/analyze?symbols=' + encodeURIComponent(cands.join(',')))).json();
+      const rows = (d.results||[]).filter(r => !r.error);
+      if(rows.length===1){ ctx = rows[0]; ctxType = 'stock'; }
+      else if(rows.length>1){
+        ctx = { results: rows.map(r => ({ticker:r.ticker, company:r.company, sector:r.sector, score:r.score,
+          status:r.status, rsi:r.rsi, archetype:(r.breakdown&&r.breakdown.archetype),
+          strengths:(r.strengths||[]).slice(0,3), risks:(r.risks||[]).slice(0,3)})) };
+        ctxType = 'search';
+      }
+    }
+  } catch(e){ /* no context — copilot answers from general knowledge */ }
+  btn.disabled = false; btn.textContent = old || 'Search';
+  window._cop = { ctxType: ctxType||'search', ctx, uiMode: mode, msgs:[], busy:false, provider:null };
+  $('#copilot').classList.remove('hidden');
+  renderCopilot();
+  $('#copilot').scrollIntoView({behavior:'smooth', block:'nearest'});
+  copilotAsk(query);
 }
 
 function statusCell(r){
@@ -518,9 +566,9 @@ function copilotSearchContext(){
   const o = window._lastOpts||{};
   return { query: ($('#syms').value||'').trim(), summary:o.summary||'', count:rows.length, results:rows };
 }
-function openCopilotSearch(){
+function openCopilotSearch(mode){
   if(!(window._rows||[]).length) return;
-  window._cop = { ctxType:'search', ctx:copilotSearchContext(), uiMode:'auto', msgs:[], busy:false, provider:null };
+  window._cop = { ctxType:'search', ctx:copilotSearchContext(), uiMode:(mode||'auto'), msgs:[], busy:false, provider:null };
   $('#copilot').classList.remove('hidden');
   renderCopilot();
 }
