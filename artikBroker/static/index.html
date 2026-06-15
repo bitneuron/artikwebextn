@@ -233,6 +233,9 @@
   .copilot-col .cop-head { background:linear-gradient(90deg,rgba(59,130,246,.14),transparent);
      border-bottom:1px solid var(--line); flex:none; }
   .copilot-col .cop-body { max-height:none !important; flex:1; min-height:0; }
+  /* cop-body is a flex column; without this its children (report cards w/ overflow:hidden)
+     shrink to fit instead of overflowing, so the body never scrolls. */
+  .copilot-col .cop-body > * { flex-shrink:0; }
   .rep-body table { width:100%; border-collapse:collapse; margin:8px 0; font-size:12.5px; }
   .rep-body th,.rep-body td { border:1px solid var(--line); padding:6px 9px; text-align:left; }
   .rep-body th { background:rgba(59,130,246,.1); color:#a9c7e6; font-size:11px; text-transform:uppercase; letter-spacing:.4px; }
