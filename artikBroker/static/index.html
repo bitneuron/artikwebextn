@@ -455,6 +455,62 @@
   .fchip { background:var(--panel2); border:1px solid var(--line); color:var(--txt); border-radius:999px;
      padding:6px 12px; font-size:12px; font-weight:600; cursor:pointer; transition:.12s; }
   .fchip:hover { border-color:var(--acc); color:#fff; background:rgba(59,130,246,.12); }
+
+  /* ═══════════════ News Collector Results — intelligence dashboard ═══════════════ */
+  .modal-card.wide { max-width:1000px; }
+  .res-head { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:4px; }
+  .res-head h2 { margin:0; }
+  .res-head .sub { color:var(--mut); font-size:12.5px; }
+  .kpibar { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin:16px 0; }
+  .rkpi { background:var(--glass); border:1px solid var(--glassline); border-radius:13px; padding:14px 16px; backdrop-filter:blur(8px); }
+  .rkpi .v { font-size:28px; font-weight:800; line-height:1; }
+  .rkpi .l { color:var(--mut); font-size:11px; text-transform:uppercase; letter-spacing:.5px; margin-top:6px; }
+  .res-filters { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:16px;
+     background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px 12px; }
+  .res-filters input[type=text], .res-filters select, .res-filters input[type=date] {
+     background:var(--bg); color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:12.5px; }
+  .res-filters input[type=text] { min-width:140px; }
+  .vtoggle { display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; margin-left:auto; }
+  .vtoggle button { background:var(--panel2); color:var(--mut); border:0; padding:7px 13px; font-size:12.5px; font-weight:600; cursor:pointer; }
+  .vtoggle button.on { background:linear-gradient(135deg,var(--acc),var(--acc2)); color:#fff; }
+
+  .tcard { background:var(--glass); border:1px solid var(--glassline); border-radius:14px; padding:16px 18px;
+     margin-bottom:14px; backdrop-filter:blur(8px); }
+  .tcard-head { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .tcard .tk { font-size:20px; font-weight:800; }
+  .tcard .co { color:var(--mut); font-size:12px; }
+  .tmini { display:flex; gap:16px; flex-wrap:wrap; margin-left:auto; }
+  .tmini .m { text-align:center; } .tmini .m b { font-size:18px; display:block; } .tmini .m span { color:var(--mut); font-size:10px; text-transform:uppercase; letter-spacing:.4px; }
+  .sring { border-radius:50%; display:grid; place-items:center; position:relative; flex:none;
+     background:conic-gradient(var(--buy) 0 var(--g), var(--acc) var(--g) var(--b), var(--sell) var(--b) 100%); }
+  .sring::after { content:""; position:absolute; inset:20%; border-radius:50%; background:#0d1420; }
+  .sring b { position:relative; z-index:1; font-size:12px; font-weight:800; }
+  .tprev { display:flex; gap:14px; align-items:center; margin-top:13px; flex-wrap:wrap; }
+  .tprev .toph { flex:1; min-width:200px; font-size:13px; }
+  .tprev .toph .src { color:#a9c7e6; font-weight:700; font-size:11px; }
+  .res-srcs { display:flex; gap:6px; flex-wrap:wrap; }
+  .tact { display:flex; gap:7px; margin-top:14px; flex-wrap:wrap; }
+  .rtabs { display:flex; gap:6px; margin:14px 0 12px; border-bottom:1px solid var(--line); padding-bottom:10px; }
+  .rtab { background:var(--panel2); border:1px solid var(--line); color:var(--mut); border-radius:8px; padding:6px 13px; font-size:12px; font-weight:600; cursor:pointer; }
+  .rtab.on { background:linear-gradient(135deg,var(--acc),var(--acc2)); color:#fff; border-color:transparent; }
+  .hl { display:flex; gap:10px; align-items:flex-start; padding:10px 0; border-bottom:1px solid rgba(255,255,255,.05); font-size:13px; }
+  .hl:last-child { border-bottom:0; }
+  .hl .dot { width:8px; height:8px; border-radius:50%; margin-top:5px; flex:none; }
+  .hl .meta { color:var(--mut); font-size:11px; display:flex; gap:8px; flex-wrap:wrap; margin-top:3px; }
+  .sentdot.pos,.dot.pos { background:var(--buy); } .sentdot.neg,.dot.neg { background:var(--sell); } .sentdot.neu,.dot.neu { background:var(--acc); }
+  .impact-box { background:linear-gradient(150deg,rgba(124,58,237,.14),rgba(59,130,246,.05)); border:1px solid rgba(124,58,237,.25);
+     border-radius:12px; padding:14px 16px; margin-bottom:12px; display:flex; gap:20px; flex-wrap:wrap; align-items:center; }
+  .impact-box .net { font-size:30px; font-weight:800; }
+  .impact-box .l { color:var(--mut); font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; }
+  .sigrow { background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:11px 13px; margin-bottom:8px; }
+  .sigrow .st-type { font-weight:700; text-transform:capitalize; }
+  .sigrow .kv2 { display:flex; gap:16px; flex-wrap:wrap; color:var(--mut); font-size:11.5px; margin-top:5px; }
+  .timeline { position:relative; padding-left:22px; }
+  .timeline::before { content:""; position:absolute; left:6px; top:4px; bottom:4px; width:2px; background:var(--line); }
+  .tl-item { position:relative; padding:6px 0 12px; font-size:13px; }
+  .tl-item::before { content:""; position:absolute; left:-19px; top:9px; width:9px; height:9px; border-radius:50%; background:var(--acc); border:2px solid var(--bg); }
+  .tl-item .t { color:var(--mut); font-size:11px; }
+  @media (max-width:760px){ .kpibar { grid-template-columns:repeat(2,1fr); } .tmini { margin-left:0; } }
 </style>
 </head>
 <body>
@@ -1922,9 +1978,10 @@ async function deleteAgent(id){
 }
 
 // ── Edit modal ───────────────────────────────────────────────────────────────
-function closeAgentModal(){ $('#agent-modal').classList.add('hidden'); }
+function closeAgentModal(){ $('#agent-modal').classList.add('hidden'); $('#agent-modal-card').classList.remove('wide'); }
 
 async function editAgent(id){
+  $('#agent-modal-card').classList.remove('wide');
   const a = await (await fetch('/api/agents/'+id)).json();
   const isInt = (a.schedule_type||'interval')!=='daily_time';
   const tiers = {1:'Tier 1 — Primary filings / issuer',2:'Tier 2 — Top-tier wires & papers',
@@ -2024,49 +2081,197 @@ async function saveAgent(id){
 }
 
 // ── View Results ─────────────────────────────────────────────────────────────
+// ── News Collector Results — intelligence dashboard (UI over the same API) ─────
+let _res = null;
 async function viewResults(id){
-  $('#agent-modal-card').innerHTML = '<div class="spin">Loading results…</div>';
+  const card = $('#agent-modal-card'); card.classList.add('wide');
+  card.innerHTML = '<div class="spin">Loading intelligence…</div>';
   $('#agent-modal').classList.remove('hidden');
-  const d = await (await fetch(`/api/agents/${id}/results`)).json();
-  const t = d.totals||{};
-  const brk = o => Object.entries(o||{}).map(([k,v])=>`<span class="chip-t">${escapeHtml(k)}: ${v}</span>`).join(' ')||'<span class="muted">—</span>';
-  const rows = (d.headlines||[]).map(h=>{
-    const sent = h.sentiment==='positive'?'pos':h.sentiment==='negative'?'neg':'';
-    return `<tr class="row">
-      <td class="tick">${escapeHtml(h.ticker||'')}</td>
-      <td style="max-width:320px">${h.url?`<a href="${h.url}" target="_blank" rel="noopener">${escapeHtml((h.headline||'').slice(0,110))}</a>`:escapeHtml((h.headline||'').slice(0,110))}</td>
-      <td class="muted">${escapeHtml((h.source||'').split(':')[0])}</td>
-      <td>${h.relevance_score!=null?Math.round(h.relevance_score*100)+'%':'—'}</td>
-      <td class="${sent}">${escapeHtml(h.sentiment||'—')}</td>
-      <td class="num">${h.impact_score??'—'}</td>
-      <td class="num">${h.confidence!=null?Math.round(h.confidence*100)+'%':'—'}</td>
-      <td>${escapeHtml(h.signal_type||'—')}</td>
-      <td class="muted" style="white-space:nowrap">${escapeHtml((h.published||'').slice(0,16))}</td>
-    </tr>`;
-  }).join('');
-  const last = d.last_run||{};
+  let d;
+  try { d = await (await fetch(`/api/agents/${id}/results`)).json(); }
+  catch(e){ card.innerHTML = `<div class="err">Failed to load results: ${e}</div><div class="modal-actions"><button class="ghost" onclick="closeAgentModal()">Close</button></div>`; return; }
+  _res = { id, data:d, tickers:aggregateTickers(d), q:'', ticker:'', source:'', sentiment:'',
+           sort:'signals', view:'ticker', exp:{}, sub:{}, sig:{} };
+  renderResults();
+}
+
+// Group the flat results payload into per-ticker intelligence (last_run.per_ticker
+// gives collected/relevant/signals; headlines give sentiment + sources).
+function aggregateTickers(d){
+  const per = (d.last_run && d.last_run.per_ticker) || {};
+  const map = {};
+  const ensure = tk => map[tk] || (map[tk] = {ticker:tk, collected:0, relevant:0, signals:0, pos:0, neg:0, neu:0, headlines:[], sources:{}});
+  Object.entries(per).forEach(([tk,v])=>{ const t=ensure(tk); t.collected=v.fetched||0; t.relevant=v.relevant||0; t.signals=v.signals||0; });
+  (d.headlines||[]).forEach(h=>{
+    const t=ensure(h.ticker||'?'); t.headlines.push(h);
+    if(h.sentiment==='positive') t.pos++; else if(h.sentiment==='negative') t.neg++; else t.neu++;
+    const s=(h.source||'').split(':')[0]||'other'; t.sources[s]=(t.sources[s]||0)+1;
+  });
+  Object.values(map).forEach(t=>{
+    if(!t.relevant) t.relevant=t.headlines.length;
+    if(!t.signals) t.signals=t.headlines.filter(h=>h.signal_type).length;
+    t.topImpact=Math.max(0,...t.headlines.map(h=>h.impact_score||0));
+    t.lastTs=t.headlines.map(h=>h.published||'').sort().slice(-1)[0]||'';
+  });
+  return Object.values(map);
+}
+function _resOpts(sel, opts){ return opts.map(o=>`<option value="${o[0]}" ${sel===o[0]?'selected':''}>${o[1]}</option>`).join(''); }
+
+function renderResults(){
+  const r=_res, d=r.data, t=d.totals||{}, last=d.last_run||{};
+  const allTickers=r.tickers.map(x=>x.ticker).sort();
+  const allSources=Object.keys(d.by_source||{}).sort();
   $('#agent-modal-card').innerHTML = `
-    <h2>📊 Results · Stock News Collector</h2>
-    <div class="muted" style="font-size:12.5px;margin-bottom:8px">Last run ${fmtTime(last.completed_at)} · <span class="st ${last.status||''}">${last.status||'—'}</span></div>
-    <div class="stat-row">
-      <div class="s"><b>${t.articles_collected??'—'}</b><span>Collected</span></div>
-      <div class="s"><b>${t.articles_relevant??'—'}</b><span>Relevant</span></div>
-      <div class="s"><b>${t.signals_generated??'—'}</b><span>Signals</span></div>
-      <div class="s"><b class="pos">${t.signals_positive??'—'}</b><span>Positive</span></div>
-      <div class="s"><b class="neg">${t.signals_negative??'—'}</b><span>Negative</span></div>
+    <div class="res-head"><h2>📊 Results</h2><span class="st ${last.status||''}">${last.status||(d.running?'running':'—')}</span>
+      <span class="sub">Stock News Collector · last run ${fmtTime(last.completed_at)}</span>
+      <button class="ex-btn" style="margin-left:auto" onclick="closeAgentModal()">✕ Close</button></div>
+    <div class="kpibar">
+      <div class="rkpi"><div class="v">${t.articles_collected??'—'}</div><div class="l">Articles Collected</div></div>
+      <div class="rkpi"><div class="v">${t.articles_relevant??'—'}</div><div class="l">Relevant</div></div>
+      <div class="rkpi"><div class="v">${t.signals_generated??'—'}</div><div class="l">Signals</div></div>
+      <div class="rkpi"><div class="v pos">${t.signals_positive??'—'}</div><div class="l">Positive</div></div>
+      <div class="rkpi"><div class="v neg">${t.signals_negative??'—'}</div><div class="l">Negative</div></div>
     </div>
-    <div class="fld"><div class="k muted" style="font-size:11px;text-transform:uppercase">Ticker breakdown</div><div class="chips" style="margin-top:6px">${brk(d.by_ticker)}</div></div>
-    <div class="fld"><div class="k muted" style="font-size:11px;text-transform:uppercase">Source breakdown</div><div class="chips" style="margin-top:6px">${brk(d.by_source)}</div></div>
-    <h4>Latest relevant headlines</h4>
-    <div style="overflow:auto;max-height:340px">
-      <table><thead><tr><th>Ticker</th><th>Headline</th><th>Source</th><th>Relevance</th><th>Sentiment</th><th class="num">Impact</th><th class="num">Conf</th><th>Signal</th><th>Published</th></tr></thead>
-      <tbody>${rows||'<tr><td colspan="9" class="muted">No relevant articles yet — run the agent.</td></tr>'}</tbody></table>
+    <div class="res-filters">
+      <input type="text" placeholder="Search ticker…" value="${escapeHtml(r.q)}" oninput="_res.q=this.value;renderResultsBody()">
+      <select onchange="_res.ticker=this.value;renderResults()"><option value="">All tickers</option>${_resOpts(r.ticker, allTickers.map(x=>[x,x]))}</select>
+      <select onchange="_res.source=this.value;renderResults()"><option value="">All sources</option>${_resOpts(r.source, allSources.map(x=>[x,x]))}</select>
+      <select onchange="_res.sentiment=this.value;renderResults()">${_resOpts(r.sentiment, [['','All sentiment'],['positive','Positive'],['negative','Negative'],['neutral','Neutral']])}</select>
+      <select onchange="_res.sort=this.value;renderResults()">${_resOpts(r.sort, [['signals','Sort: Signals'],['relevance','Sort: Relevance'],['impact','Sort: Impact'],['recent','Sort: Most Recent']])}</select>
+      <div class="vtoggle"><button class="${r.view==='ticker'?'on':''}" onclick="_res.view='ticker';renderResults()">By Ticker</button><button class="${r.view==='time'?'on':''}" onclick="_res.view='time';renderResults()">By Time</button></div>
     </div>
-    <div class="modal-actions"><button class="ghost" onclick="closeAgentModal()">Close</button></div>`;
+    <div id="res-body"></div>`;
+  renderResultsBody();
+}
+
+function _filteredHeadlines(t){
+  const r=_res;
+  return t.headlines.filter(h=>{
+    if(r.source && (h.source||'').split(':')[0]!==r.source) return false;
+    if(r.sentiment){ const s=h.sentiment||'neutral'; const isNeu=(s!=='positive'&&s!=='negative');
+      if(r.sentiment==='neutral'? !isNeu : s!==r.sentiment) return false; }
+    return true;
+  });
+}
+function _filteredTickers(){
+  const r=_res; let list=r.tickers.map(t=>({...t,_hl:_filteredHeadlines(t)}));
+  if(r.source||r.sentiment) list=list.filter(t=>t._hl.length);
+  if(r.q) list=list.filter(t=>t.ticker.toLowerCase().includes(r.q.toLowerCase()));
+  if(r.ticker) list=list.filter(t=>t.ticker===r.ticker);
+  const key={signals:t=>t.signals, relevance:t=>t.relevant, impact:t=>t.topImpact};
+  if(r.sort==='recent') list.sort((a,b)=>a.lastTs<b.lastTs?1:-1);
+  else { const k=key[r.sort]||key.signals; list.sort((a,b)=>k(b)-k(a)); }
+  return list;
+}
+function renderResultsBody(){
+  if(_res.view==='time'){ return renderResultsTime(); }
+  const list=_filteredTickers();
+  $('#res-body').innerHTML = list.length ? list.map(tickerCard).join('')
+    : '<div class="muted" style="padding:24px">No matching intelligence — run the agent or clear filters.</div>';
+}
+function sentRing(pos,neu,neg,size){
+  const tot=pos+neu+neg||1, g=pos/tot*100, b=g+neu/tot*100;
+  return `<div class="sring" style="--g:${g}%;--b:${b}%;width:${size}px;height:${size}px"><b>${Math.round(pos/tot*100)}%</b></div>`;
+}
+function resSrcBadges(sources){
+  return Object.entries(sources).sort((a,b)=>b[1]-a[1]).slice(0,6)
+    .map(([s,n])=>`<span class="srcbadge">${escapeHtml(s)} <b>${n}</b></span>`).join('') || '<span class="muted">—</span>';
+}
+function hlRow(h){
+  const sent=h.sentiment==='positive'?'pos':h.sentiment==='negative'?'neg':'neu';
+  return `<div class="hl"><span class="dot ${sent}"></span><div style="flex:1">
+    ${h.url?`<a href="${h.url}" target="_blank" rel="noopener">${escapeHtml(h.headline||'')}</a>`:escapeHtml(h.headline||'')}
+    <div class="meta"><span style="color:#a9c7e6;font-weight:700">${escapeHtml((h.source||'').split(':')[0])}</span>
+      <span>${escapeHtml(h.sentiment||'—')}</span>${h.impact_score!=null?`<span>impact ${h.impact_score}</span>`:''}
+      ${h.relevance_score!=null?`<span>rel ${Math.round(h.relevance_score*100)}%</span>`:''}
+      ${h.signal_type?`<span>${escapeHtml(h.signal_type)}</span>`:''}${h.published?`<span>${escapeHtml(h.published.slice(0,16))}</span>`:''}</div>
+  </div></div>`;
+}
+function tickerCard(t){
+  const hls=_filteredHeadlines(t);
+  const toph=[...hls].sort((a,b)=>(b.impact_score||0)-(a.impact_score||0))[0];
+  const exp=_res.exp[t.ticker];
+  return `<div class="tcard">
+    <div class="tcard-head">
+      ${sentRing(t.pos,t.neu,t.neg,46)}
+      <div><div class="tk">${t.ticker}</div><div class="co">${t.relevant} relevant · ${t.signals} signals</div></div>
+      <div class="tmini">
+        <div class="m"><b>${t.collected}</b><span>Collected</span></div>
+        <div class="m"><b>${t.relevant}</b><span>Relevant</span></div>
+        <div class="m"><b>${t.signals}</b><span>Signals</span></div>
+        <div class="m"><b class="pos">${t.pos}</b><span>Positive</span></div>
+        <div class="m"><b class="neg">${t.neg}</b><span>Negative</span></div>
+      </div>
+    </div>
+    <div class="tprev">
+      <div class="toph">${toph?`<span class="src" style="color:#a9c7e6;font-weight:700;font-size:11px">${escapeHtml((toph.source||'').split(':')[0])}</span> ${escapeHtml((toph.headline||'').slice(0,130))}`:'<span class="muted">No relevant headlines</span>'}</div>
+      <div class="res-srcs">${resSrcBadges(t.sources)}</div>
+    </div>
+    <div class="tact">
+      <button class="ex-btn" onclick="resExpand('${t.ticker}','articles')">📰 View Articles</button>
+      <button class="ex-btn" onclick="resExpand('${t.ticker}','signals')">⚡ View Signals</button>
+      <button class="ex-btn" onclick="resExpand('${t.ticker}','timeline')">🕒 Timeline</button>
+      <button class="ex-btn" onclick="resExpand('${t.ticker}', ${exp?'null':"'articles'"})">${exp?'▴ Collapse':'▾ View Details'}</button>
+    </div>
+    ${exp?resExpanded(t):''}`+`</div>`;
+}
+function resExpand(tk, sub){
+  if(sub===null){ delete _res.exp[tk]; renderResultsBody(); return; }
+  _res.exp[tk]=true; _res.sub[tk]=sub; renderResultsBody();
+  if(sub==='signals' && _res.sig[tk]===undefined) loadResSignals(tk);
+}
+function resSub(tk,k){ _res.sub[tk]=k; renderResultsBody(); if(k==='signals'&&_res.sig[tk]===undefined) loadResSignals(tk); }
+function resExpanded(t){
+  const sub=_res.sub[t.ticker]||'articles', hls=_filteredHeadlines(t);
+  const tabs=[['articles','Articles'],['signals','Signals'],['timeline','Timeline']]
+    .map(([k,l])=>`<button class="rtab ${sub===k?'on':''}" onclick="resSub('${t.ticker}','${k}')">${l}</button>`).join('');
+  let inner='';
+  if(sub==='signals') inner=resSignalsView(t.ticker);
+  else if(sub==='timeline'){
+    const tl=[...hls].sort((a,b)=>(a.published||'')<(b.published||'')?1:-1);
+    inner = tl.length ? `<div class="timeline">`+tl.map(h=>`<div class="tl-item"><div class="t">${escapeHtml((h.published||'—').slice(0,16))} · ${escapeHtml((h.source||'').split(':')[0])} · ${escapeHtml(h.sentiment||'')}</div>${escapeHtml((h.headline||'').slice(0,130))}</div>`).join('')+`</div>` : '<div class="muted">No timeline data.</div>';
+  } else inner = hls.length ? hls.map(hlRow).join('') : '<div class="muted">No relevant articles.</div>';
+  return `<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:4px"><div class="rtabs">${tabs}</div>${inner}</div>`;
+}
+function resSignalsView(tk){
+  const s=_res.sig[tk];
+  if(s===undefined || s==='loading') return '<div class="spin" style="padding:12px">Loading signal overlay…</div>';
+  if(!s || !s.available || !(s.signals||[]).length) return `<div class="muted">No active overlay signals for ${tk}. Signals expire over time — run the agent to refresh.</div>`;
+  const sigs=s.signals, bull=sigs.filter(x=>x.sentiment==='positive').length, bear=sigs.filter(x=>x.sentiment==='negative').length;
+  const hi=[...sigs].sort((a,b)=>(b.impact_score||0)-(a.impact_score||0))[0], net=s.aggregate_score_delta||0;
+  return `<div class="impact-box">
+      <div><div class="net ${net>=0?'pos':'neg'}">${net>=0?'+':''}${net}</div><div class="l">Net Impact (capped)</div></div>
+      <div><div class="net pos" style="font-size:22px">${bull}</div><div class="l">Bullish</div></div>
+      <div><div class="net neg" style="font-size:22px">${bear}</div><div class="l">Bearish</div></div>
+      ${hi?`<div style="flex:1;min-width:170px"><div class="l">Highest Impact</div><div style="font-weight:700;text-transform:capitalize">${escapeHtml(hi.signal_type||'—')}</div><div class="muted" style="font-size:11.5px">impact ${hi.impact_score} · conf ${Math.round((hi.confidence||0)*100)}%</div></div>`:''}
+    </div>${sigs.map(sigRow).join('')}`;
+}
+function sigRow(x){
+  const sent=x.sentiment==='positive'?'pos':x.sentiment==='negative'?'neg':'neu', d=x.recommended_score_delta||0;
+  return `<div class="sigrow"><div style="display:flex;align-items:center;gap:8px"><span class="dot ${sent}"></span><span class="st-type">${escapeHtml(x.signal_type||'signal')}</span>
+    <span class="badge" style="margin-left:auto;background:${d>=0?'rgba(34,197,94,.15)':'rgba(239,68,68,.15)'};color:${d>=0?'var(--buy)':'var(--sell)'}">${d>=0?'+':''}${d} overlay</span></div>
+    <div class="kv2"><span>impact ${x.impact_score}</span><span>conf ${Math.round((x.confidence||0)*100)}%</span><span>${escapeHtml(x.sentiment||'')}</span>${x.expiration_days?`<span>expires in ${x.expiration_days}d</span>`:''}</div>
+    ${x.rationale?`<div style="font-size:12px;margin-top:6px">${escapeHtml(x.rationale)}</div>`:''}
+    ${x.headline?`<div class="muted" style="font-size:11.5px;margin-top:4px">${escapeHtml((x.headline||'').slice(0,120))} ${x.url?`<a href="${x.url}" target="_blank" rel="noopener">↗</a>`:''}</div>`:''}
+  </div>`;
+}
+async function loadResSignals(tk){
+  _res.sig[tk]='loading'; renderResultsBody();
+  try { const d=await (await fetch('/api/news_signals/'+encodeURIComponent(tk))).json(); _res.sig[tk]= (d&&d.available)? d : null; }
+  catch(e){ _res.sig[tk]=null; }
+  renderResultsBody();
+}
+function renderResultsTime(){
+  let all=[]; _filteredTickers().forEach(t=>_filteredHeadlines(t).forEach(h=>all.push(h)));
+  all.sort((a,b)=>(a.published||'')<(b.published||'')?1:-1);
+  $('#res-body').innerHTML = all.length
+    ? `<div class="tcard">`+all.slice(0,80).map(h=>`<div class="hl"><span class="dot ${h.sentiment==='positive'?'pos':h.sentiment==='negative'?'neg':'neu'}"></span><div style="flex:1"><span class="tchip">${escapeHtml(h.ticker||'')}</span> ${h.url?`<a href="${h.url}" target="_blank" rel="noopener">${escapeHtml(h.headline||'')}</a>`:escapeHtml(h.headline||'')}<div class="meta"><span style="color:#a9c7e6;font-weight:700">${escapeHtml((h.source||'').split(':')[0])}</span><span>${escapeHtml(h.sentiment||'')}</span>${h.impact_score!=null?`<span>impact ${h.impact_score}</span>`:''}<span>${escapeHtml((h.published||'').slice(0,16))}</span></div></div></div>`).join('')+`</div>`
+    : '<div class="muted" style="padding:24px">No headlines match.</div>';
 }
 
 // ── View Logs ────────────────────────────────────────────────────────────────
 async function viewLogs(id){
+  $('#agent-modal-card').classList.remove('wide');
   $('#agent-modal-card').innerHTML = '<div class="spin">Loading logs…</div>';
   $('#agent-modal').classList.remove('hidden');
   const d = await (await fetch(`/api/agents/${id}/logs`)).json();
