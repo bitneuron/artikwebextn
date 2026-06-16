@@ -230,10 +230,19 @@ def analyze_one(ticker: str) -> dict:
         return None
     if t in ETFS:
         return {"ticker": t, "error": "ETF / fund — the fundamental engine does not apply."}
-    try:
-        r = scoring.score_ticker_live(t)
-    except Exception as e:  # noqa: BLE001
-        return _fallback_row(t, f"could not analyze ({type(e).__name__})")
+    # Yahoo throttles per-IP; retry a couple times with backoff so transient
+    # rate-limit blips self-heal instead of degrading the row.
+    r = None
+    for attempt in range(3):
+        try:
+            r = scoring.score_ticker_live(t)
+            break
+        except Exception as e:  # noqa: BLE001
+            name = type(e).__name__
+            if "RateLimit" in name and attempt < 2:
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            return _fallback_row(t, f"could not analyze ({name})")
 
     s = r.get("scores") or {}
     final = s.get("final")
@@ -379,7 +388,7 @@ def _score_many(tickers: List[str]) -> List[dict]:
             seen.add(u)
             ordered.append(u)
     ordered = ordered[:25]
-    with ThreadPoolExecutor(max_workers=8) as ex:
+    with ThreadPoolExecutor(max_workers=3) as ex:
         return list(ex.map(analyze_one, ordered))
 
 
@@ -988,7 +997,7 @@ def api_portfolio_refresh(date: str = Query(None), file: str = Query(None)):
 
     # Score every holding live (NOT _score_many — that caps at 25 for AI Search).
     tickers = list(dict.fromkeys(h["ticker"] for h in holdings))
-    with ThreadPoolExecutor(max_workers=8) as ex:
+    with ThreadPoolExecutor(max_workers=3) as ex:
         scored = {r["ticker"]: r for r in ex.map(analyze_one, tickers) if r}
 
     rows, t_cost, t_val, t_pl = [], 0.0, 0.0, 0.0
