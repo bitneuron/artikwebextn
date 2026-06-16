@@ -45,7 +45,27 @@ from fastapi import FastAPI, Query, UploadFile, File, Request, Form  # noqa: E40
 from fastapi.responses import FileResponse, JSONResponse, Response, HTMLResponse, RedirectResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 
-app = FastAPI(title="artikBroker")
+# Live market data occasionally yields NaN/Inf floats (e.g. a yfinance hiccup
+# during refresh). Starlette's JSONResponse renders with allow_nan=False and 500s
+# on those. Sanitize NaN/Inf -> null app-wide so a bad value degrades to "—"
+# instead of crashing the request.
+def _json_safe(o):
+    if isinstance(o, float):
+        return o if (o == o and o != float("inf") and o != float("-inf")) else None
+    if isinstance(o, dict):
+        return {k: _json_safe(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [_json_safe(v) for v in o]
+    return o
+
+
+class SafeJSONResponse(JSONResponse):
+    def render(self, content) -> bytes:  # noqa: ANN001
+        return json.dumps(_json_safe(content), ensure_ascii=False, allow_nan=False,
+                          separators=(",", ":")).encode("utf-8")
+
+
+app = FastAPI(title="artikBroker", default_response_class=SafeJSONResponse)
 
 
 @app.on_event("startup")
