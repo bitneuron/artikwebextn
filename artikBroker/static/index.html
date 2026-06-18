@@ -328,7 +328,6 @@
   .litem { background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:11px 14px;
      font-size:13.5px; display:flex; gap:9px; align-items:flex-start; }
   .litem.good { border-left:3px solid var(--buy); } .litem.bad { border-left:3px solid var(--sell); }
-  .chart-box { border:1px solid var(--line); border-radius:12px; overflow:hidden; height:420px; background:#0d1420; }
   .news-card .nstat { display:flex; gap:22px; flex-wrap:wrap; margin-bottom:12px; }
   .news-card .nstat b { font-size:22px; } .news-card .nstat span { display:block; color:var(--mut); font-size:11px; }
 
@@ -1110,7 +1109,6 @@ function detTab(name){
   window._detTab = name;
   document.querySelectorAll('#view-detail .dtab').forEach(b=>b.classList.toggle('active', b.dataset.t===name));
   $('#det-body').innerHTML = detContent(window._detR, name);
-  if(name==='overview') mountChart(window._detR.ticker);
   if(name==='news' || name==='signals') loadDetailNews(window._detR, name);
 }
 function kpiCards(cats){
@@ -1134,7 +1132,6 @@ function detContent(r, name){
       + (r.risks&&r.risks[0]?` The key risk to watch is ${escapeHtml(r.risks[0].toLowerCase())}.`:'')
       + (b.multiplier_reason?` Archetype multiplier: ${escapeHtml(b.multiplier_reason)}.`:'');
     return `
-      <div class="panel-card"><h3>📈 Price Chart</h3><div class="chart-box" id="tvchart"></div></div>
       <div class="panel-card"><h3>🤖 AI Summary</h3>
         <div class="ai-summary">${summary}</div>
         <button class="ex-btn" style="margin-top:12px" onclick="askCopilotStock('${r.ticker}')">💬 Ask Artik Broker AI for deeper analysis</button>
@@ -1178,22 +1175,6 @@ function detContent(r, name){
       <p class="muted" style="font-size:12px;margin-top:12px">Engine-generated levels — informational, not advice.</p></div>`;
   }
   return '';
-}
-let _tvLoaded = {};
-function mountChart(ticker){
-  const box = document.getElementById('tvchart'); if(!box) return;
-  box.innerHTML = `<div style="position:absolute;inset:0;display:grid;place-items:center;color:var(--mut);font-size:13px">📈 Loading interactive chart for ${escapeHtml(ticker)}…</div>`;
-  box.style.position = 'relative';
-  const cont = document.createElement('div'); cont.className='tradingview-widget-container';
-  cont.style.height='100%'; const inner = document.createElement('div'); inner.style.height='100%';
-  cont.appendChild(inner); box.appendChild(cont);
-  const s = document.createElement('script');
-  s.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
-  s.async = true;
-  s.innerHTML = JSON.stringify({symbol:ticker, theme:'dark', style:'1', interval:'D',
-    autosize:true, hide_side_toolbar:true, allow_symbol_change:false, save_image:false,
-    backgroundColor:'#0d1420', withdateranges:false});
-  cont.appendChild(s);
 }
 async function loadDetailNews(r, mode){
   const box = document.getElementById('det-news'); if(!box) return;
