@@ -118,7 +118,7 @@ class LocalAgentScheduler(AgentScheduler):
 
     def _loop(self) -> None:
         # Seed next_run for already-enabled agents at boot.
-        for aid in store.REGISTRY:
+        for aid in store.all_agent_ids():
             try:
                 self.ensure_next_run(store.get_config(aid))
             except Exception:  # noqa: BLE001
@@ -131,14 +131,14 @@ class LocalAgentScheduler(AgentScheduler):
 
     def _tick(self) -> None:
         now = _utc_now()
-        for aid in store.REGISTRY:
+        for aid in store.all_agent_ids():
             cfg = store.get_config(aid)
             if not cfg or not cfg.get("enabled"):
                 continue
             cfg = self.ensure_next_run(cfg)
             nxt = _parse_iso(cfg.get("next_run_at"))
             if nxt and nxt <= now and not self.runner.is_running(aid):
-                self.runner.run_async(aid, cfg)
+                self.runner.run_async(aid, cfg, trigger_source="scheduled")
                 # schedule the following run from now
                 store.save_config(aid, {"next_run_at": compute_next_run(cfg, now)})
 
@@ -154,7 +154,7 @@ class AwsAgentScheduler(AgentScheduler):
         return "aws"
 
     def start(self) -> None:
-        for aid in store.REGISTRY:
+        for aid in store.all_agent_ids():
             try:
                 self.ensure_next_run(store.get_config(aid))
             except Exception:  # noqa: BLE001

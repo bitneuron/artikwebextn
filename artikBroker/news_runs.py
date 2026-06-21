@@ -38,6 +38,33 @@ def latest_run(data_dir: Path, agent_id: str | None = None) -> dict | None:
     return rows[0] if rows else None
 
 
+def headlines_for_ticker(data_dir: Path, ticker: str, limit: int = 25) -> list[dict]:
+    """Recent RELEVANT classified headlines for one ticker (newest first)."""
+    tk = (ticker or "").strip().upper()
+    rows = [c for c in _read_jsonl(data_dir / "classified_news.jsonl")
+            if (c.get("ticker") or "").upper() == tk and c.get("relevance") == "RELEVANT"]
+    rows.sort(key=lambda c: c.get("classified_at") or c.get("published") or "", reverse=True)
+    return rows[:limit]
+
+
+def broker_run_history(data_dir: Path, agent_id: str | None = None,
+                       trigger_source: str | None = None,
+                       limit: int = 100) -> list[dict]:
+    """Broker-side enriched run history (carries trigger_source / query / agent_name)."""
+    rows = _read_jsonl(data_dir / "broker_runs.jsonl")
+    if agent_id:
+        rows = [r for r in rows if r.get("agent_id") == agent_id]
+    if trigger_source and trigger_source.lower() != "all":
+        rows = [r for r in rows if r.get("trigger_source") == trigger_source]
+    rows.sort(key=lambda r: r.get("started_at", ""), reverse=True)
+    return rows[:limit]
+
+
+def latest_broker_run(data_dir: Path, agent_id: str | None = None) -> dict | None:
+    rows = broker_run_history(data_dir, agent_id, limit=1)
+    return rows[0] if rows else None
+
+
 def results_summary(data_dir: Path, agent_id: str | None = None) -> dict:
     """Latest-run summary + ticker/source breakdown + recent relevant headlines."""
     last = latest_run(data_dir, agent_id)
@@ -54,6 +81,7 @@ def results_summary(data_dir: Path, agent_id: str | None = None) -> dict:
         sig = sig_by_id.get(c.get("id")) or {}
         headlines.append({
             "ticker": c.get("ticker"),
+            "company": c.get("company"),
             "headline": c.get("headline"),
             "source": c.get("source"),
             "relevance": c.get("relevance"),

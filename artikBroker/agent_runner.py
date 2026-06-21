@@ -12,6 +12,7 @@ so the /logs endpoint can tail it across restarts.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import threading
@@ -20,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import agents_store as store
-from news_runs import latest_run
+from news_runs import latest_run, run_history
 
 _LOG_DIR = store.DATA_DIR / "logs"
 _state_lock = threading.Lock()
@@ -78,10 +79,23 @@ def tail_log(agent_id: str, lines: int = 200) -> list[str]:
     return p.read_text(encoding="utf-8", errors="replace").splitlines()[-lines:]
 
 
-def _run_blocking(agent_id: str, cfg: dict) -> dict:
+def _append_broker_run(record: dict) -> None:
+    """Broker-side enriched run history (trigger_source/query/agent_name).
+
+    The standalone collector writes its own run_history.jsonl tagged with a fixed
+    agent_id; this parallel log lets Broker attribute each run to the right
+    instance and trigger without modifying the collector. Read-only for the UI.
+    """
+    store.DATA_DIR.mkdir(parents=True, exist_ok=True)
+    path = store.DATA_DIR / "broker_runs.jsonl"
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(record) + "\n")
+
+
+def _run_blocking(agent_id: str, cfg: dict, tickers_override: list[str] | None = None) -> dict:
     """Invoke the collector once, stream output to the log, return its run record."""
     cfg_path = _build_config_file(cfg)
-    tickers = ",".join(cfg.get("tickers") or [])
+    tickers = ",".join(tickers_override or cfg.get("tickers") or [])
     cmd = [sys.executable, str(store.COLLECTOR_SCRIPT),
            "--once", "--config", str(cfg_path)]
     if tickers:
@@ -112,24 +126,40 @@ def _run_blocking(agent_id: str, cfg: dict) -> dict:
             lf.write(f"----- ERROR {e} -----\n")
             return {"status": "failed", "errors": [str(e)]}
 
-    # The collector wrote a run_history record; return the freshest one.
-    rec = latest_run(store.DATA_DIR, agent_id)
+    # The collector tags every run_history row with the base agent_id, so we can't
+    # match by this instance's id. Find the exact run we just launched by its run_id
+    # (printed to stdout as "run=<id>"); fall back to the freshest overall record.
+    rid = None
+    m = re.search(r"run=(\S+)", proc.stdout or "")
+    if m:
+        rid = m.group(1)
+        for r in run_history(store.DATA_DIR, limit=50):
+            if r.get("run_id") == rid:
+                return r
+    rec = latest_run(store.DATA_DIR)
     return rec or {"status": "partial", "errors": ["no run_history record written"]}
 
 
-def run_async(agent_id: str, cfg: dict) -> dict:
-    """Start a run in a background thread. Returns immediately. No-op if running."""
+def run_async(agent_id: str, cfg: dict, trigger_source: str = "manual",
+              query: str = "", tickers_override: list[str] | None = None) -> dict:
+    """Start a run in a background thread. Returns immediately. No-op if running.
+
+    trigger_source: "scheduled" | "manual" | "search". tickers_override runs an
+    ad-hoc set (e.g. search results) without persisting them to the saved config.
+    """
     if is_running(agent_id):
         return {"started": False, "reason": "already running",
                 "state": state(agent_id)}
 
     started = _now()
+    run_tickers = tickers_override or cfg.get("tickers") or []
     _set(agent_id, running=True, started_at=started, run_id=None,
-         last_error=None)
+         last_error=None, trigger_source=trigger_source)
 
     def _worker():
+        rec = None
         try:
-            rec = _run_blocking(agent_id, cfg)
+            rec = _run_blocking(agent_id, cfg, tickers_override=tickers_override)
             _set(agent_id, running=False, last_record=rec, run_id=rec.get("run_id"),
                  finished_at=_now())
             # Persist last/next run hints on the agent config.
@@ -139,9 +169,32 @@ def run_async(agent_id: str, cfg: dict) -> dict:
                 pass
         except Exception as e:  # noqa: BLE001
             _set(agent_id, running=False, last_error=str(e), finished_at=_now())
+            rec = {"status": "failed", "errors": [str(e)]}
+        # Broker-side enriched history: attribute the run to this instance + trigger.
+        try:
+            rec = rec or {}
+            _append_broker_run({
+                "run_id": rec.get("run_id") or f"{int(time.time()*1000)}",
+                "agent_id": agent_id,
+                "agent_name": cfg.get("agent_name", "Stock News Collector"),
+                "trigger_source": trigger_source,
+                "query": query or "",
+                "tickers": list(run_tickers),
+                "started_at": started,
+                "completed_at": rec.get("completed_at") or _now(),
+                "status": rec.get("status", "unknown"),
+                "articles_collected": rec.get("articles_collected"),
+                "articles_relevant": rec.get("articles_relevant"),
+                "signals_generated": rec.get("signals_generated"),
+                "signals_positive": rec.get("signals_positive"),
+                "signals_negative": rec.get("signals_negative"),
+                "errors": rec.get("errors", []),
+            })
+        except Exception:  # noqa: BLE001
+            pass
 
     threading.Thread(target=_worker, name=f"agent-{agent_id}", daemon=True).start()
-    return {"started": True, "started_at": started}
+    return {"started": True, "started_at": started, "trigger_source": trigger_source}
 
 
 def _inherit_env() -> dict:

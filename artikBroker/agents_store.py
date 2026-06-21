@@ -14,10 +14,23 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+
+# Every managed config is an *instance* of a registry template. The default
+# instance shares its id with the template; cloned/added instances get derived ids.
+BASE_TEMPLATE = "stock_news_collector"
+
+# Reserved keys inside agent_schedules.json that are not agent instances.
+# __deleted__ tombstones registry-default ids the user explicitly deleted, so the
+# default collector can be removed entirely (re-creatable via "Add Configuration").
+_DELETED_KEY = "__deleted__"
+_RESERVED = {_DELETED_KEY}
 
 # Shared data dir with the standalone collector (so the subprocess, news_signals.py,
 # and run-history all line up). Overridable for tests/containers.
@@ -95,6 +108,9 @@ REGISTRY = {
             "interval_unit": "hour",
             "daily_time": "18:00",
             "timezone": DEFAULT_TZ,
+            # Plain-English statement (like AI Search). When set, it is resolved to
+            # `tickers` via nl_tickers; the resolved list is what actually gets collected.
+            "query": "",
             "tickers": ["NVDA", "AVGO", "TSM", "AMD"],
             "sources": default_sources(),
             "min_relevance_score": 0.70,
@@ -129,40 +145,80 @@ def _write_all(data: dict) -> None:
     tmp.replace(CONFIG_PATH)
 
 
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _template_of(agent_id: str, stored: dict) -> str:
+    """Which registry template an instance derives from."""
+    t = (stored.get(agent_id) or {}).get("template")
+    if t in REGISTRY:
+        return t
+    return agent_id if agent_id in REGISTRY else BASE_TEMPLATE
+
+
+def _deleted_set(stored: dict) -> set[str]:
+    return set(stored.get(_DELETED_KEY) or [])
+
+
+def all_agent_ids(stored: dict | None = None) -> list[str]:
+    """Every manageable agent id: registry defaults first, then stored instances.
+    Registry ids the user deleted (tombstoned) are omitted."""
+    data = _read_all() if stored is None else stored
+    deleted = _deleted_set(data)
+    ids = [r for r in REGISTRY if r not in deleted]
+    extras = [aid for aid in data if aid not in REGISTRY and aid not in _RESERVED]
+    extras.sort(key=lambda a: ((data[a] or {}).get("created_at", ""), a))
+    return ids + extras
+
+
+def _exists(agent_id: str, stored: dict) -> bool:
+    if agent_id in _RESERVED:
+        return False
+    if agent_id in REGISTRY:
+        return agent_id not in _deleted_set(stored)
+    return agent_id in stored
+
+
 def _merged_config(agent_id: str, stored: dict) -> dict:
-    """Registry defaults overlaid with any stored config for one agent."""
-    reg = REGISTRY[agent_id]
+    """Template defaults overlaid with any stored config for one instance."""
+    reg = REGISTRY[_template_of(agent_id, stored)]
     cfg = dict(reg["defaults"])
     cfg.update(stored.get(agent_id, {}))
     # Ensure every catalog source has an explicit enabled flag.
     src = dict(default_sources())
     src.update(cfg.get("sources") or {})
     cfg["sources"] = {k: bool(v) for k, v in src.items() if k in _SRC_BY_ID}
+    # Description falls back to the template's only when not explicitly set (a
+    # blank-created config stores "" and must stay blank).
+    raw_desc = cfg.get("description")
     cfg.update({
         "agent_id": agent_id,
-        "agent_name": reg["agent_name"],
+        "agent_name": cfg.get("agent_name") or reg["agent_name"],
         "agent_type": reg["agent_type"],
-        "description": cfg.get("description") or reg["description"],
+        "description": reg["description"] if raw_desc is None else raw_desc,
     })
     return cfg
 
 
 def get_config(agent_id: str) -> dict | None:
-    if agent_id not in REGISTRY:
-        return None
     with _lock:
-        return _merged_config(agent_id, _read_all())
+        data = _read_all()
+        if not _exists(agent_id, data):
+            return None
+        return _merged_config(agent_id, data)
 
 
 def save_config(agent_id: str, patch: dict) -> dict:
-    """Merge a partial update into an agent's stored config and persist it."""
-    if agent_id not in REGISTRY:
-        raise KeyError(agent_id)
+    """Merge a partial update into an instance's stored config and persist it."""
     with _lock:
         data = _read_all()
+        if not _exists(agent_id, data):
+            raise KeyError(agent_id)
+        tmpl = _template_of(agent_id, data)
         cur = data.get(agent_id, {})
-        cur.update({k: v for k, v in patch.items() if k in REGISTRY[agent_id]["defaults"]
-                    or k == "description"})
+        allowed = set(REGISTRY[tmpl]["defaults"]) | {"description", "agent_name", "template"}
+        cur.update({k: v for k, v in patch.items() if k in allowed})
         if "sources" in patch and isinstance(patch["sources"], dict):
             merged = dict(default_sources())
             merged.update(cur.get("sources") or {})
@@ -173,11 +229,71 @@ def save_config(agent_id: str, patch: dict) -> dict:
         return _merged_config(agent_id, data)
 
 
-def delete_config(agent_id: str) -> None:
+def create_instance(agent_name: str | None = None, clone_from: str | None = None,
+                    template: str = BASE_TEMPLATE) -> dict:
+    """Create a new managed config instance, optionally cloned from another."""
     with _lock:
         data = _read_all()
+        base = template if template in REGISTRY else BASE_TEMPLATE
+        if clone_from and _exists(clone_from, data):
+            base = _template_of(clone_from, data)
+        cloning = bool(clone_from and _exists(clone_from, data))
+        name = (agent_name or "").strip() or (
+            (_merged_config(clone_from, data)["agent_name"] + " (copy)")
+            if cloning else "New Collector")
+        slug = (re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:24]) or "collector"
+        aid = f"{base}__{slug}-{uuid.uuid4().hex[:4]}"
+        entry: dict = {"template": base, "agent_name": name,
+                       "created_at": _now_iso(), "enabled": False}
+        if cloning:
+            src = _merged_config(clone_from, data)
+            for k in REGISTRY[base]["defaults"]:
+                if k not in ("last_run_at", "next_run_at"):
+                    entry[k] = src.get(k)
+            entry["description"] = src.get("description")
+            entry["enabled"] = False
+        else:
+            # Blank new configuration — never inherit default/other-agent tickers.
+            entry["tickers"] = []
+            entry["query"] = ""
+            entry["description"] = ""
+        data[aid] = entry
+        _write_all(data)
+        return _merged_config(aid, data)
+
+
+def tracked_tickers(exclude: str | None = None) -> set[str]:
+    """Union of tickers tracked across all instances (optionally excluding one).
+
+    Used before purging a deleted config's data so we never remove articles for a
+    ticker another collector still tracks."""
+    with _lock:
+        data = _read_all()
+        out: set[str] = set()
+        for aid in all_agent_ids(data):
+            if aid == exclude:
+                continue
+            cfg = _merged_config(aid, data)
+            out.update((t or "").upper() for t in (cfg.get("tickers") or []) if t)
+        return out
+
+
+def delete_config(agent_id: str) -> None:
+    """Remove an agent entirely. A derived instance disappears; a registry-default
+    id is tombstoned so it no longer appears (re-creatable via Add Configuration)."""
+    with _lock:
+        data = _read_all()
+        changed = False
         if agent_id in data:
             del data[agent_id]
+            changed = True
+        if agent_id in REGISTRY:
+            deleted = _deleted_set(data)
+            if agent_id not in deleted:
+                deleted.add(agent_id)
+                data[_DELETED_KEY] = sorted(deleted)
+                changed = True
+        if changed:
             _write_all(data)
 
 

@@ -11,7 +11,8 @@ from botocore.exceptions import ClientError
 
 REGION = "us-west-2"
 SERVICE = "artikbroker"
-SECRET_KEYS = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "APP_PASSWORD_HASH", "APP_SECRET"]
+SECRET_KEYS = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "APP_SECRET",
+               "INITIAL_ADMIN_PASSWORD", "APP_PASSWORD_HASH"]  # APP_PASSWORD_HASH = legacy/deprecated
 INSTANCE_ROLE = "AppRunnerInstanceRole-artikbroker"
 
 ar = boto3.client("apprunner", region_name=REGION)

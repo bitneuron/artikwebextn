@@ -40,6 +40,8 @@ import news_signals  # noqa: E402  (read-only overlay from the news-collector ag
 import agents_store  # noqa: E402  (agent registry + config/agent_schedules.json)
 import agent_runner  # noqa: E402  (non-blocking agent execution)
 import news_runs  # noqa: E402  (run history + results reader)
+import news_data  # noqa: E402  (deletes a config's run history/logs + exclusive-ticker articles)
+import nl_tickers  # noqa: E402  (plain-English statement → tickers, for agent config)
 from agent_scheduler import get_scheduler, compute_next_run  # noqa: E402
 from fastapi import FastAPI, Query, UploadFile, File, Request, Form  # noqa: E402
 from fastapi.responses import FileResponse, JSONResponse, Response, HTMLResponse, RedirectResponse  # noqa: E402
@@ -80,79 +82,242 @@ def _start_agent_scheduler():
 HERE = Path(__file__).resolve().parent
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 
-# ── Auth gate (login form + signed session cookie + pbkdf2-hashed password) ───
-# Enabled when APP_PASSWORD_HASH and APP_SECRET are set (e.g. on AWS). Unset
-# locally → open for dev. The raw password is never stored or sent per-request:
-# it's typed once into /login (over HTTPS), checked against the hash, then a
-# signed HttpOnly+Secure cookie authorises later requests.
-APP_PASSWORD_HASH = os.environ.get("APP_PASSWORD_HASH", "")  # pbkdf2_sha256$iters$salt_hex$hash_hex
-APP_SECRET = os.environ.get("APP_SECRET", "")
-AUTH_ON = bool(APP_PASSWORD_HASH and APP_SECRET)
+# ── Auth: database-backed user accounts (replaces the shared APP_PASSWORD gate) ──
+# Per-user login. Passwords are PBKDF2-hashed in SQLite (users_db); sessions are
+# stateless, signed with APP_SECRET, carry uid/role/exp + a password fingerprint
+# (so a password reset invalidates old cookies). HttpOnly always; Secure in prod.
+# APP_PASSWORD_HASH is deprecated and no longer consulted for login.
+import base64  # noqa: E402
+import users_db  # noqa: E402
+
 SESSION_TTL = 7 * 24 * 3600  # 7 days
+IS_PRODUCTION = os.environ.get("ENVIRONMENT", "").lower() in ("production", "prod")
+# Open (no login) ONLY when explicitly enabled in development — never in production.
+DEV_AUTH_DISABLED = os.environ.get("DEV_AUTH_DISABLED", "").lower() in ("1", "true", "yes")
+OPEN_MODE = DEV_AUTH_DISABLED and not IS_PRODUCTION
+SECURE_COOKIE = IS_PRODUCTION  # http on localhost can't store Secure cookies
 
 
-def _verify_password(pw: str) -> bool:
+def _resolve_secret() -> str:
+    s = os.environ.get("APP_SECRET")
+    if s:
+        return s
+    if IS_PRODUCTION:
+        raise RuntimeError("APP_SECRET must be set in production (used to sign session cookies).")
+    # dev: persist a random secret so sessions survive --reload restarts
+    p = HERE / "config" / ".app_secret"
     try:
-        algo, iters, salt, h = APP_PASSWORD_HASH.split("$")
-        dk = hashlib.pbkdf2_hmac("sha256", pw.encode(), bytes.fromhex(salt), int(iters))
-        return hmac.compare_digest(dk.hex(), h)
+        if p.exists():
+            return p.read_text(encoding="utf-8").strip()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        sec = os.urandom(32).hex()
+        p.write_text(sec, encoding="utf-8")
+        return sec
     except Exception:  # noqa: BLE001
-        return False
+        return "dev-insecure-secret"
 
 
-def _make_token() -> str:
-    exp = str(int(time.time()) + SESSION_TTL)
-    sig = hmac.new(APP_SECRET.encode(), exp.encode(), hashlib.sha256).hexdigest()
-    return f"{exp}.{sig}"
+APP_SECRET = _resolve_secret()
 
 
-def _valid_token(tok: str) -> bool:
+@app.on_event("startup")
+def _init_users():
+    # Create the users table + bootstrap the first admin (raises in prod if missing).
+    users_db.ensure_initial_admin(is_production=IS_PRODUCTION)
+
+
+def _pwd_fp(password_hash: str) -> str:
+    """Short fingerprint of a user's password hash — embedded in the session so a
+    password change/reset invalidates previously-issued cookies."""
+    return hmac.new(APP_SECRET.encode(), (password_hash or "").encode(), hashlib.sha256).hexdigest()[:16]
+
+
+def _make_token(user: dict) -> str:
+    payload = {"uid": user["id"], "role": user["role"],
+               "pv": _pwd_fp(user["password_hash"]),
+               "exp": int(time.time()) + SESSION_TTL}
+    raw = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
+    sig = hmac.new(APP_SECRET.encode(), raw.encode(), hashlib.sha256).hexdigest()
+    return f"{raw}.{sig}"
+
+
+def _parse_token(tok: str) -> dict | None:
     try:
-        exp, sig = tok.rsplit(".", 1)
-        good = hmac.new(APP_SECRET.encode(), exp.encode(), hashlib.sha256).hexdigest()
-        return hmac.compare_digest(sig, good) and int(exp) > int(time.time())
+        raw, sig = (tok or "").rsplit(".", 1)
+        good = hmac.new(APP_SECRET.encode(), raw.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, good):
+            return None
+        p = json.loads(base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)))
+        return p if int(p.get("exp", 0)) > int(time.time()) else None
     except Exception:  # noqa: BLE001
-        return False
+        return None
 
 
-_LOGIN_HTML = """<!doctype html><html><head><meta charset=utf-8>
-<meta name=viewport content="width=device-width,initial-scale=1"><title>artikBroker — Sign in</title>
-<style>body{{margin:0;height:100vh;display:grid;place-items:center;background:#0d1117;color:#e6edf3;
-font-family:-apple-system,Segoe UI,Roboto,sans-serif}}form{{background:#161b22;border:1px solid #30363d;
-border-radius:12px;padding:28px 26px;width:300px}}h1{{font-size:18px;margin:0 0 4px}}p.sub{{margin:0 0 18px;
-color:#8b949e;font-size:13px}}input{{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:8px;
-border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:14px}}button{{margin-top:12px;width:100%;
-padding:10px;border:0;border-radius:8px;background:#1f6feb;color:#fff;font-weight:600;font-size:14px;cursor:pointer}}
-.err{{color:#f85149;font-size:13px;margin:10px 0 0}}</style></head>
-<body><form method=post action=/login><h1>🔎 artikBroker</h1><p class=sub>Enter the access password.</p>
-<input type=password name=password placeholder=Password autofocus required>{err}<button type=submit>Sign in</button></form></body></html>"""
+def _current_user(request: Request) -> dict | None:
+    p = _parse_token(request.cookies.get("session", ""))
+    if not p:
+        return None
+    u = users_db.get_by_id(p.get("uid"))
+    if not u or not u["is_active"]:
+        return None
+    if p.get("pv") != _pwd_fp(u["password_hash"]):   # password changed → cookie void
+        return None
+    return u
+
+
+def _set_session(resp, user: dict) -> None:
+    resp.set_cookie("session", _make_token(user), max_age=SESSION_TTL,
+                    httponly=True, secure=SECURE_COOKIE, samesite="lax")
+
+
+def _user(request: Request) -> dict | None:
+    return getattr(request.state, "user", None)
+
+
+def _require_admin(request: Request) -> dict | None:
+    u = _user(request)
+    return u if (u and u["role"] == "admin") else None
+
+
+def _safe_user_or_self(request: Request, uid: int) -> bool:
+    u = _user(request)
+    return bool(u and (u["role"] == "admin" or u["id"] == uid))
+
+
+# Credentials are submitted as JSON to /api/login and /api/change-password (not as
+# form-urlencoded fields). The raw password lives only briefly in memory during
+# verification and is never logged, stored, or returned.
+# TODO(https): once TLS terminates at the app, enforce HTTPS here — redirect http→https
+# and emit HSTS. Config placeholder (unused this phase):
+FORCE_HTTPS = os.environ.get("FORCE_HTTPS", "").lower() in ("1", "true", "yes")  # noqa: F841
+
+# Fields scrubbed from any structure before it could ever reach a log line.
+_REDACT_FIELDS = {"password", "new_password", "confirm_password",
+                  "temporary_password", "current_password"}
+
+
+def _redact(data):
+    """Return a copy of a dict/list with sensitive fields masked, for safe logging."""
+    if isinstance(data, dict):
+        return {k: ("[REDACTED]" if k in _REDACT_FIELDS else _redact(v)) for k, v in data.items()}
+    if isinstance(data, (list, tuple)):
+        return [_redact(v) for v in data]
+    return data
 
 
 @app.middleware("http")
 async def _auth_gate(request: Request, call_next):
-    if AUTH_ON:
-        path = request.url.path
-        public = path.startswith("/login") or path.startswith("/static") or path == "/favicon.ico"
-        if not public and not _valid_token(request.cookies.get("session", "")):
-            if path.startswith("/api/"):
-                return JSONResponse({"error": "unauthorized — please sign in"}, status_code=401)
-            return RedirectResponse("/login", status_code=302)
+    request.state.user = None
+    if OPEN_MODE:                         # dev-only fully-open mode
+        return await call_next(request)
+    path = request.url.path
+    # Pre-auth public surface (login page + JSON login endpoint + static assets).
+    if (path.startswith("/login") or path == "/api/login"
+            or path.startswith("/static") or path == "/favicon.ico"):
+        return await call_next(request)
+    user = _current_user(request)
+    if not user:
+        if path.startswith("/api/"):
+            return JSONResponse({"error": "unauthorized — please sign in"}, status_code=401)
+        return RedirectResponse("/login", status_code=302)
+    request.state.user = user
+    if user["must_reset_password"] and path not in (
+            "/change-password", "/api/change-password", "/logout", "/api/me"):
+        if path.startswith("/api/"):
+            return JSONResponse({"error": "password reset required", "must_reset_password": True},
+                                status_code=403)
+        return RedirectResponse("/change-password", status_code=302)
     return await call_next(request)
 
 
+# ── Auth pages — JSON-submitted via fetch (no form-urlencoded password fields) ──
+def _auth_script(endpoint: str) -> str:
+    # Collects inputs → JSON, clears password fields immediately, POSTs as JSON,
+    # never console.logs / never stores the password, never puts it in the URL.
+    js = """<script>
+(function(){
+ var f=document.getElementById('authform'), e=document.getElementById('autherr');
+ f.addEventListener('submit', async function(ev){
+   ev.preventDefault();
+   var body={}; f.querySelectorAll('input[name]').forEach(function(i){ body[i.name]=i.value; });
+   f.querySelectorAll('input[type=password]').forEach(function(i){ i.value=''; });
+   e.style.display='none';
+   try{
+     var r=await fetch('__ENDPOINT__',{method:'POST',headers:{'Content-Type':'application/json'},
+       body:JSON.stringify(body)});
+     var d={}; try{ d=await r.json(); }catch(_){}
+     body=null;
+     if(r.ok && d.success){ window.location.replace(d.redirect||'/'); return; }
+     e.textContent=(d && d.error) || 'Something went wrong'; e.style.display='block';
+   }catch(err){ e.textContent='Network error — please try again'; e.style.display='block'; }
+ });
+})();
+</script>"""
+    return js.replace("__ENDPOINT__", endpoint)
+
+
+def _auth_page(title: str, fields: str, endpoint: str, submit: str, extra: str = "") -> str:
+    # NOTE: <form> has no method/action — submission is intercepted by JS and sent as
+    # JSON, so a password can never be transmitted as form data or land in the URL.
+    head = f"""<!doctype html><html><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1"><title>artikBroker — {title}</title>
+<style>body{{margin:0;height:100vh;display:grid;place-items:center;background:#0d1117;color:#e6edf3;
+font-family:-apple-system,Segoe UI,Roboto,sans-serif}}form{{background:#161b22;border:1px solid #30363d;
+border-radius:12px;padding:28px 26px;width:320px}}h1{{font-size:18px;margin:0 0 4px}}p.sub{{margin:0 0 18px;
+color:#8b949e;font-size:13px}}label{{display:block;font-size:12px;color:#8b949e;margin:12px 0 4px}}
+input{{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:8px;border:1px solid #30363d;
+background:#0d1117;color:#e6edf3;font-size:14px}}button{{margin-top:16px;width:100%;padding:10px;border:0;
+border-radius:8px;background:#1f6feb;color:#fff;font-weight:600;font-size:14px;cursor:pointer}}
+.err{{color:#f85149;font-size:13px;margin:10px 0 0}}a{{color:#58a6ff;font-size:12.5px}}</style></head>
+<body><form id=authform autocomplete=on><h1>🔎 artikBroker</h1><p class=sub>{title}</p>
+{fields}<div class=err id=autherr style="display:none"></div><button type=submit>{submit}</button>{extra}</form>"""
+    return head + _auth_script(endpoint) + "</body></html>"
+
+
+def login_html() -> str:
+    fields = ('<label>Email or username</label>'
+              '<input name=identifier autocomplete=username autofocus required>'
+              '<label>Password</label>'
+              '<input type=password name=password autocomplete=current-password required>')
+    return _auth_page("Sign in", fields, "/api/login", "Sign in")
+
+
+def changepw_html(first: bool = False) -> str:
+    sub = ('<label>Current password</label><input type=password name=current_password autocomplete=current-password required>'
+           '<label>New password</label><input type=password name=new_password autocomplete=new-password required>'
+           '<label>Confirm new password</label><input type=password name=confirm_password autocomplete=new-password required>')
+    extra = '<p style="margin-top:14px"><a href="/logout">Sign out</a></p>'
+    return _auth_page("Change password" + (" (required)" if first else ""), sub,
+                      "/api/change-password", "Update password", extra)
+
+
 @app.get("/login")
-def login_page():
-    return HTMLResponse(_LOGIN_HTML.format(err=""))
+def login_page(request: Request):
+    if OPEN_MODE or _current_user(request):
+        return RedirectResponse("/", status_code=302)
+    return HTMLResponse(login_html())
 
 
-@app.post("/login")
-def login_submit(password: str = Form("")):
-    if AUTH_ON and _verify_password(password):
-        resp = RedirectResponse("/", status_code=302)
-        resp.set_cookie("session", _make_token(), max_age=SESSION_TTL,
-                        httponly=True, secure=True, samesite="lax")
-        return resp
-    return HTMLResponse(_LOGIN_HTML.format(err='<p class=err>Incorrect password</p>'), status_code=401)
+@app.post("/api/login")
+async def api_login(request: Request):
+    """JSON login. Password is read from the body, used only to verify, then dropped.
+    Generic error (never reveals whether the username exists)."""
+    try:
+        b = await request.json()
+    except Exception:  # noqa: BLE001
+        b = {}
+    identifier = (b.get("identifier") or "").strip()
+    password = b.get("password") or ""
+    u = users_db.get_by_login(identifier)
+    ok = bool(u and u["is_active"] and users_db.verify_password(password, u["password_hash"]))
+    password = None  # overwrite the raw value as soon as verification is done
+    if not ok:
+        return JSONResponse({"success": False, "error": "Invalid username or password"}, status_code=401)
+    users_db.touch_last_login(u["id"])
+    resp = JSONResponse({"success": True,
+                         "redirect": "/change-password" if u["must_reset_password"] else "/"})
+    _set_session(resp, u)
+    return resp
 
 
 @app.get("/logout")
@@ -160,6 +325,272 @@ def logout():
     resp = RedirectResponse("/login", status_code=302)
     resp.delete_cookie("session")
     return resp
+
+
+@app.post("/logout")
+def logout_post():
+    return logout()
+
+
+@app.get("/change-password")
+def change_password_page(request: Request):
+    u = _user(request) or _current_user(request)
+    if not u and not OPEN_MODE:
+        return RedirectResponse("/login", status_code=302)
+    return HTMLResponse(changepw_html(first=bool(u and u["must_reset_password"])))
+
+
+@app.post("/api/change-password")
+async def api_change_password(request: Request):
+    """JSON change-password. Reads current/new/confirm from the body only."""
+    u = _user(request) or _current_user(request)
+    if not u:
+        return JSONResponse({"success": False, "error": "not signed in"}, status_code=401)
+    try:
+        b = await request.json()
+    except Exception:  # noqa: BLE001
+        b = {}
+    current = b.get("current_password") or ""
+    new = b.get("new_password") or ""
+    confirm = b.get("confirm_password") or ""
+    if not users_db.verify_password(current, u["password_hash"]):
+        current = new = confirm = None
+        return JSONResponse({"success": False, "error": "Current password is incorrect"}, status_code=400)
+    if len(new) < 6:
+        current = new = confirm = None
+        return JSONResponse({"success": False, "error": "New password must be at least 6 characters"}, status_code=400)
+    if new != confirm:
+        current = new = confirm = None
+        return JSONResponse({"success": False, "error": "New passwords do not match"}, status_code=400)
+    u2 = users_db.set_password(u["id"], new, must_reset=False)
+    current = new = confirm = None      # drop raw values
+    resp = JSONResponse({"success": True, "redirect": "/"})
+    _set_session(resp, u2)              # fresh fingerprint → other sessions invalidated
+    return resp
+
+
+# ── Current user + admin user-management API ──────────────────────────────────
+@app.get("/api/me")
+def api_me(request: Request):
+    u = _user(request) or (None if OPEN_MODE else _current_user(request))
+    if not u:
+        return {"authenticated": False, "dev_open": OPEN_MODE}
+    return {"authenticated": True, "dev_open": OPEN_MODE, "user": users_db.safe(u)}
+
+
+@app.get("/api/users")
+def api_users_list(request: Request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "admin only"}, status_code=403)
+    return {"users": users_db.list_users()}
+
+
+@app.post("/api/users")
+async def api_users_create(request: Request):
+    admin = _require_admin(request)
+    if not admin:
+        return JSONResponse({"error": "admin only"}, status_code=403)
+    b = await request.json()
+    try:
+        u = users_db.create_user(
+            email=b.get("email", ""), username=b.get("username", ""),
+            password=b.get("password", ""), full_name=b.get("full_name", ""),
+            role=b.get("role", "user"),
+            must_reset_password=bool(b.get("must_reset_password", True)),
+            created_by=admin["id"])
+    except users_db.UserError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    return users_db.safe(u)
+
+
+@app.put("/api/users/{uid}")
+async def api_users_update(uid: int, request: Request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "admin only"}, status_code=403)
+    b = await request.json()
+    target = users_db.get_by_id(uid)
+    if not target:
+        return JSONResponse({"error": "user not found"}, status_code=404)
+    # Never let the last active admin be demoted or deactivated.
+    demoting = (b.get("role") == "user") or (b.get("is_active") is False)
+    if target["role"] == "admin" and demoting and users_db.admin_count(exclude_id=uid) == 0:
+        return JSONResponse({"error": "cannot remove the last active admin"}, status_code=400)
+    try:
+        u = users_db.update_user(
+            uid, full_name=b.get("full_name"), email=b.get("email"),
+            username=b.get("username"), role=b.get("role"),
+            is_active=b.get("is_active"), must_reset_password=b.get("must_reset_password"))
+    except users_db.UserError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    return users_db.safe(u)
+
+
+@app.post("/api/users/{uid}/reset-password")
+async def api_users_reset(uid: int, request: Request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "admin only"}, status_code=403)
+    b = await request.json()
+    pw = b.get("password", "")
+    if not pw:
+        return JSONResponse({"error": "a temporary password is required"}, status_code=400)
+    try:
+        users_db.set_password(uid, pw, must_reset=True)
+    except users_db.UserError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    return {"ok": True}   # never echo the password back
+
+
+@app.post("/api/users/{uid}/deactivate")
+def api_users_deactivate(uid: int, request: Request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "admin only"}, status_code=403)
+    if (users_db.get_by_id(uid) or {}).get("role") == "admin" and users_db.admin_count(exclude_id=uid) == 0:
+        return JSONResponse({"error": "cannot deactivate the last active admin"}, status_code=400)
+    return users_db.safe(users_db.set_active(uid, False))
+
+
+@app.post("/api/users/{uid}/activate")
+def api_users_activate(uid: int, request: Request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "admin only"}, status_code=403)
+    return users_db.safe(users_db.set_active(uid, True))
+
+
+@app.delete("/api/users/{uid}")
+def api_users_delete(uid: int, request: Request):
+    admin = _require_admin(request)
+    if not admin:
+        return JSONResponse({"error": "admin only"}, status_code=403)
+    target = users_db.get_by_id(uid)
+    if not target:
+        return JSONResponse({"error": "user not found"}, status_code=404)
+    if target["role"] == "admin" and users_db.admin_count(exclude_id=uid) == 0:
+        return JSONResponse({"error": "cannot delete the last active admin"}, status_code=400)
+    users_db.delete_user(uid)
+    return {"deleted": True}
+
+
+# ── Skills Management API (view / edit / version / publish methodology docs) ───
+# Scoring is NOT changed dynamically: artik_engine is deterministic Python and does
+# not parse these markdown files. Publishing only rewrites the live .md on disk.
+import skills_store  # noqa: E402
+
+
+def _skill_role(request: Request) -> str | None:
+    """Effective role for skills: dev OPEN_MODE acts as admin; else the user's role."""
+    if OPEN_MODE:
+        return "admin"
+    u = _user(request)
+    return u["role"] if u else None
+
+
+def _can_edit_skill(role: str | None) -> bool:
+    return role in ("admin", "financial_analyst")
+
+
+def _skill_author(request: Request) -> str:
+    u = _user(request)
+    return (u or {}).get("username") or "dev"
+
+
+@app.get("/api/skills")
+def api_skills_list(request: Request):
+    role = _skill_role(request)
+    return {"role": role, "can_edit": _can_edit_skill(role), "can_publish": role == "admin",
+            "skills": skills_store.list_skills()}
+
+
+@app.get("/api/skills/{skill_id}")
+def api_skill_get(skill_id: str, request: Request):
+    s = skills_store.get_skill(skill_id)
+    if not s:
+        return JSONResponse({"error": "skill not found"}, status_code=404)
+    role = _skill_role(request)
+    s["role"] = role
+    s["can_edit"] = _can_edit_skill(role)
+    s["can_publish"] = role == "admin"
+    return s
+
+
+@app.get("/api/skills/{skill_id}/versions")
+def api_skill_versions(skill_id: str, request: Request):
+    if not skills_store.get_skill(skill_id):
+        return JSONResponse({"error": "skill not found"}, status_code=404)
+    return {"versions": skills_store.versions(skill_id)}
+
+
+@app.get("/api/skills/{skill_id}/versions/{version}")
+def api_skill_version_content(skill_id: str, version: int, request: Request):
+    c = skills_store.version_content(skill_id, version)
+    if c is None:
+        return JSONResponse({"error": "version not found"}, status_code=404)
+    return {"version": version, "content": c}
+
+
+@app.put("/api/skills/{skill_id}/draft")
+async def api_skill_save_draft(skill_id: str, request: Request):
+    role = _skill_role(request)
+    if not _can_edit_skill(role):
+        return JSONResponse({"error": "editing requires admin or financial_analyst role"}, status_code=403)
+    b = await request.json()
+    try:
+        s = skills_store.save_draft(skill_id, b.get("content", ""), _skill_author(request),
+                                    b.get("change_summary", ""), requested=bool(b.get("requested")))
+    except skills_store.SkillError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    return s
+
+
+@app.post("/api/skills/{skill_id}/publish")
+async def api_skill_publish(skill_id: str, request: Request):
+    role = _skill_role(request)
+    if role != "admin":   # financial_analyst can save/request, only admin publishes live
+        return JSONResponse({"error": "publishing requires admin role"}, status_code=403)
+    b = await request.json()
+    try:
+        s = skills_store.publish(skill_id, _skill_author(request),
+                                 b.get("change_summary", ""), content=b.get("content"))
+    except skills_store.SkillError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    return s
+
+
+@app.post("/api/skills")
+async def api_skill_create(request: Request):
+    role = _skill_role(request)
+    if not _can_edit_skill(role):
+        return JSONResponse({"error": "creating skills requires admin or financial_analyst role"}, status_code=403)
+    b = await request.json()
+    try:
+        s = skills_store.create_skill(name=b.get("name", ""), category=b.get("category", ""),
+                                      content=b.get("content", ""), description=b.get("description", ""),
+                                      author=_skill_author(request))
+    except skills_store.SkillError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    return s
+
+
+@app.post("/api/skills/{skill_id}/duplicate")
+def api_skill_duplicate(skill_id: str, request: Request):
+    role = _skill_role(request)
+    if not _can_edit_skill(role):
+        return JSONResponse({"error": "duplicating requires admin or financial_analyst role"}, status_code=403)
+    try:
+        s = skills_store.duplicate_skill(skill_id, _skill_author(request))
+    except skills_store.SkillError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    return s
+
+
+@app.delete("/api/skills/{skill_id}")
+def api_skill_delete(skill_id: str, request: Request):
+    if _skill_role(request) != "admin":
+        return JSONResponse({"error": "deleting skills requires admin role"}, status_code=403)
+    try:
+        skills_store.delete_skill(skill_id)
+    except skills_store.SkillError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    return {"deleted": True}
 
 
 def _anthropic_key() -> str | None:
@@ -1177,7 +1608,10 @@ def _agent_view(agent_id: str) -> dict:
     cfg = agents_store.get_config(agent_id)
     if not cfg:
         return None
-    last = news_runs.latest_run(agents_store.DATA_DIR, agent_id)
+    # Prefer the Broker-side record (correct per-instance + trigger); fall back to
+    # the collector's own run_history for the default instance / legacy runs.
+    last = (news_runs.latest_broker_run(agents_store.DATA_DIR, agent_id)
+            or news_runs.latest_run(agents_store.DATA_DIR, agent_id))
     rstate = agent_runner.state(agent_id)
     return {
         "agent_id": cfg["agent_id"],
@@ -1193,11 +1627,14 @@ def _agent_view(agent_id: str) -> dict:
         "interval_unit": cfg.get("interval_unit"),
         "daily_time": cfg.get("daily_time"),
         "timezone": cfg.get("timezone"),
+        "query": cfg.get("query", ""),
         "tickers": cfg.get("tickers", []),
+        "is_default": agent_id == agents_store.BASE_TEMPLATE,
         "last_run_at": (last or {}).get("completed_at") or cfg.get("last_run_at"),
         "next_run_at": cfg.get("next_run_at"),
         "last_result": _last_result_str(last),
         "last_status": (last or {}).get("status"),
+        "last_trigger": (last or {}).get("trigger_source"),
         "signals_generated": (last or {}).get("signals_generated"),
         "errors": (last or {}).get("errors", []),
         "min_relevance_score": cfg.get("min_relevance_score"),
@@ -1221,8 +1658,20 @@ def api_agents_list():
     scheduler = get_scheduler()
     return {
         "scheduler_backend": scheduler.backend(),
-        "agents": [_agent_view(aid) for aid in agents_store.REGISTRY],
+        "agents": [_agent_view(aid) for aid in agents_store.all_agent_ids()],
     }
+
+
+@app.post("/api/agents")
+async def api_agent_create(request: Request):
+    """Create a new News Collector configuration (optionally cloned from another)."""
+    body = await request.json()
+    clone_from = body.get("clone_from")
+    if clone_from and agents_store.get_config(clone_from) is None:
+        return JSONResponse({"error": "unknown clone source"}, status_code=404)
+    cfg = agents_store.create_instance(
+        agent_name=body.get("agent_name"), clone_from=clone_from)
+    return _agent_view(cfg["agent_id"])
 
 
 @app.get("/api/agents/{agent_id}")
@@ -1234,27 +1683,51 @@ def api_agent_get(agent_id: str):
 
 
 @app.post("/api/agents/{agent_id}/run")
-def api_agent_run(agent_id: str):
+async def api_agent_run(agent_id: str, request: Request):
+    """Run a config now. Optional JSON body {tickers, query, trigger_source} runs an
+    ad-hoc set (e.g. from Search) without persisting the tickers."""
     cfg = agents_store.get_config(agent_id)
     if not cfg:
         return JSONResponse({"error": "unknown agent"}, status_code=404)
-    return agent_runner.run_async(agent_id, cfg)
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001 — no body = plain manual run
+        pass
+    override = body.get("tickers")
+    if isinstance(override, str):
+        override = [t.strip().upper() for t in override.replace("\n", ",").split(",") if t.strip()]
+    elif isinstance(override, list):
+        override = [str(t).strip().upper() for t in override if str(t).strip()]
+    else:
+        override = None
+    trig = body.get("trigger_source") or "manual"
+    return agent_runner.run_async(agent_id, cfg, trigger_source=trig,
+                                  query=body.get("query", ""), tickers_override=override)
 
 
 @app.post("/api/agents/{agent_id}/schedule")
 async def api_agent_schedule(agent_id: str, request: Request):
-    if agent_id not in agents_store.REGISTRY:
+    if agents_store.get_config(agent_id) is None:
         return JSONResponse({"error": "unknown agent"}, status_code=404)
     body = await request.json()
     allowed = ("agent_name", "description", "enabled", "schedule_type",
                "interval_value", "interval_unit", "daily_time", "timezone",
-               "tickers", "sources", "min_relevance_score", "min_impact_score",
+               "query", "tickers", "sources", "min_relevance_score", "min_impact_score",
                "retention_days", "dedup", "use_llm")
     patch = {k: body[k] for k in allowed if k in body}
     if isinstance(patch.get("tickers"), str):
         patch["tickers"] = [t.strip().upper() for t in patch["tickers"].replace("\n", ",").split(",") if t.strip()]
     if "tickers" in patch and isinstance(patch["tickers"], list):
         patch["tickers"] = [str(t).strip().upper() for t in patch["tickers"] if str(t).strip()]
+    if "query" in patch:
+        patch["query"] = (patch["query"] or "").strip()
+    # If a plain-English statement is provided without an explicit ticker list,
+    # resolve it server-side so the saved config (and the card) reflect real tickers.
+    if patch.get("query") and not patch.get("tickers"):
+        res = nl_tickers.resolve(patch["query"])
+        if res.get("ok"):
+            patch["tickers"] = res["tickers"]
     cfg = agents_store.save_config(agent_id, patch)
     # Recompute next run from the new schedule when enabled.
     nxt = compute_next_run(cfg) if cfg.get("enabled") else None
@@ -1262,9 +1735,21 @@ async def api_agent_schedule(agent_id: str, request: Request):
     return _agent_view(agent_id)
 
 
+@app.post("/api/agents/{agent_id}/resolve")
+async def api_agent_resolve(agent_id: str, request: Request):
+    """Preview: turn a plain-English statement into candidate tickers (no save)."""
+    if agents_store.get_config(agent_id) is None:
+        return JSONResponse({"error": "unknown agent"}, status_code=404)
+    body = await request.json()
+    res = nl_tickers.resolve(body.get("query", ""))
+    if not res.get("ok"):
+        return JSONResponse({"error": res.get("error", "could not resolve")}, status_code=422)
+    return res
+
+
 @app.post("/api/agents/{agent_id}/enable")
 def api_agent_enable(agent_id: str):
-    if agent_id not in agents_store.REGISTRY:
+    if agents_store.get_config(agent_id) is None:
         return JSONResponse({"error": "unknown agent"}, status_code=404)
     cfg = agents_store.save_config(agent_id, {"enabled": True})
     agents_store.save_config(agent_id, {"next_run_at": compute_next_run(cfg)})
@@ -1273,35 +1758,190 @@ def api_agent_enable(agent_id: str):
 
 @app.post("/api/agents/{agent_id}/disable")
 def api_agent_disable(agent_id: str):
-    if agent_id not in agents_store.REGISTRY:
+    if agents_store.get_config(agent_id) is None:
         return JSONResponse({"error": "unknown agent"}, status_code=404)
     agents_store.save_config(agent_id, {"enabled": False, "next_run_at": None})
     return _agent_view(agent_id)
 
 
 @app.post("/api/agents/{agent_id}/delete")
-def api_agent_delete(agent_id: str):
-    if agent_id not in agents_store.REGISTRY:
+def api_agent_delete(agent_id: str, purge: int = 1):
+    """Delete a configuration. By default also purges the data behind it: its
+    Broker run history, log file and generated config, plus collected
+    articles/signals for tickers no longer tracked by any remaining config
+    (shared-ticker articles are kept so other collectors aren't blinded)."""
+    cfg = agents_store.get_config(agent_id)
+    if cfg is None:
         return JSONResponse({"error": "unknown agent"}, status_code=404)
-    agents_store.delete_config(agent_id)  # reverts to registry defaults (disabled)
-    return _agent_view(agent_id)
+    own_tickers = {(t or "").upper() for t in (cfg.get("tickers") or []) if t}
+    agents_store.delete_config(agent_id)  # default id reverts to defaults; instance disappears
+
+    purged: dict = {}
+    if purge:
+        dd, cdir = agents_store.DATA_DIR, agents_store.CONFIG_DIR
+        exclusive = sorted(own_tickers - agents_store.tracked_tickers())  # remaining after delete
+        purged = {
+            "tickers": exclusive,
+            "articles": news_data.purge_articles(dd, exclusive),
+            "runs_removed": news_data.purge_broker_runs(dd, agent_id),
+            "logs_deleted": news_data.delete_logs(dd, agent_id),
+            "config_deleted": news_data.delete_collector_config(cdir, agent_id),
+        }
+
+    view = _agent_view(agent_id)  # None for a removed instance; reset view for the default
+    return {"deleted": True, "agent_id": agent_id, "purged": purged, "agent": view}
 
 
 @app.get("/api/agents/{agent_id}/results")
 def api_agent_results(agent_id: str):
-    if agent_id not in agents_store.REGISTRY:
+    if agents_store.get_config(agent_id) is None:
         return JSONResponse({"error": "unknown agent"}, status_code=404)
     summary = news_runs.results_summary(agents_store.DATA_DIR, agent_id)
-    summary["history"] = news_runs.run_history(agents_store.DATA_DIR, agent_id, limit=20)
+    # Prefer the Broker-side record so the header shows the right run for this
+    # instance (counts/trigger). Classified/signal storage is shared across configs.
+    brun = news_runs.latest_broker_run(agents_store.DATA_DIR, agent_id)
+    if brun:
+        summary["last_run"] = brun
+        summary["totals"] = {
+            "articles_collected": brun.get("articles_collected", summary["totals"].get("articles_collected")),
+            "articles_relevant": brun.get("articles_relevant", summary["totals"].get("articles_relevant")),
+            "signals_generated": summary["totals"].get("signals_generated"),
+            "signals_positive": summary["totals"].get("signals_positive"),
+            "signals_negative": summary["totals"].get("signals_negative"),
+        }
+    summary["history"] = news_runs.broker_run_history(agents_store.DATA_DIR, agent_id, limit=20)
     summary["running"] = agent_runner.is_running(agent_id)
     return summary
 
 
+_SEARCH_AGENT_PREFIX = "🔎 Search: "
+
+
+@app.post("/api/news_collector/search_run")
+async def api_news_collector_search_run(request: Request):
+    """From the Search screen: create (or reuse) a managed News Collector config
+    seeded with the current query + tickers — so it shows up in the Agents section —
+    and run its background collection now (trigger_source='search'). Never blocks
+    search; failures are isolated."""
+    body = await request.json()
+    raw = body.get("tickers")
+    if isinstance(raw, str):
+        raw = raw.replace("\n", ",").split(",")
+    tickers = [str(t).strip().upper() for t in (raw or []) if str(t).strip()][:25]
+    if not tickers:
+        return JSONResponse({"error": "no tickers provided"}, status_code=400)
+    query = (body.get("query") or "").strip()
+
+    # Reuse the search-created collector for this same query (avoid piling up
+    # duplicates); otherwise create a new managed instance so it appears in Agents.
+    agent_id = None
+    for aid in agents_store.all_agent_ids():
+        if aid == agents_store.BASE_TEMPLATE:
+            continue
+        c = agents_store.get_config(aid)
+        if c and (c.get("agent_name", "").startswith(_SEARCH_AGENT_PREFIX)
+                  and (c.get("query", "") == query)):
+            agent_id = aid
+            break
+    if not agent_id:
+        label = query or ", ".join(tickers[:4])
+        created = agents_store.create_instance(agent_name=(_SEARCH_AGENT_PREFIX + label)[:48])
+        agent_id = created["agent_id"]
+
+    # Persist the tracking statement + tickers so the Agents card reflects them.
+    agents_store.save_config(agent_id, {"query": query, "tickers": tickers})
+    cfg = agents_store.get_config(agent_id)
+    res = agent_runner.run_async(agent_id, cfg, trigger_source="search",
+                                 query=query, tickers_override=tickers)
+    return {**res, "agent_id": agent_id, "agent_name": cfg.get("agent_name"),
+            "tickers": tickers}
+
+
+@app.get("/api/news_collector/runs")
+def api_news_collector_runs(trigger_source: str = "all", agent_id: str = "",
+                            limit: int = 100):
+    """All Broker-attributed collector runs (scheduled / manual / search) for the
+    Run History view, with optional trigger-source and agent filters."""
+    return {
+        "runs": news_runs.broker_run_history(
+            agents_store.DATA_DIR, agent_id or None, trigger_source, limit),
+    }
+
+
 @app.get("/api/agents/{agent_id}/logs")
 def api_agent_logs(agent_id: str, lines: int = 200):
-    if agent_id not in agents_store.REGISTRY:
+    if agents_store.get_config(agent_id) is None:
         return JSONResponse({"error": "unknown agent"}, status_code=404)
     return {"agent_id": agent_id, "lines": agent_runner.tail_log(agent_id, lines)}
+
+
+_SUMMARY_SYSTEM = (
+    "You are Artik Broker's news summarizer. Given recent news headlines about one "
+    "stock, write a concise 2-3 sentence plain-English summary of the key developments "
+    "and the overall sentiment/trend. Be specific and factual; only use what the "
+    "headlines state. No preamble, no bullet points, no disclaimers."
+)
+
+
+def _summarize_anthropic(prompt: str, key: str) -> str | None:
+    import anthropic
+    client = anthropic.Anthropic(api_key=key)
+    msg = client.messages.create(
+        model="claude-opus-4-8", max_tokens=350,
+        system=_SUMMARY_SYSTEM,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return "".join(b.text for b in msg.content if getattr(b, "type", "") == "text").strip() or None
+
+
+def _summarize_openai(prompt: str, key: str) -> str | None:
+    from openai import OpenAI
+    client = OpenAI(api_key=key)
+    resp = client.chat.completions.create(
+        model="gpt-5-mini",
+        messages=[{"role": "system", "content": _SUMMARY_SYSTEM},
+                  {"role": "user", "content": prompt}],
+        max_completion_tokens=400, reasoning_effort="minimal",
+    )
+    return (resp.choices[0].message.content or "").strip() or None
+
+
+@app.get("/api/news_summary")
+def api_news_summary(ticker: str = Query(..., description="ticker to summarize news for")):
+    """AI summary of a ticker's recent collected headlines (Claude→GPT cascade)."""
+    tk = (ticker or "").strip().upper()
+    if not tk:
+        return JSONResponse({"ok": False, "error": "empty ticker"}, status_code=400)
+    rows = news_runs.headlines_for_ticker(agents_store.DATA_DIR, tk, limit=25)
+    if not rows:
+        return {"ok": False, "ticker": tk, "error": "no collected articles for this ticker"}
+
+    lines = []
+    for c in rows:
+        sent = c.get("sentiment") or ""
+        src = (c.get("source") or "").split(":")[0]
+        when = (c.get("published") or "")[:10]
+        lines.append(f"- {c.get('headline','')} ({src}{', '+when if when else ''}{', '+sent if sent else ''})")
+    prompt = (f"Recent news headlines about {tk}:\n" + "\n".join(lines)
+              + f"\n\nSummarize the news about {tk} in 2-3 sentences.")
+
+    akey, okey = _anthropic_key(), _openai_key()
+    if not akey and not okey:
+        return {"ok": False, "ticker": tk, "error": "no AI provider configured", "count": len(rows)}
+    summary, provider, last_err = None, None, None
+    if akey:
+        try:
+            summary, provider = _summarize_anthropic(prompt, akey), "claude"
+        except Exception as e:  # noqa: BLE001
+            last_err = _err_detail(e)
+    if not summary and okey:
+        try:
+            summary, provider = _summarize_openai(prompt, okey), "gpt"
+        except Exception as e:  # noqa: BLE001
+            last_err = _err_detail(e)
+    if not summary:
+        return {"ok": False, "ticker": tk, "error": last_err or "summary failed", "count": len(rows)}
+    return {"ok": True, "ticker": tk, "summary": summary, "provider": provider, "count": len(rows)}
 
 
 @app.get("/api/news_signals/{ticker}")

@@ -44,27 +44,30 @@ if ! aws iam get-role --role-name "${ROLE}" >/dev/null 2>&1; then
 fi
 ROLE_ARN="arn:aws:iam::${ACCOUNT}:role/${ROLE}"
 
-# ── 5. Runtime env vars (AI Search keys + login gate) ────────────────────────
-# Keys from your shell or artikAgents/.env. Login gate: pass APP_PASSWORD=... and it's
-# stored as a pbkdf2 HASH (never plaintext); a random APP_SECRET signs session cookies.
+# ── 5. Runtime env vars (AI Search keys + per-user auth) ─────────────────────
+# Keys from your shell or artikAgents/.env. Auth is now per-user (DB-backed):
+# ENVIRONMENT=production turns on strict auth, APP_SECRET signs session cookies,
+# and INITIAL_ADMIN_* bootstraps the first admin on a fresh DB. APP_PASSWORD is
+# deprecated (the old single shared gate is no longer used).
 KEY="${ANTHROPIC_API_KEY:-$(grep -h '^ANTHROPIC_API_KEY=' artikAgents/agents/.env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'"'")}"
 OKEY="${OPENAI_API_KEY:-$(grep -h '^OPENAI_API_KEY=' artikAgents/agents/.env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'"'")}"
 ENV_PAIRS=""
 [ -n "${KEY}" ]   && ENV_PAIRS="\"ANTHROPIC_API_KEY\":\"${KEY}\""
 [ -n "${OKEY}" ]  && ENV_PAIRS="${ENV_PAIRS:+${ENV_PAIRS},}\"OPENAI_API_KEY\":\"${OKEY}\""
-if [ -n "${APP_PASSWORD:-}" ]; then
-  # hash the password + mint a signing secret (plaintext never leaves this shell)
-  PW_ENV="$(APP_PASSWORD="${APP_PASSWORD}" python3 - <<'PY'
-import os,hashlib
-pw=os.environ["APP_PASSWORD"].encode(); salt=os.urandom(16); it=200000
-dk=hashlib.pbkdf2_hmac("sha256",pw,salt,it)
-print(f'"APP_PASSWORD_HASH":"pbkdf2_sha256${it}${salt.hex()}${dk.hex()}","APP_SECRET":"{os.urandom(32).hex()}"')
-PY
-)"
-  ENV_PAIRS="${ENV_PAIRS:+${ENV_PAIRS},}${PW_ENV}"
+# Production auth (strict): no dev open-mode, no dev fallback admin.
+ENV_PAIRS="${ENV_PAIRS:+${ENV_PAIRS},}\"ENVIRONMENT\":\"production\""
+# Cookie-signing secret: reuse APP_SECRET from env, else mint a fresh one.
+APP_SECRET="${APP_SECRET:-$(python3 -c 'import os;print(os.urandom(32).hex())')}"
+ENV_PAIRS="${ENV_PAIRS},\"APP_SECRET\":\"${APP_SECRET}\""
+# Bootstrap admin (only used the first time the users DB is empty).
+if [ -n "${INITIAL_ADMIN_PASSWORD:-}" ]; then
+  IA_EMAIL="${INITIAL_ADMIN_EMAIL:-admin@artikbroker.local}"
+  IA_USER="${INITIAL_ADMIN_USERNAME:-admin}"
+  ENV_PAIRS="${ENV_PAIRS},\"INITIAL_ADMIN_EMAIL\":\"${IA_EMAIL}\",\"INITIAL_ADMIN_USERNAME\":\"${IA_USER}\",\"INITIAL_ADMIN_PASSWORD\":\"${INITIAL_ADMIN_PASSWORD}\""
 fi
 RTE=""; [ -n "${ENV_PAIRS}" ] && RTE=",\"RuntimeEnvironmentVariables\":{${ENV_PAIRS}}"
-[ -z "${APP_PASSWORD:-}" ] && echo "⚠ APP_PASSWORD not set — deploying WITHOUT the login gate. Re-run with APP_PASSWORD=... to protect it."
+[ -z "${INITIAL_ADMIN_PASSWORD:-}" ] && echo "⚠ INITIAL_ADMIN_PASSWORD not set — if the users DB is empty the app will FAIL to start in production. Re-run with INITIAL_ADMIN_PASSWORD=... (and optional INITIAL_ADMIN_EMAIL / INITIAL_ADMIN_USERNAME)."
+echo "ℹ Note: the SQLite users DB lives on the container filesystem (USERS_DB_PATH, default config/users.db). On App Runner this resets on redeploy — point USERS_DB_PATH at a persistent mount (EFS) to retain user-created accounts across deploys."
 [ -z "${KEY}${OKEY}" ] && echo "⚠ No ANTHROPIC_API_KEY or OPENAI_API_KEY — AI Search will be disabled on the deploy."
 
 SRC_CONFIG="{

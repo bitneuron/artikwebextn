@@ -24,6 +24,135 @@
   .mode-sel { padding:8px 10px; font-size:13px; }
   .news-toggle { display:inline-flex; align-items:center; gap:6px; font-size:13px; color:var(--mut); cursor:pointer; user-select:none; white-space:nowrap; }
   .news-toggle input { accent-color:var(--acc); }
+  .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
+           background:var(--panel); border:1px solid var(--line); color:var(--txt);
+           padding:11px 18px; border-radius:10px; font-size:13px; z-index:100; opacity:0;
+           transition:.2s; pointer-events:none; box-shadow:0 8px 28px rgba(0,0,0,.4); }
+  .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  /* ── Favorites: stars, context menu, nav count, empty state ── */
+  .favstar { cursor:pointer; color:var(--mut); font-size:14px; margin-left:5px; line-height:1;
+             display:inline-block; transition:.12s; user-select:none; vertical-align:middle; }
+  .favstar:hover { color:#fbbf24; transform:scale(1.2); }
+  .favstar.on { color:#fbbf24; }
+  .ctxmenu { position:fixed; z-index:200; min-width:184px; background:var(--panel); border:1px solid var(--line);
+             border-radius:10px; padding:5px; box-shadow:0 12px 34px rgba(0,0,0,.5); }
+  .ctxmenu.hidden { display:none; }
+  .ctxmenu .ci { padding:8px 11px; border-radius:7px; font-size:13px; cursor:pointer; color:var(--txt); white-space:nowrap; }
+  .ctxmenu .ci:hover { background:rgba(255,255,255,.07); }
+  .ctxmenu .ci.head { color:var(--mut); font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase;
+                      cursor:default; padding:6px 11px 4px; }
+  .ctxmenu .ci.head:hover { background:none; }
+  .navcount { margin-left:auto; background:rgba(245,158,11,.18); color:#fbbf24; font-size:11px; font-weight:800;
+              border-radius:999px; padding:1px 8px; min-width:18px; text-align:center; }
+  .app.collapsed .navcount { display:none; }
+  .empty-fav { text-align:center; padding:56px 20px; color:var(--mut); }
+  .empty-fav .ico { font-size:46px; margin-bottom:10px; }
+  .empty-fav h3 { color:var(--txt); margin:0 0 6px; }
+  .empty-fav .acts { display:flex; gap:10px; justify-content:center; margin-top:18px; flex-wrap:wrap; }
+  /* ── User badge (header) + roles + users table ── */
+  .user-badge { position:relative; }
+  .user-badge.hidden { display:none; }
+  .ub-btn { display:flex; align-items:center; gap:8px; background:var(--panel2); border:1px solid var(--line);
+     color:var(--txt); border-radius:999px; padding:4px 10px 4px 4px; cursor:pointer; font-size:13px; }
+  .ub-btn:hover { border-color:#3a4a5e; }
+  .ub-av { width:26px; height:26px; border-radius:50%; flex:none; display:grid; place-items:center; font-weight:800;
+     color:#fff; background:linear-gradient(135deg,var(--acc),var(--acc2)); font-size:13px; }
+  .ub-name { font-weight:600; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ub-role { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; border-radius:999px; padding:1px 7px; }
+  .ub-role.admin { background:rgba(245,158,11,.18); color:#fbbf24; }
+  .ub-role.user { background:rgba(139,148,158,.18); color:var(--mut); }
+  .ub-menu { position:absolute; right:0; top:40px; min-width:200px; background:var(--panel); border:1px solid var(--line);
+     border-radius:10px; padding:5px; box-shadow:0 12px 34px rgba(0,0,0,.5); z-index:30; }
+  .ub-menu.hidden { display:none; }
+  .ub-menu .ub-info { padding:7px 11px 6px; font-size:11.5px; color:var(--mut); border-bottom:1px solid var(--line); margin-bottom:4px; }
+  .ub-menu .ci { display:block; width:100%; text-align:left; background:transparent; border:0; color:var(--txt);
+     padding:8px 11px; border-radius:7px; font-size:13px; cursor:pointer; text-decoration:none; }
+  .ub-menu .ci:hover { background:rgba(255,255,255,.07); }
+  .utable { width:100%; border-collapse:collapse; }
+  .utable th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--mut);
+     padding:10px 12px; border-bottom:1px solid var(--line); }
+  .utable td { padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:middle; }
+  .utable tr.row:hover { background:rgba(255,255,255,.02); }
+  /* ── Skills Management ── */
+  .skills-layout { display:grid; grid-template-columns:280px minmax(0,1fr); gap:16px; align-items:start; }
+  .skills-tree { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:8px; max-height:calc(100vh - 180px); overflow-y:auto; }
+  .sk-cat { margin-bottom:6px; }
+  .sk-cat-h { font-size:10.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--mut); padding:9px 10px 5px; }
+  .sk-item { display:flex; align-items:center; gap:7px; width:100%; text-align:left; background:transparent; border:0;
+     color:#aab4c2; padding:7px 10px; border-radius:8px; font-size:13px; cursor:pointer; }
+  .sk-item:hover { background:rgba(255,255,255,.05); color:var(--txt); }
+  .sk-item.on { background:linear-gradient(90deg,rgba(59,130,246,.2),rgba(99,102,241,.05)); color:#fff; box-shadow:inset 2px 0 0 var(--acc); }
+  .sk-item .sk-nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sk-item .sk-imp { font-size:9.5px; color:#7cb0ff; flex:none; }
+  .sk-badge.draft { font-size:9.5px; font-weight:800; background:rgba(245,158,11,.18); color:#fbbf24; border-radius:999px; padding:1px 6px; }
+  .skills-main { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px 20px; min-height:300px; }
+  .skills-empty { color:var(--mut); padding:40px; text-align:center; }
+  .sk-head { display:flex; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+  .sk-head h2 { margin:0 0 3px; font-size:18px; }
+  .sk-head .sk-actions { margin-left:auto; display:flex; gap:6px; flex-wrap:wrap; }
+  .sk-impact { display:flex; align-items:center; gap:10px; flex-wrap:wrap; background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:10px 13px; }
+  .sk-pill { font-size:12.5px; color:var(--mut); } .sk-pill b { color:#7cb0ff; }
+  .sk-impacts { width:100%; display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  .sk-body { margin-top:10px; }
+  .sk-raw { white-space:pre-wrap; font-family:ui-monospace,Menlo,monospace; font-size:12.5px; color:#cdd6e0; background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:14px; overflow-x:auto; }
+  /* rendered markdown */
+  .md-body { font-size:14px; line-height:1.6; color:#d7dee7; }
+  .md-body h1,.md-body h2,.md-body h3,.md-body h4 { color:#fff; margin:18px 0 8px; line-height:1.3; }
+  .md-body h1 { font-size:21px; } .md-body h2 { font-size:18px; } .md-body h3 { font-size:15.5px; } .md-body h4 { font-size:14px; }
+  .md-body p { margin:8px 0; } .md-body ul,.md-body ol { margin:8px 0 8px 22px; } .md-body li { margin:3px 0; }
+  .md-body code { background:rgba(255,255,255,.08); padding:1px 6px; border-radius:5px; font-size:12.5px; font-family:ui-monospace,Menlo,monospace; }
+  .md-body pre { background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:12px 14px; overflow-x:auto; }
+  .md-body pre code { background:none; padding:0; }
+  .md-body table { width:100%; border-collapse:collapse; margin:10px 0; font-size:12.5px; }
+  .md-body th,.md-body td { border:1px solid var(--line); padding:6px 10px; text-align:left; }
+  .md-body th { background:rgba(59,130,246,.1); color:#a9c7e6; }
+  .md-body hr { border:0; border-top:1px solid var(--line); margin:16px 0; }
+  .md-body a { color:#58a6ff; }
+  /* editor */
+  .sk-edit { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:6px; }
+  .sk-edit-pane { display:flex; flex-direction:column; gap:4px; }
+  #sk-editor { min-height:48vh; background:var(--bg); color:#d7dee7; border:1px solid var(--line); border-radius:10px;
+     padding:12px 14px; font-family:ui-monospace,Menlo,monospace; font-size:12.5px; line-height:1.55; resize:vertical; }
+  #sk-preview { min-height:48vh; max-height:60vh; overflow-y:auto; background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+  .sk-editbar { display:flex; gap:10px; justify-content:flex-end; margin-top:14px; border-top:1px solid var(--line); padding-top:14px; }
+  .gov-warn { background:rgba(245,158,11,.1); border:1px solid rgba(245,158,11,.35); color:#fbbf24; border-radius:10px; padding:11px 14px; font-size:13px; margin-bottom:14px; }
+  .vers { display:flex; flex-direction:column; gap:8px; max-height:56vh; overflow-y:auto; }
+  .ver-row { border:1px solid var(--line); border-radius:9px; padding:10px 12px; display:flex; gap:9px; align-items:center; flex-wrap:wrap; }
+  .ver-row .ver-n { font-weight:800; font-variant-numeric:tabular-nums; }
+  .ver-row .ver-sum { width:100%; font-size:12.5px; color:var(--mut); }
+  @media (max-width:900px){ .skills-layout { grid-template-columns:1fr; } .sk-edit { grid-template-columns:1fr; } }
+  /* ── Favorite groups ── */
+  .fav-groupbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:2px 0 16px; }
+  .fav-groupbar:empty { display:none; }
+  .gbar-lbl { font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--mut); margin-right:2px; }
+  .gchip { background:var(--panel2); border:1px solid var(--line); color:var(--mut); padding:5px 13px;
+     border-radius:999px; font-size:12.5px; font-weight:600; cursor:pointer; transition:.12s; display:inline-flex; align-items:center; gap:6px; }
+  .gchip:hover { color:var(--txt); border-color:#3a4a5e; }
+  .gchip.on { background:linear-gradient(135deg,var(--acc),var(--acc2)); color:#fff; border-color:transparent; }
+  .gchip .gc { background:rgba(255,255,255,.14); border-radius:999px; padding:0 6px; font-size:11px; font-weight:700; }
+  .gbadge { display:inline-block; background:rgba(124,58,237,.16); border:1px solid rgba(124,58,237,.3); color:#c9b6f7;
+     padding:2px 9px; border-radius:999px; font-size:11px; font-weight:600; cursor:pointer; margin:2px 4px 2px 0; white-space:nowrap; }
+  .gbadge:hover { border-color:#a384e8; }
+  .gcell { max-width:220px; }
+  .ftile { display:flex; flex-direction:column; }
+  .ftile .scard { border-bottom-left-radius:0; border-bottom-right-radius:0; border-bottom:0; height:100%; }
+  .fav-grp-bar { background:var(--panel); border:1px solid var(--line); border-top:1px dashed var(--line);
+     border-radius:0 0 14px 14px; padding:9px 12px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .fav-grp-bar .gbadges { flex:1; min-width:0; display:flex; flex-wrap:wrap; }
+  .ex-btn.sm { padding:4px 9px; font-size:11.5px; }
+  /* group modals */
+  .glist { display:flex; flex-direction:column; gap:2px; }
+  .grow { display:flex; align-items:center; gap:10px; padding:8px 6px; border-radius:8px; cursor:pointer; }
+  .grow:hover { background:rgba(255,255,255,.04); }
+  .grow input { width:16px; height:16px; accent-color:var(--acc); }
+  .grow .gnm { flex:1; font-size:13.5px; }
+  .gmanage { display:flex; flex-direction:column; gap:10px; max-height:52vh; overflow-y:auto; }
+  .gcard { border:1px solid var(--line); border-radius:10px; padding:12px; }
+  .gmembers { display:flex; flex-wrap:wrap; gap:6px; }
+  .gmember { display:inline-flex; align-items:center; gap:5px; background:var(--panel2); border:1px solid var(--line);
+     border-radius:999px; padding:3px 6px 3px 10px; font-size:12px; font-weight:600; }
+  .gmember button { background:transparent; border:0; color:var(--mut); cursor:pointer; font-size:12px; padding:0 2px; border-radius:50%; }
+  .gmember button:hover { color:var(--sell); }
   .ov-chip { display:inline-block; margin-left:6px; padding:1px 6px; border-radius:999px; font-size:11px; font-weight:700; vertical-align:middle; }
   .ov-chip.pos { color:#7ee787; background:rgba(63,185,80,.16); }
   .ov-chip.neg { color:#ff9b9b; background:rgba(248,81,73,.16); }
@@ -136,6 +265,23 @@
   .st.Disabled { background:rgba(139,148,158,.16); color:var(--mut); }
   .st.Running,.st.partial { background:rgba(59,130,246,.16); color:#7cb0ff; }
   .st.failed { background:rgba(239,68,68,.15); color:var(--sell); }
+  .st.unknown { background:rgba(139,148,158,.16); color:var(--mut); }
+  /* trigger-source badges (scheduled / manual / search) */
+  .trig { padding:2px 8px; border-radius:999px; font-size:10.5px; font-weight:700;
+          text-transform:capitalize; letter-spacing:.3px; }
+  .trig.scheduled { background:rgba(168,85,247,.16); color:#cba6f7; }
+  .trig.manual { background:rgba(59,130,246,.16); color:#7cb0ff; }
+  .trig.search { background:rgba(245,158,11,.16); color:#fbbf24; }
+  /* run-history rows */
+  .runrow { border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:10px; background:var(--panel); }
+  .rr-top { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .rr-name { font-weight:700; font-size:13.5px; }
+  .rr-time { color:var(--mut); font-size:12px; margin-left:auto; }
+  .rr-q { color:var(--mut); font-style:italic; font-size:12.5px; margin:6px 0 2px; }
+  .rr-chips { display:flex; gap:5px; flex-wrap:wrap; margin:8px 0; }
+  .rr-kpis { display:flex; gap:16px; flex-wrap:wrap; font-size:12.5px; color:var(--mut); }
+  .rr-kpis b { color:var(--txt); font-variant-numeric:tabular-nums; }
+  .rr-kpis .pos b { color:var(--buy); } .rr-kpis .neg b { color:var(--sell); }
   /* toggle switch */
   .sw { position:relative; display:inline-block; width:42px; height:23px; }
   .sw input { opacity:0; width:0; height:0; }
@@ -194,12 +340,24 @@
   .brand .name { font-weight:700; font-size:15.5px; letter-spacing:.2px; white-space:nowrap; }
   .brand .name span { color:var(--acc); }
   .brand .collapse { margin-left:auto; background:transparent; border:0; color:var(--mut);
-     padding:4px; font-size:16px; cursor:pointer; border-radius:6px; }
-  .app.collapsed .brand .name, .app.collapsed .side-foot span, .app.collapsed .nav-item span { display:none; }
+     padding:4px; font-size:16px; cursor:pointer; border-radius:6px; transition:.15s; }
+  .brand .collapse:hover { background:rgba(255,255,255,.06); color:var(--txt); }
+  /* hide text labels when collapsed — but NOT the .ic icon spans */
+  .app.collapsed .brand .name, .app.collapsed .side-foot span:not(.ic), .app.collapsed .nav-item span:not(.ic) { display:none; }
+  /* collapsed → clean icon rail: center the logo, nav icons and footer */
+  .app.collapsed .brand { flex-direction:column; gap:8px; padding:16px 0 12px; }
+  .app.collapsed .brand .collapse { margin:0; transform:rotate(180deg); }   /* ‹ → › (expand) */
+  .app.collapsed .nav-item { justify-content:center; gap:0; padding:10px 0; }
+  .app.collapsed .nav-item .ic { width:auto; }
+  .app.collapsed .side-foot { padding:12px 0; }
+  .app.collapsed .side-foot a { justify-content:center; gap:0; }
   .side-nav { display:flex; flex-direction:column; gap:2px; padding:6px 10px; overflow-y:auto; }
+  .app.collapsed .side-nav { padding:6px 8px; }
   .nav-sec { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#5b6677;
              padding:12px 12px 5px; }
-  .app.collapsed .nav-sec { text-align:center; font-size:8px; }
+  /* collapsed section labels become a subtle divider between groups */
+  .app.collapsed .nav-sec { font-size:0; padding:8px 0 4px; }
+  .app.collapsed .nav-sec::before { content:""; display:block; height:1px; background:var(--line); margin:0 12px; }
   .nav-item { display:flex; align-items:center; gap:11px; width:100%; text-align:left;
      background:transparent; border:0; color:#aab4c2; padding:9px 12px; border-radius:9px;
      font-size:14px; font-weight:500; cursor:pointer; transition:.12s; white-space:nowrap; }
@@ -240,31 +398,85 @@
   .rep-body th,.rep-body td { border:1px solid var(--line); padding:6px 9px; text-align:left; }
   .rep-body th { background:rgba(59,130,246,.1); color:#a9c7e6; font-size:11px; text-transform:uppercase; letter-spacing:.4px; }
   .copilot-col .cop-in { flex:none; }
+  /* collapse toggle in the copilot header (mirrors the left-nav collapse button) */
+  .cop-collapse { background:transparent; border:0; color:var(--mut); padding:4px 6px; font-size:18px;
+     line-height:1; cursor:pointer; border-radius:6px; flex:none; }
+  .cop-collapse:hover { background:rgba(255,255,255,.06); color:var(--txt); }
+  /* collapsed rail (shown only when the panel is collapsed on desktop) */
+  .cop-rail { display:none; flex-direction:column; align-items:center; gap:14px; height:100%;
+     padding:16px 0; cursor:pointer; }
+  .cop-rail:hover .cop-rail-btn { border-color:rgba(59,130,246,.6); color:#fff; }
+  .cop-rail-btn { background:var(--panel2); border:1px solid var(--line); color:var(--txt);
+     width:34px; height:34px; border-radius:9px; font-size:16px; cursor:pointer; display:grid; place-items:center; }
+  .cop-rail-label { writing-mode:vertical-rl; transform:rotate(180deg); color:var(--mut);
+     font-size:12px; letter-spacing:1.5px; font-weight:600; white-space:nowrap; }
+  .cop-rail-chev { color:var(--mut); font-size:14px; margin-top:auto; }
+  @media (min-width:1101px){
+    .app.copcollapsed { grid-template-columns:236px minmax(0,1fr) 54px; }
+    .app.collapsed.copcollapsed { grid-template-columns:66px minmax(0,1fr) 54px; }
+    .app.copcollapsed #copilot { display:none; }
+    .app.copcollapsed .cop-rail { display:flex; }
+  }
 
   /* hero search */
-  .hero { margin:6px 0 22px; }
-  .hero h1 { font-size:26px; font-weight:800; letter-spacing:-.3px; margin:0 0 4px;
+  /* ═══ Analyze hero — premium search header (visual redesign) ═══ */
+  .hero { margin:10px auto 24px; max-width:820px; }
+  .hero h1 { font-size:27px; font-weight:800; letter-spacing:-.3px; margin:0 0 5px; text-align:center;
      background:linear-gradient(90deg,#fff,#9fb4cc); -webkit-background-clip:text; background-clip:text;
      -webkit-text-fill-color:transparent; }
-  .hero .tag { color:var(--mut); font-size:13.5px; margin-bottom:16px; }
-  .search-wrap { display:flex; gap:10px; background:var(--glass); border:1px solid var(--glassline);
-     border-radius:16px; padding:8px 8px 8px 18px; box-shadow:var(--shadow); backdrop-filter:blur(10px);
-     transition:.15s; align-items:center; }
-  .search-wrap:focus-within { border-color:rgba(59,130,246,.6); box-shadow:0 0 0 4px rgba(59,130,246,.12),var(--shadow); }
-  .search-wrap .sicon { color:var(--mut); font-size:18px; }
-  #syms { flex:1; min-height:auto; background:transparent; border:0; resize:none; padding:12px 4px;
-     font-size:16px; color:var(--txt); outline:none; }
-  #syms::placeholder { color:#5f6b7a; }
-  #go { border-radius:12px; padding:0 26px; height:46px; font-weight:700;
-     background:linear-gradient(135deg,var(--acc),var(--acc2)); box-shadow:0 6px 18px rgba(59,130,246,.35); }
-  .chiprow { display:flex; gap:8px; flex-wrap:wrap; margin:14px 0 4px; }
+  .hero .tag { color:var(--mut); font-size:13.5px; margin-bottom:18px; text-align:center; }
+  /* mode selector row (above search) */
+  .chiprow { display:flex; gap:8px; flex-wrap:wrap; }
+  .moderow { justify-content:center; margin-bottom:14px; }
   .mchip { background:var(--panel2); border:1px solid var(--line); color:var(--mut); padding:7px 16px;
      border-radius:999px; font-size:13px; font-weight:600; cursor:pointer; transition:.12s; }
   .mchip:hover { color:var(--txt); border-color:#3a4a5e; }
   .mchip.active { background:linear-gradient(135deg,var(--acc),var(--acc2)); color:#fff; border-color:transparent;
      box-shadow:0 4px 12px rgba(59,130,246,.3); }
-  .mini-up { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:14px;
-     font-size:12.5px; color:var(--mut); }
+  /* search box */
+  .search-wrap { display:flex; gap:8px; background:var(--glass); border:1px solid var(--glassline);
+     border-radius:16px; padding:7px 7px 7px 18px; box-shadow:var(--shadow); backdrop-filter:blur(10px);
+     transition:.15s; align-items:center; }
+  .search-wrap:focus-within { border-color:rgba(59,130,246,.6); box-shadow:0 0 0 4px rgba(59,130,246,.12),var(--shadow); }
+  .search-wrap .sicon { color:var(--mut); font-size:18px; flex:none; }
+  #syms { flex:1; min-height:auto; background:transparent; border:0; resize:none; padding:13px 4px;
+     font-size:16px; color:var(--txt); outline:none; line-height:1.4; }
+  #syms::placeholder { color:#5f6b7a; }
+  .clear-btn { flex:none; background:transparent; border:0; color:var(--mut); font-size:14px; cursor:pointer;
+     width:28px; height:28px; border-radius:50%; transition:.12s; }
+  .clear-btn:hover { background:rgba(255,255,255,.08); color:var(--txt); }
+  #go { border-radius:12px; padding:0 26px; height:46px; font-weight:700; flex:none;
+     background:linear-gradient(135deg,var(--acc),var(--acc2)); box-shadow:0 6px 18px rgba(59,130,246,.35); }
+  /* suggested query chips */
+  .suggrow { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin:14px 0 4px; }
+  .sugg { background:rgba(255,255,255,.03); border:1px solid var(--line); color:var(--mut);
+     padding:5px 13px; border-radius:999px; font-size:12.5px; font-weight:500; cursor:pointer; transition:.12s; }
+  .sugg:hover { color:var(--txt); border-color:rgba(59,130,246,.5); background:rgba(59,130,246,.08); }
+  /* collapsible Search Tools */
+  .tools { margin-top:16px; border:1px solid var(--line); border-radius:14px; background:var(--panel); overflow:hidden; }
+  .tools-head { width:100%; display:flex; align-items:center; gap:12px; background:transparent; border:0;
+     color:var(--txt); padding:12px 16px; cursor:pointer; font-size:13.5px; font-weight:700; }
+  .tools-head:hover { background:rgba(255,255,255,.03); }
+  .tools-head .th-hint { color:var(--mut); font-weight:400; font-size:12px; }
+  .tools-head .chev { margin-left:auto; color:var(--mut); transition:.18s; font-size:12px; }
+  .tools.open .tools-head .chev { transform:rotate(180deg); }
+  .tools-body { padding:4px 14px 16px; border-top:1px solid var(--line); }
+  .tool-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; }
+  .tool-card { background:var(--bg); border:1px solid var(--line); border-radius:12px; padding:14px;
+     display:flex; flex-direction:column; gap:9px; align-items:flex-start; }
+  .tool-card .tc-h { font-size:13px; font-weight:700; color:var(--txt); }
+  .tool-card .tc-d { font-size:11.5px; color:var(--mut); line-height:1.4; margin-top:auto; }
+  .tool-card .tc-na { font-size:11px; color:var(--mut); font-style:italic; display:none; }
+  .tool-card.disabled .tc-na { display:block; }
+  .tc-btn { background:var(--panel2); border:1px solid var(--line); color:var(--txt); border-radius:8px;
+     padding:7px 14px; font-size:12.5px; font-weight:600; cursor:pointer; transition:.12s; }
+  .tc-btn:hover { border-color:rgba(59,130,246,.5); background:rgba(59,130,246,.1); }
+  .tc-btn:disabled { opacity:.5; cursor:default; }
+  .file-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .file-btn { background:var(--panel2); border:1px solid var(--line); color:var(--txt); border-radius:8px;
+     padding:7px 14px; font-size:12.5px; font-weight:600; cursor:pointer; transition:.12s; }
+  .file-btn:hover { border-color:rgba(59,130,246,.5); }
+  .file-name { font-size:11.5px; color:var(--mut); max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
   /* stock card grid */
   .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:16px; }
@@ -293,6 +505,12 @@
   .scard .err { color:var(--sell); font-size:12.5px; }
   .grid-banner { background:rgba(59,130,246,.08); border:1px solid rgba(59,130,246,.18);
      border-radius:12px; padding:12px 16px; margin-bottom:16px; font-size:13.5px; }
+  /* detected-intent badge above results */
+  .intent-banner { display:inline-flex; align-items:center; gap:9px; background:rgba(59,130,246,.1);
+     border:1px solid rgba(59,130,246,.25); border-radius:999px; padding:6px 14px; margin-bottom:14px; font-size:13px; }
+  .intent-banner .ib-ic { font-size:15px; }
+  .intent-banner b { color:var(--txt); }
+  .intent-banner .ib-sub { color:var(--mut); font-size:12px; }
 
   /* stock detail */
   .det-head { display:flex; align-items:flex-start; gap:18px; flex-wrap:wrap;
@@ -337,6 +555,9 @@
        box-shadow:-12px 0 40px rgba(0,0,0,.5); transform:translateX(100%); transition:.2s; }
     .app.copopen .copilot-col { transform:translateX(0); display:flex; }
     .icon-btn.cop { display:block; }
+    .cop-collapse { display:none; }   /* mobile uses the overlay toggle, not collapse */
+    .app .copilot-col .cop-rail { display:none; }
+    .app .copilot-col #copilot { display:flex; }
     .twrap, .kpi-grid { grid-template-columns:1fr 1fr; }
   }
   @media (max-width:760px){
@@ -347,6 +568,16 @@
     .wviews { padding:16px 14px 80px; }
     .det-head .det-score { margin-left:0; }
     .twrap { grid-template-columns:1fr; }
+    /* hero: mode pills scroll horizontally; keep search button integrated */
+    .moderow { flex-wrap:nowrap; overflow-x:auto; justify-content:flex-start;
+               -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-bottom:2px; }
+    .moderow::-webkit-scrollbar { display:none; }
+    .mchip { flex:none; }
+    .suggrow { flex-wrap:nowrap; overflow-x:auto; justify-content:flex-start; scrollbar-width:none; }
+    .suggrow::-webkit-scrollbar { display:none; }
+    .sugg { flex:none; }
+    #go { padding:0 18px; }
+    .tool-grid { grid-template-columns:1fr; }
   }
   .scrim { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:38; display:none; }
   .app.navopen .scrim, .app.copopen .scrim { display:block; }
@@ -496,6 +727,16 @@
   .hl:last-child { border-bottom:0; }
   .hl .dot { width:8px; height:8px; border-radius:50%; margin-top:5px; flex:none; }
   .hl .meta { color:var(--mut); font-size:11px; display:flex; gap:8px; flex-wrap:wrap; margin-top:3px; }
+  /* article headlines are white for readability (were dark default-link blue) */
+  .hl a, .hl a:visited { color:#fff; text-decoration:none; font-weight:600; }
+  .hl a:hover { color:var(--acc2); text-decoration:underline; }
+  /* article summary box (above the article links) */
+  .asum { background:linear-gradient(150deg,rgba(59,130,246,.10),rgba(124,58,237,.05));
+          border:1px solid rgba(59,130,246,.25); border-radius:12px; padding:13px 15px; margin:4px 0 14px; }
+  .asum .h { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--acc2); font-weight:800; margin-bottom:6px; }
+  .asum .body { color:#e8eef6; font-size:13px; line-height:1.55; }
+  .asum .stats { color:var(--mut); font-size:11.5px; margin-top:8px; display:flex; gap:14px; flex-wrap:wrap; }
+  .asum .stats b { color:#fff; } .asum .stats .pos b{color:var(--buy)} .asum .stats .neg b{color:var(--sell)}
   .sentdot.pos,.dot.pos { background:var(--buy); } .sentdot.neg,.dot.neg { background:var(--sell); } .sentdot.neu,.dot.neu { background:var(--acc); }
   .impact-box { background:linear-gradient(150deg,rgba(124,58,237,.14),rgba(59,130,246,.05)); border:1px solid rgba(124,58,237,.25);
      border-radius:12px; padding:14px 16px; margin-bottom:12px; display:flex; gap:20px; flex-wrap:wrap; align-items:center; }
@@ -529,6 +770,8 @@
   .seg button.hold.on { background:rgba(234,179,8,.2); color:#f5d97a; }
   .seg button.sell.on { background:rgba(239,68,68,.2); color:#ff9b9b; }
   .fbar input[type=number] { background:var(--bg); color:var(--txt); border:1px solid var(--line); border-radius:7px; padding:6px 9px; font-size:12.5px; }
+  .fclear { background:transparent; border:1px solid var(--line); color:var(--mut); border-radius:8px; padding:6px 12px; font-size:12px; font-weight:600; cursor:pointer; transition:.12s; }
+  .fclear:hover { color:var(--txt); border-color:var(--sell); }
   .empty-res { text-align:center; padding:54px 20px; background:var(--glass); border:1px solid var(--glassline); border-radius:14px; }
   .empty-res .ico { font-size:38px; opacity:.8; }
   .empty-res h3 { margin:12px 0 6px; font-size:17px; }
@@ -555,7 +798,7 @@
     <div class="brand">
       <div class="logo">A</div>
       <div class="name">artik<span>_broker</span></div>
-      <button class="collapse" title="Collapse" onclick="$('#app').classList.toggle('collapsed')">‹</button>
+      <button class="collapse" title="Collapse menu" onclick="toggleNav()">‹</button>
     </div>
     <nav class="side-nav">
       <div class="nav-sec">Workspace</div>
@@ -564,11 +807,14 @@
       <button class="nav-item" id="nav-research" onclick="goResearch()"><span class="ic">🧭</span><span>Research</span></button>
       <div class="nav-sec">Markets</div>
       <button class="nav-item" id="tab-portfolio" onclick="showTab('portfolio')"><span class="ic">💼</span><span>Portfolio</span></button>
+      <button class="nav-item" id="tab-favorites" onclick="showTab('favorites')"><span class="ic">⭐</span><span>Favorites</span><span id="fav-nav-count" class="navcount"></span></button>
       <button class="nav-item" id="tab-sp500" onclick="showTab('sp500')"><span class="ic">🏛️</span><span>S&amp;P 500</span></button>
       <button class="nav-item" id="tab-dow" onclick="showTab('dow')"><span class="ic">🎩</span><span>Dow</span></button>
       <div class="nav-sec">Intelligence</div>
       <button class="nav-item hidden" id="tab-agents" onclick="showTab('agents')"><span class="ic">🤖</span><span>Agents</span></button>
       <button class="nav-item" id="tab-history" onclick="showTab('history')"><span class="ic">🕘</span><span>History</span></button>
+      <button class="nav-item" id="tab-skills" onclick="showTab('skills')"><span class="ic">🧠</span><span>Skills</span></button>
+      <button class="nav-item hidden" id="tab-users" onclick="showTab('users')"><span class="ic">👥</span><span>Users</span></button>
       <button class="nav-item" id="tab-settings" onclick="showTab('settings')"><span class="ic">⚙️</span><span>Settings</span></button>
     </nav>
     <div class="side-foot"><a href="/logout"><span class="ic">↪</span><span>Sign out</span></a></div>
@@ -581,38 +827,83 @@
       <h2 id="wtitle">Dashboard</h2>
       <span class="crumb" id="wcrumb">Live 100-point analysis · BUY ≥ 75 · HOLD 50–74 · SELL &lt; 50</span>
       <span class="sp"></span>
+      <div id="user-badge" class="user-badge hidden"></div>
       <button class="icon-btn cop" title="AI Copilot" onclick="$('#app').classList.toggle('copopen')">🤖</button>
     </div>
     <div class="wviews">
   <!-- ANALYZE VIEW -->
   <section id="view-analyze">
     <div class="hero">
+      <!-- 1 · Title -->
       <h1>Ask Artik Broker</h1>
-      <div class="tag">Search in plain English, screen by criteria, or enter tickers — scored live by the Artik engine, reasoned by AI.</div>
+      <div class="tag">Search in plain English, screen by criteria, or enter tickers.</div>
+
+      <!-- 2 · Mode selector (above the search box) -->
+      <div class="chiprow moderow" id="modechips"></div>
+      <input type="hidden" id="main-mode" value="auto">
+
+      <!-- 3 · Search box -->
       <div class="search-wrap">
         <span class="sicon">🔍</span>
-        <textarea id="syms" rows="1" placeholder="Find AI infrastructure stocks with RSI below 30 and a MACD crossover…"></textarea>
-        <input type="hidden" id="main-mode" value="auto">
+        <textarea id="syms" rows="1" placeholder="Ask about a stock, enter tickers, or screen by criteria…"></textarea>
+        <button class="clear-btn" id="syms-clear" type="button" title="Clear" onclick="clearSyms()" style="display:none">✕</button>
         <button id="go" onclick="run()">Search</button>
       </div>
-      <div class="chiprow" id="modechips"></div>
-      <div class="mini-up">
-        <label id="news-toggle" class="news-toggle hidden" title="Overlay optional news-collector signals on top of the Artik Score (base + overlay shown separately; score is never modified)">
-          <input type="checkbox" id="news-on" onchange="window._newsOn=this.checked"> 📰 News signals
-        </label>
-        <span style="opacity:.4">·</span>
-        <span>📁 Portfolio CSV</span>
-        <input type="file" id="files" accept=".csv" multiple />
-        <button id="goPf" class="ghost" onclick="runPortfolio()">Analyze</button>
-        <span class="muted">e*Trade / Schwab export</span>
+
+      <!-- 4 · Suggested query chips -->
+      <div class="suggrow">
+        <button class="sugg" onclick="fill('AI infrastructure stocks')">AI infrastructure</button>
+        <button class="sugg" onclick="fill('stocks with RSI below 30')">Oversold RSI &lt; 30</button>
+        <button class="sugg" onclick="fill('Buffett-style compounders with score above 80')">Buffett compounders</button>
+        <button class="sugg" onclick="fill('stocks with score above 80')">Score &gt; 80</button>
+        <button class="sugg" onclick="fill('stocks similar to Costco')">Similar to Costco</button>
+        <button class="sugg" onclick="fill('NVDA, GOOGL, TSM')">NVDA, GOOGL, TSM</button>
       </div>
-      <div class="hint" style="margin-top:14px">
-        Try:
-        <a onclick="fill('AI infrastructure stocks')">AI infrastructure stocks</a> ·
-        <a onclick="fill('industrial stocks with RSI below 30')">oversold industrials (RSI&lt;30)</a> ·
-        <a onclick="fill('Buffett-style compounders with score above 80')">Buffett compounders, score&gt;80</a> ·
-        <a onclick="fill('stocks similar to Costco')">similar to Costco</a> ·
-        <a onclick="fill('NVDA, GOOGL, TSM, MU, TSLA')">NVDA, GOOGL, TSM…</a>
+
+      <!-- 5 · Collapsible tools -->
+      <div class="tools" id="search-tools">
+        <button class="tools-head" type="button" onclick="toggleTools()" aria-expanded="false">
+          <span class="th-title">🧰 Search Tools</span>
+          <span class="th-hint">News signals · collector · portfolio · export</span>
+          <span class="chev">▾</span>
+        </button>
+        <div class="tools-body" id="tools-body" hidden>
+          <div class="tool-grid">
+            <!-- News Signals -->
+            <div class="tool-card">
+              <div class="tc-h">📰 News Signals</div>
+              <div class="seg" id="news-seg">
+                <button id="news-off" class="on" onclick="setNewsOn(false)">OFF</button>
+                <button id="news-on-btn" onclick="setNewsOn(true)">ON</button>
+              </div>
+              <div class="tc-d">Include latest news impact in scoring.</div>
+              <div class="tc-na" id="news-na">Not configured</div>
+            </div>
+            <!-- News Collector -->
+            <div class="tool-card">
+              <div class="tc-h">⚡ News Collector</div>
+              <button id="run-collector" class="tc-btn" onclick="runCollectorForSearch()">Run News Collector</button>
+              <div class="tc-d">Collect fresh news for current results.</div>
+            </div>
+            <!-- Portfolio Upload -->
+            <div class="tool-card">
+              <div class="tc-h">💼 Portfolio Upload</div>
+              <div class="file-row">
+                <label class="file-btn" for="files">Choose File</label>
+                <input type="file" id="files" accept=".csv" multiple onchange="onFilesPicked()" hidden>
+                <span class="file-name" id="file-name">No file chosen</span>
+              </div>
+              <button id="goPf" class="tc-btn" onclick="runPortfolio()">Analyze Portfolio</button>
+              <div class="tc-d">e*Trade / Schwab CSV export.</div>
+            </div>
+            <!-- Export -->
+            <div class="tool-card">
+              <div class="tc-h">⬇ Export</div>
+              <button class="tc-btn" onclick="downloadCSV()">Download CSV</button>
+              <div class="tc-d">Export current result set.</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -657,6 +948,20 @@
     <div id="pf-out"><div class="spin">Loading saved portfolios…</div></div>
   </section>
 
+  <!-- FAVORITES / WATCHLIST -->
+  <section id="view-favorites" class="hidden">
+    <div class="pf-bar">
+      <span class="up-label">⭐ Favorites</span>
+      <span class="pf-meta" id="fav-meta"></span>
+      <button class="ghost" onclick="favCreateGroup()">＋ Create Group</button>
+      <button class="ghost" onclick="manageGroupsModal()">⚙️ Manage Groups</button>
+      <div class="vtoggle" id="fav-toggle" style="margin-left:auto"></div>
+      <button class="ghost" onclick="loadFavorites(true)">🔄 Refresh</button>
+    </div>
+    <div id="fav-groupbar" class="fav-groupbar"></div>
+    <div id="fav-out"><div class="spin">Loading…</div></div>
+  </section>
+
   <!-- S&P 500 (top 40) -->
   <section id="view-sp500" class="hidden">
     <div class="pf-bar">
@@ -694,9 +999,38 @@
     <div class="pf-bar">
       <span class="up-label">🤖 Agent Management</span>
       <span class="pf-meta" id="ag-sched-note">Background agents that feed Artik Broker with intelligence signals.</span>
-      <button class="ghost" style="margin-left:auto" onclick="loadAgents()">🔄 Refresh</button>
+      <button class="ghost" style="margin-left:auto" onclick="addAgentConfig()">➕ Add Configuration</button>
+      <button class="ghost" onclick="viewRunHistory()">🕓 Run History</button>
+      <button class="ghost" onclick="loadAgents()">🔄 Refresh</button>
     </div>
     <div id="agents-list"><div class="spin">Loading agents…</div></div>
+  </section>
+
+  <!-- User Management (admin only) -->
+  <section id="view-users" class="hidden">
+    <div class="pf-bar">
+      <span class="up-label">👥 User Management</span>
+      <span class="pf-meta" id="users-meta"></span>
+      <button class="ghost" style="margin-left:auto" onclick="userAddModal()">➕ Add User</button>
+      <button class="ghost" onclick="loadUsers()">🔄 Refresh</button>
+    </div>
+    <div id="users-out"><div class="spin">Loading users…</div></div>
+  </section>
+
+  <!-- Skills Management — view / review / edit / version the methodology skills -->
+  <section id="view-skills" class="hidden">
+    <div class="pf-bar">
+      <span class="up-label">🧠 Skills Management</span>
+      <span class="pf-meta" id="skills-meta"></span>
+      <button class="ghost" id="skills-new-btn" style="margin-left:auto;display:none" onclick="skillCreateModal()">➕ New Skill</button>
+      <button class="ghost" onclick="loadSkills()">🔄 Refresh</button>
+    </div>
+    <div class="skills-layout">
+      <aside class="skills-tree" id="skills-tree"><div class="spin">Loading skills…</div></aside>
+      <div class="skills-main" id="skills-main">
+        <div class="skills-empty">Select a skill from the left to view it.</div>
+      </div>
+    </div>
   </section>
 
     </div><!-- /.wviews -->
@@ -705,6 +1039,12 @@
   <!-- RIGHT: persistent AI Copilot (Perplexity-style, always available) -->
   <aside class="copilot-col" id="copilot-col">
     <div id="copilot"></div>
+    <!-- collapsed rail: shown only when the panel is collapsed (click to expand) -->
+    <div class="cop-rail" title="Expand Artik Copilot" onclick="toggleCopilot()">
+      <button class="cop-rail-btn" aria-label="Expand Artik Copilot">🤖</button>
+      <span class="cop-rail-label">Artik Copilot</span>
+      <span class="cop-rail-chev">‹</span>
+    </div>
   </aside>
 </div><!-- /.app -->
 
@@ -713,9 +1053,306 @@
   <div class="modal-card" id="agent-modal-card"></div>
 </div>
 
+<!-- Favorite groups modal (manage groups / assign a stock to groups) -->
+<div id="fav-modal" class="modal hidden" onclick="if(event.target===this)closeFavModal()">
+  <div class="modal-card" id="fav-modal-card" style="max-width:520px"></div>
+</div>
+
+<!-- User management modal (add / edit / reset password) -->
+<div id="user-modal" class="modal hidden" onclick="if(event.target===this)closeUserModal()">
+  <div class="modal-card" id="user-modal-card" style="max-width:480px"></div>
+</div>
+
+<!-- Skills modal (create / publish governance / version history) -->
+<div id="skill-modal" class="modal hidden" onclick="if(event.target===this)closeSkillModal()">
+  <div class="modal-card" id="skill-modal-card" style="max-width:600px"></div>
+</div>
+
 <script>
 const $ = s => document.querySelector(s);
-function fill(v){ $('#syms').value = v; run(); }
+function fill(v){ $('#syms').value = v; toggleClearBtn(); run(); }
+
+// ── Analyze hero: clear button + collapsible Search Tools (UI only) ────────────
+function toggleClearBtn(){ const s=$('#syms'), b=$('#syms-clear'); if(s&&b) b.style.display=(s.value.trim()?'':'none'); }
+function clearSyms(){ const s=$('#syms'); if(!s) return; s.value=''; toggleClearBtn(); s.focus(); }
+function openTools(open){ const t=$('#search-tools'), b=$('#tools-body'), h=t&&t.querySelector('.tools-head');
+  if(!t) return; t.classList.toggle('open', !!open); if(b) b.hidden=!open;
+  if(h) h.setAttribute('aria-expanded', open?'true':'false');
+  try { localStorage.setItem('artik_broker_tools_open', open?'1':'0'); } catch(e){} }
+function toggleTools(){ openTools(!$('#search-tools').classList.contains('open')); }
+// Collapse/expand the right Artik Copilot panel (mirrors the left-nav collapse).
+function toggleCopilot(){
+  const on = $('#app').classList.toggle('copcollapsed');
+  try { localStorage.setItem('artik_broker_cop_collapsed', on?'1':'0'); } catch(e){}
+}
+// Collapse/expand the LEFT navigation menu (icon-only rail when collapsed).
+function toggleNav(){
+  const on = $('#app').classList.toggle('collapsed');
+  const btn = $('.brand .collapse'); if(btn) btn.title = on?'Expand menu':'Collapse menu';
+  try { localStorage.setItem('artik_broker_nav_collapsed', on?'1':'0'); } catch(e){}
+}
+// Hover tooltips for the icon rail: label each nav item from its text.
+function initNavTooltips(){
+  document.querySelectorAll('.side-nav .nav-item').forEach(b=>{
+    const sp=b.querySelector('span:not(.ic):not(.navcount)'); if(sp && !b.title) b.title=sp.textContent.trim();
+  });
+}
+function onFilesPicked(){ const inp=$('#files'), nm=$('#file-name');
+  if(nm) nm.textContent = (inp&&inp.files&&inp.files.length)
+    ? (inp.files.length>1 ? inp.files.length+' files' : inp.files[0].name) : 'No file chosen';
+  openTools(true); }   // auto-expand tools when a portfolio file is picked
+// Enable/disable the news cards based on whether the signals backend is configured.
+function applyNewsAvail(avail){
+  const card = $('#news-seg') && $('#news-seg').closest('.tool-card');
+  if(card) card.classList.toggle('disabled', !avail);
+  const onb=$('#news-on-btn'), rc=$('#run-collector');
+  if(onb) onb.disabled=!avail; if(rc) rc.disabled=!avail; }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Favorites / Watchlist — localStorage-backed (designed so a backend sync can be
+// dropped in later behind these same helpers). Never touches scoring/search logic.
+// ══════════════════════════════════════════════════════════════════════════════
+const FAV_KEY='artik_broker_favorites', FAV_VIEW_KEY='artik_broker_favorites_view';
+function getFavorites(){ try { return JSON.parse(localStorage.getItem(FAV_KEY))||[]; } catch(e){ return []; } }
+function _saveFavs(list){ localStorage.setItem(FAV_KEY, JSON.stringify(list)); }
+function favTickers(){ return getFavorites().map(f=>f.ticker); }
+function isFav(tk){ tk=(tk||'').toUpperCase(); return getFavorites().some(f=>f.ticker===tk); }
+function addFav(tk, source){ tk=(tk||'').trim().toUpperCase(); if(!tk) return;
+  const l=getFavorites(); if(l.some(f=>f.ticker===tk)) return;
+  l.push({ticker:tk, added_at:new Date().toISOString(), source:source||'ui'}); _saveFavs(l); onFavChange(); }
+function removeFav(tk){ tk=(tk||'').toUpperCase(); _saveFavs(getFavorites().filter(f=>f.ticker!==tk)); _removeAllAssignments(tk); onFavChange(); }
+function toggleFav(tk, source){ tk=(tk||'').toUpperCase(); isFav(tk)?removeFav(tk):addFav(tk, source); }
+
+// Small star shown next to every ticker. Click toggles; right-click → context menu.
+function favStar(tk, source){ tk=(tk||'').toUpperCase(); const f=isFav(tk);
+  return `<span class="favstar ${f?'on':''}" data-star="${tk}" title="${f?'Remove from Favorites':'Add to Favorites'}" `
+    + `onclick="event.stopPropagation();event.preventDefault();toggleFav('${tk}','${source||'ui'}')">${f?'★':'☆'}</span>`; }
+function refreshStars(){ document.querySelectorAll('.favstar[data-star]').forEach(el=>{
+  const f=isFav(el.getAttribute('data-star')); el.classList.toggle('on',f); el.textContent=f?'★':'☆';
+  el.title=f?'Remove from Favorites':'Add to Favorites'; }); }
+function updateFavNavCount(){ const el=$('#fav-nav-count'); if(el){ const n=getFavorites().length; el.textContent=n?n:''; } }
+
+function onFavChange(){
+  refreshStars(); updateFavNavCount();
+  if(currentTab()==='favorites'){
+    const set=new Set(favTickers());
+    if(window._favRows) window._favRows=window._favRows.filter(r=>set.has((r.ticker||'').toUpperCase()));
+    const loaded=new Set((window._favRows||[]).map(r=>(r.ticker||'').toUpperCase()));
+    if([...set].some(t=>!loaded.has(t))) loadFavorites(true); else drawFavorites();
+    const meta=$('#fav-meta'); if(meta&&window._favRows) meta.textContent=`${window._favRows.filter(r=>!r.error).length} stocks`;
+  }
+}
+function currentTab(){ return window._activeTab||'analyze'; }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Favorite GROUPS — lightweight watchlist organisation (localStorage, sync-ready).
+// Store: { groups:[{id,name,created_at}], assignments:[{ticker,group_id}] }.
+// A stock can be in many groups. Deleting a group keeps the favorite; removing a
+// favorite drops all its group assignments. Group names are unique; tickers upper.
+// ══════════════════════════════════════════════════════════════════════════════
+const FAV_GROUPS_KEY='artik_broker_favorite_groups', FAV_GROUP_SEL_KEY='artik_broker_fav_group';
+function _grpData(){ try { const d=JSON.parse(localStorage.getItem(FAV_GROUPS_KEY)); return (d&&Array.isArray(d.groups))?{groups:d.groups,assignments:d.assignments||[]}:{groups:[],assignments:[]}; } catch(e){ return {groups:[],assignments:[]}; } }
+function _grpSave(d){ localStorage.setItem(FAV_GROUPS_KEY, JSON.stringify(d)); }
+function getGroups(){ return _grpData().groups; }
+function groupById(id){ return getGroups().find(g=>g.id===id) || null; }
+function groupCount(id){ return _grpData().assignments.filter(a=>a.group_id===id).length; }
+function isInGroup(tk,id){ tk=(tk||'').toUpperCase(); return _grpData().assignments.some(a=>a.ticker===tk&&a.group_id===id); }
+function groupsForTicker(tk){ tk=(tk||'').toUpperCase(); const d=_grpData(); const ids=new Set(d.assignments.filter(a=>a.ticker===tk).map(a=>a.group_id)); return d.groups.filter(g=>ids.has(g.id)); }
+function tickersInGroup(id){ return _grpData().assignments.filter(a=>a.group_id===id).map(a=>a.ticker); }
+function createGroup(name){ name=(name||'').trim(); if(!name) return null; const d=_grpData();
+  const ex=d.groups.find(g=>g.name.toLowerCase()===name.toLowerCase()); if(ex) return ex;   // names unique
+  const g={id:'group_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), name, created_at:new Date().toISOString()};
+  d.groups.push(g); _grpSave(d); onGroupChange(); return g; }
+function renameGroup(id,name){ name=(name||'').trim(); if(!name) return false; const d=_grpData();
+  if(d.groups.some(g=>g.id!==id && g.name.toLowerCase()===name.toLowerCase())) return false;
+  const g=d.groups.find(g=>g.id===id); if(g){ g.name=name; _grpSave(d); onGroupChange(); } return !!g; }
+function deleteGroup(id){ const d=_grpData(); d.groups=d.groups.filter(g=>g.id!==id); d.assignments=d.assignments.filter(a=>a.group_id!==id);
+  _grpSave(d); if(_favGroup===id) _setFavGroup('all'); onGroupChange(); }   // keeps the favorites themselves
+function assignToGroup(tk,id){ tk=(tk||'').toUpperCase(); const d=_grpData();
+  if(!d.assignments.some(a=>a.ticker===tk&&a.group_id===id)){ d.assignments.push({ticker:tk,group_id:id}); _grpSave(d); }
+  if(!isFav(tk)) addFav(tk,'group');   // grouping a stock implies favoriting it
+  onGroupChange(); }
+function removeFromGroup(tk,id){ tk=(tk||'').toUpperCase(); const d=_grpData();
+  d.assignments=d.assignments.filter(a=>!(a.ticker===tk&&a.group_id===id)); _grpSave(d); onGroupChange(); }
+function _removeAllAssignments(tk){ tk=(tk||'').toUpperCase(); const d=_grpData(); const n=d.assignments.length;
+  d.assignments=d.assignments.filter(a=>a.ticker!==tk); if(d.assignments.length!==n) _grpSave(d); }
+function toggleGroupAssign(tk,id){ isInGroup(tk,id)?removeFromGroup(tk,id):assignToGroup(tk,id); }
+
+// Selected group filter (persisted).
+let _favGroup = (function(){ try { return localStorage.getItem(FAV_GROUP_SEL_KEY)||'all'; } catch(e){ return 'all'; } })();
+function _setFavGroup(g){ _favGroup=g; try { localStorage.setItem(FAV_GROUP_SEL_KEY,g); } catch(e){} }
+function selectFavGroup(g){ _setFavGroup(g); renderGroupBar(); drawFavorites(); }
+
+// Re-render the favorites view + stars after any group mutation.
+function onGroupChange(){
+  refreshStars();
+  if(currentTab()==='favorites'){ renderGroupBar(); drawFavorites(); }
+  if(!$('#fav-modal').classList.contains('hidden')) _refreshFavModal();
+}
+let _favModalRefresh=null;
+function _refreshFavModal(){ if(_favModalRefresh) _favModalRefresh(); }
+
+function renderGroupBar(){
+  const bar=$('#fav-groupbar'); if(!bar) return;
+  const groups=getGroups();
+  if(!favTickers().length){ bar.innerHTML=''; return; }   // hide filter until there are favorites
+  const chip=(id,label,count)=>`<button class="gchip ${_favGroup===id?'on':''}" onclick="selectFavGroup('${id}')">${escapeHtml(label)}${count!=null?` <span class="gc">${count}</span>`:''}</button>`;
+  const ungroupedN = favTickers().filter(t=>groupsForTicker(t).length===0).length;
+  bar.innerHTML = `<span class="gbar-lbl">Groups</span>`
+    + chip('all','All', favTickers().length)
+    + chip('ungrouped','Ungrouped', ungroupedN)
+    + groups.map(g=>chip(g.id, g.name, groupCount(g.id))).join('');
+}
+
+// ── Group modals ──────────────────────────────────────────────────────────────
+function closeFavModal(){ $('#fav-modal').classList.add('hidden'); _favModalRefresh=null; }
+function openFavModal(){ $('#fav-modal').classList.remove('hidden'); }
+function favCreateGroup(){
+  const name=prompt('New group name:'); if(name===null) return;
+  const t=(name||'').trim(); if(!t) return;
+  const before=getGroups().length; const g=createGroup(t);
+  if(g && getGroups().length===before) alert('A group named "'+g.name+'" already exists.');
+}
+
+// Assign one ticker to groups (checkbox list + create-new).
+function assignGroupModal(tk){
+  tk=(tk||'').toUpperCase(); hideFavMenu();
+  _favModalRefresh=()=>{
+    const groups=getGroups();
+    const rows = groups.length ? groups.map(g=>`
+      <label class="grow">
+        <input type="checkbox" ${isInGroup(tk,g.id)?'checked':''} onchange="toggleGroupAssign('${tk}','${g.id}')">
+        <span class="gnm">${escapeHtml(g.name)}</span><span class="muted" style="font-size:11.5px">${groupCount(g.id)} stock(s)</span>
+      </label>`).join('') : '<div class="muted" style="padding:8px 0">No groups yet — create one below.</div>';
+    $('#fav-modal-card').innerHTML = `
+      <h2>🏷 Groups · ${escapeHtml(tk)}</h2>
+      <div class="muted" style="font-size:12.5px;margin-bottom:10px">A stock can belong to multiple groups.</div>
+      <div class="glist">${rows}</div>
+      <div class="fld" style="margin-top:14px"><label>Create & add to a new group</label>
+        <div class="inline" style="gap:8px">
+          <input type="text" id="ag-new" placeholder="e.g. Quantum Stocks" style="flex:1" onkeydown="if(event.key==='Enter')agCreateAdd('${tk}')">
+          <button class="tc-btn" onclick="agCreateAdd('${tk}')">Add</button>
+        </div></div>
+      <div class="modal-actions"><button onclick="closeFavModal()">Done</button></div>`;
+  };
+  _favModalRefresh(); openFavModal();
+}
+function agCreateAdd(tk){ const inp=$('#ag-new'); const name=(inp&&inp.value||'').trim(); if(!name) return;
+  const g=createGroup(name); if(g){ assignToGroup(tk,g.id); } if(inp) inp.value=''; _refreshFavModal(); }
+
+// Manage all groups: rename / delete / counts / remove members.
+function manageGroupsModal(){
+  hideFavMenu();
+  _favModalRefresh=()=>{
+    const groups=getGroups();
+    const body = groups.length ? groups.map(g=>{
+      const mem=tickersInGroup(g.id);
+      const chips = mem.length ? mem.map(t=>`<span class="gmember">${escapeHtml(t)}<button title="Remove from group" onclick="removeFromGroup('${t}','${g.id}')">✕</button></span>`).join('') : '<span class="muted" style="font-size:11.5px">No stocks yet</span>';
+      return `<div class="gcard">
+        <div class="inline" style="gap:8px">
+          <input type="text" value="${escapeHtml(g.name)}" id="gn-${g.id}" style="flex:1">
+          <button class="tc-btn" onclick="mgRename('${g.id}')">Rename</button>
+          <button class="ex-btn" onclick="mgDelete('${g.id}')" title="Delete group (keeps the stocks in Favorites)">🗑</button>
+        </div>
+        <div class="muted" style="font-size:11.5px;margin:8px 0 6px">${mem.length} stock(s)</div>
+        <div class="gmembers">${chips}</div>
+      </div>`;
+    }).join('') : '<div class="muted" style="padding:10px 0">No groups yet. Create one to organize your favorites.</div>';
+    $('#fav-modal-card').innerHTML = `
+      <h2>⚙️ Manage Groups</h2>
+      <div class="fld"><div class="inline" style="gap:8px">
+        <input type="text" id="mg-new" placeholder="New group name…" style="flex:1" onkeydown="if(event.key==='Enter')mgCreate()">
+        <button class="tc-btn" onclick="mgCreate()">＋ Create</button>
+      </div></div>
+      <div class="gmanage">${body}</div>
+      <div class="modal-actions"><button onclick="closeFavModal()">Done</button></div>`;
+  };
+  _favModalRefresh(); openFavModal();
+}
+function mgCreate(){ const inp=$('#mg-new'); const name=(inp&&inp.value||'').trim(); if(!name) return;
+  const before=getGroups().length; createGroup(name); if(getGroups().length===before) alert('That group name already exists.'); if(inp) inp.value=''; _refreshFavModal(); }
+function mgRename(id){ const inp=$('#gn-'+id); const name=(inp&&inp.value||'').trim(); if(!name) return;
+  if(!renameGroup(id,name)) alert('A group with that name already exists.'); _refreshFavModal(); }
+function mgDelete(id){ const g=groupById(id); if(!g) return;
+  if(!confirm('Delete group "'+g.name+'"?\\n\\nThis only removes the group — the stocks stay in Favorites.')) return;
+  deleteGroup(id); _refreshFavModal(); }
+
+// ── Right-click context menu (only on elements carrying data-fav-ticker) ───────
+let _favMenuEl=null;
+function _ensureFavMenu(){ if(_favMenuEl) return _favMenuEl;
+  const m=document.createElement('div'); m.className='ctxmenu hidden'; m.id='fav-ctxmenu';
+  document.body.appendChild(m); _favMenuEl=m;
+  document.addEventListener('click', hideFavMenu);
+  document.addEventListener('scroll', hideFavMenu, true);
+  window.addEventListener('resize', hideFavMenu);
+  return m; }
+function hideFavMenu(){ if(_favMenuEl) _favMenuEl.classList.add('hidden'); }
+function showFavMenu(x,y,tk){ tk=(tk||'').toUpperCase(); const m=_ensureFavMenu(); const fav=isFav(tk);
+  m.innerHTML=`<div class="ci head">${tk}</div>`
+    + (fav ? `<div class="ci" onclick="removeFav('${tk}');hideFavMenu()">★ Remove from Favorites</div>`
+           : `<div class="ci" onclick="addFav('${tk}','context_menu');hideFavMenu()">☆ Add to Favorites</div>`)
+    + `<div class="ci" onclick="assignGroupModal('${tk}')">🏷 Add to Group…</div>`
+    + `<div class="ci" onclick="ctxViewDetails('${tk}')">🔎 View Details</div>`
+    + `<div class="ci" onclick="ctxAnalyze('${tk}')">⚡ Analyze Stock</div>`;
+  m.classList.remove('hidden');
+  const w=m.offsetWidth||200, h=m.offsetHeight||150;
+  m.style.left=Math.min(x, window.innerWidth-w-8)+'px';
+  m.style.top=Math.min(y, window.innerHeight-h-8)+'px'; }
+document.addEventListener('contextmenu', e=>{
+  const el=e.target.closest && e.target.closest('[data-fav-ticker]');
+  if(!el) return;                       // default browser menu everywhere else
+  e.preventDefault();
+  showFavMenu(e.clientX, e.clientY, el.getAttribute('data-fav-ticker'));
+});
+function ctxViewDetails(tk){ hideFavMenu(); openStockDetail(tk); }
+function ctxAnalyze(tk){ hideFavMenu(); showTab('analyze','tab-analyze'); fill(tk); }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Auto-mode intent router. Classify the query BEFORE any ticker extraction so we
+// never analyze English words as tickers. Pure front-end routing — it only decides
+// which existing endpoint to call (/api/analyze vs /api/search) or the comparison
+// copilot. No scoring/search/API logic changes.
+// ══════════════════════════════════════════════════════════════════════════════
+// Natural-language indicator words (curated to avoid common real tickers like MA/ON/IT).
+const _NL_WORDS = new Set(('find show me give list get want looking which what who whats best top better cheap '
+  + 'expensive undervalued overvalued similar alternative alternatives compare comparison versus industry sector '
+  + 'stock stocks company companies shares firm firms name names leaders leader theme themes idea ideas '
+  + 'value growth quality momentum dividend dividends compounder compounders income turnaround turnarounds '
+  + 'oversold overbought rsi macd bollinger breakout crossover cross golden death support resistance trend trending '
+  + 'valuation earnings revenue profit profitable margin margins fcf cashflow debt yield payout '
+  + 'semiconductor semiconductors quantum cybersecurity ai infrastructure cloud biotech pharma energy retail '
+  + 'banks bank fintech defensive cyclical with that has have having recent near below above under over '
+  + 'lower higher than between buffett benefiting exposure play plays pick picks screen screener strong weak').split(/\s+/));
+function _isTickerTok(t){ return /^[A-Za-z]{1,5}([.\-][A-Za-z]{1,4})?$/.test(t); }
+function _isNL(t){ return _NL_WORDS.has(t.toLowerCase()); }
+function classifyQuery(raw){
+  const tokens = (raw||'').trim().split(/[\s,]+/).filter(Boolean);
+  if(!tokens.length) return {type:'EMPTY', tickers:[]};
+  const lc = raw.toLowerCase();
+  const comparison = /\b(compare|compared|comparison|versus|vs\.?|better than|which is better|which one|alternatives?\s+to)\b/.test(lc);
+  const nlPhrase = /\b(moving average|cash flow|similar to|better than|less than|more than|lower than|higher than|near the|benefiting from|interest rates|such as)\b/.test(lc);
+  const hasNL = comparison || nlPhrase || raw.includes('?') || tokens.some(_isNL);
+  // A single short symbol typed alone → direct ticker (covers MA, ON, IT, V, F…).
+  if(tokens.length===1 && _isTickerTok(tokens[0]) && !comparison && !nlPhrase && !raw.includes('?'))
+    return {type:'DIRECT_TICKER', tickers:[tokens[0].toUpperCase()]};
+  // Clearly only tickers: no NL signal AND every token is a symbol (not an English word).
+  if(!hasNL && tokens.length<=15 && tokens.every(t=>_isTickerTok(t) && !_isNL(t)))
+    return {type:'DIRECT_TICKER', tickers: tokens.map(t=>t.toUpperCase())};
+  // Mixed: explicit symbols + a question/condition/comparison. Require UPPERCASE
+  // symbols here so English filler ("to","from","band","style") isn't read as a ticker.
+  const symbols = tokens.filter(t=>_isTickerTok(t) && !_isNL(t) && t===t.toUpperCase()).map(t=>t.toUpperCase());
+  if(symbols.length>=1 && symbols.length<tokens.length && hasNL)
+    return {type:'MIXED', tickers: symbols, comparison};
+  return {type:'NL_SEARCH', tickers:[]};
+}
+// Small badge that tells the user how their query was interpreted.
+function intentBanner(kind){
+  const map = { ticker:['📈','Ticker Analysis','Direct Ticker Analysis'],
+                search:['🔎','AI Search','Natural Language Search'],
+                comparison:['⚖️','Comparison','Mixed Query'] };
+  const [ic,t,sub] = map[kind] || map.search;
+  return `<div class="intent-banner"><span class="ib-ic">${ic}</span><b>${t}</b><span class="ib-sub">Intent: ${sub}</span></div>`;
+}
 
 async function run(){
   const raw = $('#syms').value.trim();
@@ -726,26 +1363,34 @@ async function run(){
     return runCopilotQuery(raw, mode);
   }
   // Auto / Discovery / Screening -> run the engine and show the scored table.
-  const tokens = raw.split(/[\s,]+/).filter(Boolean);
-  const isTickers = tokens.length>0 && tokens.every(t => /^[A-Za-z][A-Za-z.\-]{0,5}$/.test(t));
+  // STEP 1: classify intent FIRST (never split English words into tickers). Auto
+  // routes by intent; Discovery/Screening are explicit AI-search modes.
+  const cls = (mode==='auto') ? classifyQuery(raw) : {type:'NL_SEARCH'};
+
+  // Mixed comparison ("compare NVDA and AMD", "is TSM better than INTC") → comparison copilot.
+  if(cls.type==='MIXED' && cls.comparison){
+    return runCopilotQuery(raw, 'comparison');
+  }
+
   const btn = $('#go'); btn.disabled = true;
   try {
-    if(isTickers && mode==='auto'){
+    if(cls.type==='DIRECT_TICKER'){
       btn.textContent = 'Analyzing…';
-      $('#out').innerHTML = '<div class="spin">Running live analysis…</div>';
-      const res = await fetch('/api/analyze?symbols=' + encodeURIComponent(tokens.join(',')) + _newsParam());
+      $('#out').innerHTML = intentBanner('ticker') + '<div class="spin">Running live analysis…</div>';
+      const res = await fetch('/api/analyze?symbols=' + encodeURIComponent(cls.tickers.join(',')) + _newsParam());
       const data = await res.json();
       if(data.error){ $('#out').innerHTML = '<div class="err">'+data.error+'</div>'; return; }
-      render(data.results);
-      addHist({type:'tickers', query: tokens.join(', '), count:(data.results||[]).length, results:data.results});
+      render(data.results, {intent:'ticker'});
+      addHist({type:'tickers', query: cls.tickers.join(', '), count:(data.results||[]).length, results:data.results});
       openCopilotSearch('auto');
     } else {
+      // NATURAL_LANGUAGE_SEARCH (and mixed-non-comparison): pass the WHOLE phrase to AI search.
       btn.textContent = 'Searching…';
-      $('#out').innerHTML = '<div class="spin">🔎 AI Search — interpreting your query and scoring candidates live… (this can take ~15s)</div>';
+      $('#out').innerHTML = intentBanner('search') + '<div class="spin">🔎 AI Search — interpreting your query and scoring candidates live… (this can take ~15s)</div>';
       const res = await fetch('/api/search?q=' + encodeURIComponent(raw) + _newsParam());
       const data = await res.json();
       if(data.error){ $('#out').innerHTML = '<div class="err">'+data.error+'</div>'; return; }
-      render(data.results, {summary:data.summary, provider:data.provider});
+      render(data.results, {summary:data.summary, provider:data.provider, intent:'search'});
       addHist({type:'ai', query: raw, summary:data.summary, provider:data.provider, count:(data.results||[]).length, results:data.results});
       openCopilotSearch(mode);   // 'auto' | 'discovery' | 'screening' carries into the copilot
     }
@@ -794,6 +1439,89 @@ function statusCell(r){
 
 // "&news=1" when the user opted into the news-collector overlay (only when available).
 function _newsParam(){ return (window._newsAvail && window._newsOn) ? '&news=1' : ''; }
+
+// OFF/ON segmented toggle. ON re-runs the current search WITH overlays so Base /
+// Overlay / Adjusted appear; OFF re-runs without them. The base Artik Score is
+// never modified server-side — overlays are attached as a separate field.
+function setNewsOn(on){
+  window._newsOn = !!on;
+  $('#news-off').classList.toggle('on', !on);
+  $('#news-on-btn').classList.toggle('on', on);
+  if(window._rows && window._rows.length) rerunCurrentSearch();
+}
+
+// Re-run whatever produced the current results (typed tickers or AI search),
+// preserving the news on/off state. Used after toggling ON/OFF or a fresh collect.
+async function rerunCurrentSearch(){
+  const raw = ($('#syms').value||'').trim(); if(!raw) return;
+  const tokens = raw.split(/[\s,]+/).filter(Boolean);
+  const isTickers = tokens.length>0 && tokens.every(t => /^[A-Za-z][A-Za-z.\-]{0,5}$/.test(t));
+  try {
+    const url = isTickers
+      ? '/api/analyze?symbols=' + encodeURIComponent(tokens.join(',')) + _newsParam()
+      : '/api/search?q=' + encodeURIComponent(raw) + _newsParam();
+    const data = await (await fetch(url)).json();
+    if(data && !data.error) render(data.results, isTickers?{}:{summary:data.summary, provider:data.provider});
+  } catch(e){ /* leave current results in place */ }
+}
+
+// Current tickers for a collector run: typed tickers if the box holds tickers,
+// else the on-screen result tickers from the last AI search.
+function _currentSearchTickers(){
+  const raw = ($('#syms').value||'').trim();
+  const tokens = raw.split(/[\s,]+/).filter(Boolean);
+  const isTickers = tokens.length>0 && tokens.every(t => /^[A-Za-z][A-Za-z.\-]{0,5}$/.test(t));
+  if(isTickers) return tokens.map(t=>t.toUpperCase());
+  return (window._lastTickers||[]).slice(0,25);
+}
+
+// Trigger the existing collector backend for the current tickers/results
+// (trigger_source="search"), without blocking or disturbing the visible results.
+// On completion, refresh overlays if News Signals is ON. Failures are non-fatal.
+let _collectorPoll = null;
+async function runCollectorForSearch(){
+  const tickers = _currentSearchTickers();
+  if(!tickers.length){ toast('Type tickers or run a search first.'); return; }
+  const btn = $('#run-collector'); btn.disabled = true; const old = btn.textContent;
+  btn.textContent = '⏳ Collecting…';
+  const raw = ($('#syms').value||'').trim();
+  const isNL = !(tickers.join(',')===raw.split(/[\s,]+/).filter(Boolean).map(t=>t.toUpperCase()).join(','));
+  try {
+    const r = await (await fetch('/api/news_collector/search_run',{method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({tickers, query: isNL?raw:''})})).json();
+    if(r.error){ toast('Collector: '+r.error); btn.disabled=false; btn.textContent=old; return; }
+    if(r.started===false){ toast('Collector already running — try again shortly.'); btn.disabled=false; btn.textContent=old; return; }
+    toast(`Added to Agents · collecting news for ${tickers.length} stock(s) in the background…`);
+    if(currentTab()==='agents') loadAgents();   // reflect the new job immediately if Agents is open
+    // Poll the (new/reused) collector job until the run finishes, then refresh overlays if ON.
+    const agentId = r.agent_id || 'stock_news_collector';
+    if(_collectorPoll) clearInterval(_collectorPoll);
+    _collectorPoll = setInterval(async ()=>{
+      try {
+        const a = await (await fetch('/api/agents/'+agentId)).json();
+        if(!a.running){
+          clearInterval(_collectorPoll); _collectorPoll=null;
+          btn.disabled=false; btn.textContent=old;
+          toast('News collection complete — view it under Agents.' + (window._newsOn?' Refreshing overlays…':''));
+          if(currentTab()==='agents') loadAgents();
+          if(window._newsOn) rerunCurrentSearch();
+        }
+      } catch(e){ clearInterval(_collectorPoll); _collectorPoll=null; btn.disabled=false; btn.textContent=old; }
+    }, 3000);
+  } catch(e){
+    toast('Collector run failed — search is unaffected.');
+    btn.disabled=false; btn.textContent=old;
+  }
+}
+
+// Lightweight transient toast (search must never be blocked by collector status).
+function toast(msg){
+  let t = $('#toast');
+  if(!t){ t=document.createElement('div'); t.id='toast'; t.className='toast'; document.body.appendChild(t); }
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(window._toastT); window._toastT = setTimeout(()=>t.classList.remove('show'), 3500);
+}
 
 // Inline chip next to the base score: "82 +3" / "82 −2".
 function overlayChip(r){
@@ -880,10 +1608,14 @@ function setResultView(v){ localStorage.setItem('artik_broker_result_view', v); 
 
 function render(rows, opts){
   opts = opts || {};
-  window._rows = rows; window._mode = 'symbol'; window._lastOpts = opts;
+  window._rows = rows; window._analyzeRows = rows; window._mode = 'symbol'; window._lastOpts = opts;
+  // Remember the result tickers so "Run News Collector" can collect for exactly
+  // what's on screen (typed tickers or AI-search results).
+  window._lastTickers = (rows||[]).filter(r=>r && r.ticker && !r.error).map(r=>r.ticker);
   window._resFilters = { status:'', rsi:'', rsiMin:'', rsiMax:'' };   // reset per search
   window._aSort = { col:'score', dir:-1 };
   let banner = '';
+  if(opts.intent){ banner += intentBanner(opts.intent); }
   if(opts.savedNote){ banner += `<div class="grid-banner">📁 ${opts.savedNote}</div>`; }
   if(opts.summary){
     const via = opts.provider==='gpt' ? ' · via GPT (fallback)' : opts.provider==='claude' ? ' · via Claude' : '';
@@ -926,6 +1658,7 @@ function analyzeFbar(){
       <span class="muted">to</span>
       <input type="number" placeholder="Max" value="${f.rsiMax}" style="width:66px" oninput="window._resFilters.rsiMax=this.value;renderAnalyzeResults()">
     </div>` : ''}
+    ${(f.status||f.rsi)?`<button class="fclear" onclick="clearResFilters()">✕ Clear All</button>`:''}
     <div class="vtoggle" style="margin-left:auto">
       <button class="${view==='tiles'?'on':''}" onclick="setResultView('tiles')">▦ Tiles</button>
       <button class="${view==='list'?'on':''}" onclick="setResultView('list')">☰ List</button>
@@ -995,7 +1728,7 @@ function analyzeListTable(view){
   const rows = sorted.map((x,idx)=>{ const r=x.r, i=x.i, arch=(r.breakdown&&r.breakdown.archetype)||'—';
     const news = r.news_overlay ? `<span class="${r.news_overlay.aggregate_score_delta>=0?'pos':'neg'}">${r.news_overlay.aggregate_score_delta>=0?'+':''}${r.news_overlay.aggregate_score_delta}</span>` : '—';
     return `<tr class="row">
-      <td>${idx+1}</td><td class="tick">${r.ticker}</td>
+      <td>${idx+1}</td><td class="tick" data-fav-ticker="${r.ticker}">${favStar(r.ticker,'search_results')} ${r.ticker}</td>
       <td class="muted" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r.company||'')}</td>
       <td class="muted">${escapeHtml(r.sector||'—')}</td>
       <td class="muted" style="font-size:12px">${escapeHtml(arch)}</td>
@@ -1026,7 +1759,7 @@ function stockCard(r,i){
   return `<div class="scard">
     <div class="row1" onclick="showDetail(${i})" style="cursor:pointer">
       <div style="min-width:0">
-        <div class="tk">${r.ticker}${overlayChip(r)}</div>
+        <div class="tk" data-fav-ticker="${r.ticker}">${r.ticker}${favStar(r.ticker,'search_results')}${overlayChip(r)}</div>
         <div class="co">${escapeHtml(r.company||'')}</div>
       </div>
       <div class="ring" style="--p:${Math.max(0,Math.min(100,r.score||0))};--rc:${ringColor(r.status)}"><b>${r.score??'—'}</b></div>
@@ -1054,10 +1787,128 @@ function miniExplain(r){
   }).join('');
   return `<div class="formula" style="margin-bottom:8px">( ${b.base} − ${b.penalties} ) × ${b.multiplier}× = <b>${b.final}</b> → ${r.rating}</div>${cats}`;
 }
-function cardExplain(i,btn){ const d=$('#cx'+i); if(!d) return; const open=d.style.display==='none'; d.style.display=open?'':'none'; btn.textContent=open?'Hide':'Explain'; }
+function cardExplain(i,btn){ const card=btn&&btn.closest('.scard'); const d=card?card.querySelector('.card-explain'):$('#cx'+i);
+  if(!d) return; const open=d.style.display==='none'; d.style.display=open?'':'none'; btn.textContent=open?'Hide':'Explain'; }
 function errorCard(r){
-  return `<div class="scard" style="cursor:default"><div class="row1"><div class="tk">${r.ticker}</div></div>
+  return `<div class="scard" style="cursor:default"><div class="row1"><div class="tk" data-fav-ticker="${r.ticker}">${r.ticker}${favStar(r.ticker,'ui')}</div></div>
     <div class="err" style="margin-top:12px">${escapeHtml(r.error||'error')}</div></div>`;
+}
+
+// ── Favorites page (reuses the search stock card + a sortable list view) ───────
+function getFavView(){ return localStorage.getItem(FAV_VIEW_KEY)||'tiles'; }
+function setFavView(v){ localStorage.setItem(FAV_VIEW_KEY,v); renderFavToggle(); drawFavorites(); }
+function renderFavToggle(){ const v=getFavView(), el=$('#fav-toggle'); if(!el) return;
+  el.innerHTML=`<button class="${v==='tiles'?'on':''}" onclick="setFavView('tiles')">▦ Tiles</button>`
+    +`<button class="${v==='list'?'on':''}" onclick="setFavView('list')">☰ List</button>`; }
+let _favSort={col:'score',dir:-1};   // default: Score descending
+function favSort(col){ if(_favSort.col===col) _favSort.dir*=-1;
+  else { _favSort.col=col; _favSort.dir={price:1,score:1,rsi:1,news:1}[col]?-1:1; } drawFavorites(); }
+function favToggle(i){ const d=$('#favd'+i); if(d) d.style.display=d.style.display==='none'?'':'none'; }
+
+async function loadFavorites(force){
+  window._activeTab='favorites';
+  renderFavToggle(); renderGroupBar();
+  const tks=favTickers(), out=$('#fav-out'), meta=$('#fav-meta');
+  if(!tks.length){ if(out) out.innerHTML=favEmptyState(); if(meta) meta.textContent='0 stocks'; window._favRows=[]; return; }
+  const key=tks.slice().sort().join(',');
+  if(!force && window._favRows && window._favLoadedFor===key){ window._rows=window._favRows; drawFavorites(); return; }
+  if(out) out.innerHTML='<div class="spin">Scoring your favorites with the Artik engine…</div>';
+  try {
+    const d=await (await fetch('/api/analyze?symbols='+encodeURIComponent(tks.join(','))+_newsParam())).json();
+    if(d.error){ if(out) out.innerHTML='<div class="err">'+d.error+'</div>'; return; }
+    window._favRows=d.results||[]; window._favLoadedFor=key; window._rows=window._favRows;
+    if(meta) meta.textContent=`${window._favRows.filter(r=>!r.error).length} stocks`;
+    drawFavorites();
+  } catch(e){ if(out) out.innerHTML='<div class="err">Failed to load favorites: '+e+'</div>'; }
+}
+
+// Filter the favorite rows by the selected group chip.
+function _favInGroup(x){
+  if(_favGroup==='all') return true;
+  if(_favGroup==='ungrouped') return groupsForTicker(x.r.ticker).length===0;
+  return isInGroup(x.r.ticker, _favGroup);
+}
+function drawFavorites(){
+  renderGroupBar();
+  window._rows=window._favRows||[];          // index-based handlers resolve from here
+  const all=(window._favRows||[]).map((r,i)=>({r,i}));
+  const out=$('#fav-out'); if(!out) return;
+  if(!all.length){ out.innerHTML=favEmptyState(); return; }
+  // group filter applies to all rows (incl. error rows)
+  const inGrp=all.filter(_favInGroup);
+  const scorable=inGrp.filter(x=>!x.r.error), errs=inGrp.filter(x=>x.r.error);
+  if(!scorable.length && !errs.length){ out.innerHTML=favGroupEmptyState(); return; }
+  if(getFavView()==='list'){
+    out.innerHTML=favListTable(scorable)+(errs.length?`<div class="cards" style="margin-top:14px">${errs.map(x=>errorCard(x.r)).join('')}</div>`:'');
+  } else {
+    const sorted=[...scorable].sort((a,b)=>(b.r.score||0)-(a.r.score||0));   // tiles: score desc
+    out.innerHTML=`<div class="cards">${sorted.map(x=>favTile(x.r,x.i)).join('')}${errs.map(x=>errorCard(x.r)).join('')}</div>`;
+  }
+}
+// Group badges shown on a list cell / tile.
+function groupBadges(tk, empty){
+  const gs=groupsForTicker(tk);
+  if(!gs.length) return empty||'<span class="muted" style="font-size:11px">—</span>';
+  return gs.map(g=>`<span class="gbadge" onclick="event.stopPropagation();selectFavGroup('${g.id}');showTab('favorites','tab-favorites')" title="Filter by ${escapeHtml(g.name)}">${escapeHtml(g.name)}</span>`).join('');
+}
+// Favorite tile = the standard stock card + a groups bar (badges + Groups action).
+function favTile(r,i){
+  return `<div class="ftile">${stockCard(r,i)}
+    <div class="fav-grp-bar">
+      <div class="gbadges">${groupBadges(r.ticker,'<span class="muted" style="font-size:11px">No groups</span>')}</div>
+      <button class="ex-btn sm" onclick="assignGroupModal('${r.ticker}')" title="Add to / manage groups">🏷 Groups</button>
+    </div></div>`;
+}
+
+function favListTable(view){
+  const st=_favSort, num={price:1,score:1,rsi:1,news:1};
+  const sorted=[...view].sort((a,b)=>{ let av=aVal(a.r,st.col),bv=aVal(b.r,st.col);
+    if(num[st.col]){ av=av==null?-Infinity:av; bv=bv==null?-Infinity:bv; return (av-bv)*st.dir; }
+    av=(av||'').toString().toUpperCase(); bv=(bv||'').toString().toUpperCase(); return av<bv?-st.dir:av>bv?st.dir:0; });
+  const cols=[['_n','#',0,0],['ticker','Ticker',1,0],['company','Company',1,0],['sector','Sector',1,0],
+    ['archetype','Archetype',1,0],['price','Price',1,1],['score','Score',1,1],['rsi','RSI',1,1],
+    ['status','Status',1,0],['news','News Impact',1,1]];
+  const head=cols.map(([k,l,s,n])=> s
+    ? `<th class="sortable ${n?'num':''}" onclick="favSort('${k}')">${l}${st.col===k?`<span class="arr">${st.dir>0?'▲':'▼'}</span>`:''}</th>`
+    : `<th class="${n?'num':''}">${l}</th>`).join('') + '<th>Groups</th><th>Actions</th>';
+  const rows=sorted.map((x,idx)=>{ const r=x.r,i=x.i,arch=(r.breakdown&&r.breakdown.archetype)||'—';
+    const news=r.news_overlay?`<span class="${r.news_overlay.aggregate_score_delta>=0?'pos':'neg'}">${r.news_overlay.aggregate_score_delta>=0?'+':''}${r.news_overlay.aggregate_score_delta}</span>`:'—';
+    return `<tr class="row"><td>${idx+1}</td>
+      <td class="tick" data-fav-ticker="${r.ticker}">${favStar(r.ticker,'favorites')} ${r.ticker}</td>
+      <td class="muted" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r.company||'')}</td>
+      <td class="muted">${escapeHtml(r.sector||'—')}</td>
+      <td class="muted" style="font-size:12px">${escapeHtml(arch)}</td>
+      <td class="num">$${r.price!=null?r.price.toLocaleString():'—'}</td>
+      <td class="num"><b>${r.score}</b></td>
+      <td class="num">${r.rsi!=null?r.rsi:'—'}</td>
+      <td>${statusCell(r)}</td>
+      <td class="num">${news}</td>
+      <td class="gcell">${groupBadges(r.ticker)}</td>
+      <td style="white-space:nowrap"><button class="ex-btn" onclick="favToggle(${i})">Explain ▾</button> <button class="ex-btn" onclick="showDetail(${i})">Details</button> <button class="ex-btn" onclick="assignGroupModal('${r.ticker}')" title="Add to / manage groups">🏷</button> <button class="ex-btn" onclick="removeFav('${r.ticker}')" title="Remove from Favorites">✕</button></td>
+    </tr>
+    <tr class="detail" id="favd${i}" style="display:none"><td colspan="13">${detail(r)}</td></tr>`;
+  }).join('');
+  return `<table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function favGroupEmptyState(){
+  const g=groupById(_favGroup);
+  const nm=_favGroup==='ungrouped'?'Ungrouped':(g?g.name:'this group');
+  return `<div class="empty-fav"><div class="ico">🏷</div>
+    <h3>No stocks in ${escapeHtml(nm)} yet.</h3>
+    <p>Add stocks to this group from any favorite's 🏷 Groups action, or right-click a ticker.</p>
+    <div class="acts"><button onclick="selectFavGroup('all')">Show all favorites</button></div></div>`;
+}
+
+function favEmptyState(){
+  return `<div class="empty-fav"><div class="ico">⭐</div>
+    <h3>No favorite stocks yet.</h3>
+    <p>Add favorites by right-clicking any ticker or clicking the ☆ star icon.</p>
+    <div class="acts">
+      <button onclick="showTab('analyze','tab-analyze')">Go to Analyze</button>
+      <button class="ghost" onclick="showTab('sp500')">Browse S&amp;P 500</button>
+      <button class="ghost" onclick="showTab('dow')">Browse Dow</button>
+    </div></div>`;
 }
 
 // ── Stock Detail page (tabs · KPI score cards · chart · news) ──────────────────
@@ -1079,6 +1930,9 @@ async function openStockDetail(ticker){
 }
 function detailFor(r){
   window._detR = r; window._detTab = 'overview';
+  // Return to whichever list opened this detail (favorites / sp500 / dow / analyze).
+  const back = (window._activeTab && window._activeTab!=='detail') ? window._activeTab : 'analyze';
+  window._detBack = back;
   const sc = r.breakdown||{};
   const chips = [r.sector, sc.archetype].filter(Boolean)
     .map(c=>`<span class="pill acc">${escapeHtml(c)}</span>`).join('');
@@ -1086,10 +1940,10 @@ function detailFor(r){
   const TABS = [['overview','Overview'],['technicals','Technicals'],['fundamentals','Fundamentals'],
                 ['news','News'],['signals','Signals'],['peers','Peers'],['trade','Trade Plan']];
   $('#view-detail').innerHTML = `
-    <button class="ghost" style="margin-bottom:14px" onclick="showTab('analyze','tab-analyze')">← Back to results</button>
+    <button class="ghost" style="margin-bottom:14px" onclick="showTab('${back}')">← Back to results</button>
     <div class="det-head">
       <div style="min-width:0">
-        <div class="tk">${r.ticker}</div>
+        <div class="tk" data-fav-ticker="${r.ticker}">${r.ticker}${favStar(r.ticker,'stock_detail')}</div>
         <div class="co">${escapeHtml(r.company||'')}</div>
         <div class="schips">${statusCell(r)} ${chips} ${ni}</div>
       </div>
@@ -1551,6 +2405,7 @@ function renderCopilot(){
   $('#copilot').innerHTML = `
     <div class="cop-head"><div class="cop-brand">🤖 <b>Artik Copilot</b></div>
       <button class="ex-btn" style="margin-left:auto" onclick="copilotReset()" title="New conversation">↺ New</button>
+      <button class="cop-collapse" onclick="toggleCopilot()" title="Collapse panel">›</button>
     </div>
     ${meta}
     ${ctxCard?`<div style="padding:12px 14px 0;flex:none">${ctxCard}</div>`:''}
@@ -1640,19 +2495,27 @@ function downloadCSV(){
 // ── Tabs ────────────────────────────────────────────────────────────────────
 let _pfLoaded = false;
 const _idxLoaded = {};
-const _VIEWS = ['analyze','detail','portfolio','sp500','dow','history','agents','settings'];
-const _TITLES = {analyze:'Analyze', detail:'Stock Detail', portfolio:'Portfolio', sp500:'S&P 500',
-                 dow:'Dow Jones', history:'History', agents:'Agents', settings:'Settings'};
+const _VIEWS = ['analyze','detail','portfolio','favorites','sp500','dow','history','agents','skills','users','settings'];
+const _TITLES = {analyze:'Analyze', detail:'Stock Detail', portfolio:'Portfolio', favorites:'Favorites',
+                 sp500:'S&P 500', dow:'Dow Jones', history:'History', agents:'Agents', skills:'Skills Management', users:'User Management', settings:'Settings'};
 function showTab(name, navId){
   _VIEWS.forEach(v => { const el=$('#view-'+v); if(el) el.classList.toggle('hidden', v!==name); });
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
   const nav = $('#'+(navId || ('tab-'+name))); if(nav) nav.classList.add('active');
   if($('#wtitle')) $('#wtitle').textContent = _TITLES[name] || 'Artik Broker';
   $('#app').classList.remove('navopen');
+  // Keep window._rows pointing at the active result set so index-based
+  // showDetail/Explain handlers resolve the right row (analyze vs favorites).
+  if(name!=='detail') window._activeTab = name;
+  if(name==='analyze' && window._analyzeRows) window._rows = window._analyzeRows;
+  if(name==='favorites' && window._favRows) window._rows = window._favRows;
   if(name==='portfolio' && !_pfLoaded){ _pfLoaded = true; loadPortfolioDates(); }
+  if(name==='favorites'){ loadFavorites(); }
   if((name==='sp500'||name==='dow') && !_idxLoaded[name]){ _idxLoaded[name]=true; loadIndex(name); }
   if(name==='history'){ renderHistory(); }
   if(name==='agents'){ loadAgents(); }
+  if(name==='users'){ loadUsers(); }
+  if(name==='skills'){ loadSkills(); }
 }
 function goResearch(){ setMainMode('research'); showTab('analyze','nav-research'); const s=$('#syms'); if(s) s.focus(); }
 
@@ -1854,7 +2717,7 @@ function drawIndex(pfx){
       }
       const arch = (r.breakdown && r.breakdown.archetype) || '—';
       return `<tr class="row">
-        <td>${i+1}</td><td class="tick">${r.ticker}</td>
+        <td>${i+1}</td><td class="tick" data-fav-ticker="${r.ticker}">${favStar(r.ticker,pfx)} ${r.ticker}</td>
         <td style="color:var(--mut);font-size:12px">${arch}</td>
         <td style="color:var(--mut)">${r.sector||'—'}</td>
         <td class="num">$${r.price!=null?r.price.toLocaleString():'—'}</td>
@@ -2003,7 +2866,7 @@ function applyPfView(){
     rows: view,
     rowHtml: (r,i) => `<tr class="row">
       <td>${i+1}</td>
-      <td class="tick">${r.ticker}</td>
+      <td class="tick" data-fav-ticker="${r.ticker}">${favStar(r.ticker,'portfolio')} ${r.ticker}</td>
       <td style="color:var(--mut);font-size:12px">${r.archetype||'—'}</td>
       <td class="num">${num(r.qty)??r.qty}</td>
       <td class="num">${money(r.cost_basis)}</td>
@@ -2042,6 +2905,8 @@ async function explainPf(ticker, btn){
 $('#syms').addEventListener('keydown', e => {
   if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); run(); }
 });
+// Toggle the in-field clear (✕) button as the user types.
+$('#syms').addEventListener('input', toggleClearBtn);
 
 // ── Agent Management ─────────────────────────────────────────────────────────
 let _agents = [], _agentPoll = null;
@@ -2089,15 +2954,17 @@ function renderAgents(){
         <div class="ak"><div class="lbl">Signals</div><div class="v">${a.signals_generated??'—'}</div></div>
         <div class="ak"><div class="lbl">Errors</div><div class="v ${errN?'neg':''}">${errN||'0'}</div></div>
       </div>
+      ${a.query?`<div style="margin-bottom:10px"><div class="agent-type" style="margin-bottom:4px">Tracking statement</div><div class="muted" style="font-size:12.5px;font-style:italic">“${escapeHtml(a.query)}”</div></div>`:''}
       <div style="margin-bottom:12px"><div class="agent-type" style="margin-bottom:6px">Tracked stocks</div><div class="tchips">${tchips}</div></div>
-      <div class="agent-type" style="margin-bottom:13px">Last run ${fmtTime(a.last_run_at)} ${lastSt} · Next ${a.enabled?fmtTime(a.next_run_at):'—'}<br><span class="muted">${escapeHtml(a.last_result||'—')}</span></div>
+      <div class="agent-type" style="margin-bottom:13px">Last run ${fmtTime(a.last_run_at)} ${lastSt} ${a.last_trigger?`<span class="trig ${a.last_trigger}">${a.last_trigger}</span>`:''} · Next ${a.enabled?fmtTime(a.next_run_at):'—'}<br><span class="muted">${escapeHtml(a.last_result||'—')}</span></div>
       <div class="agent-actions">
         <button class="ex-btn" onclick="runAgent('${a.agent_id}')" ${a.running?'disabled':''}>${a.running?'⏳ Running…':'▶ Run Now'}</button>
         <button class="ex-btn" onclick="editAgent('${a.agent_id}')">✏️ Edit</button>
+        <button class="ex-btn" onclick="cloneAgent('${a.agent_id}')">⧉ Clone</button>
         <button class="ex-btn" onclick="viewResults('${a.agent_id}')">📊 Results</button>
         <button class="ex-btn" onclick="viewLogs('${a.agent_id}')">📜 Logs</button>
         <button class="ex-btn" onclick="toggleAgent('${a.agent_id}',${a.enabled?'false':'true'})">${a.enabled?'⏸ Disable':'✅ Enable'}</button>
-        <button class="ex-btn" onclick="deleteAgent('${a.agent_id}')">🗑</button>
+        <button class="ex-btn" onclick="deleteAgent('${a.agent_id}',${a.is_default})">🗑</button>
       </div>
     </div>`;
   }).join('') + '</div>';
@@ -2120,18 +2987,48 @@ async function toggleAgent(id, on){
   loadAgents();
 }
 
-async function deleteAgent(id){
-  if(!confirm('Delete this agent configuration? It resets to defaults (disabled).')) return;
-  await fetch(`/api/agents/${id}/delete`,{method:'POST'});
+async function deleteAgent(id, isDefault){
+  const msg = 'Delete this News Collector job AND the articles behind it?\n\n'
+    + 'The collector configuration, its run history and logs are removed, along with '
+    + 'collected articles/signals for stocks no longer tracked by any other collector. '
+    + 'This cannot be undone.'
+    + (isDefault ? '\n\n(You can recreate it later with “Add Configuration”.)' : '');
+  if(!confirm(msg)) return;
+  try {
+    const r = await (await fetch(`/api/agents/${id}/delete`,{method:'POST'})).json();
+    const p = r.purged||{}; const arts = p.articles||{};
+    const nArt = (arts['raw_news.jsonl']||0);
+    const tks = (p.tickers||[]).length;
+    if(tks||nArt) toast(`Deleted · purged ${nArt} article(s) across ${tks} stock(s) no longer tracked.`);
+    else toast('Configuration deleted.');
+  } catch(e){ toast('Delete failed: '+e); }
   loadAgents();
+}
+
+// Create a brand-new BLANK News Collector configuration (no default stocks,
+// no inherited values). Opens the edit form in "new" mode with empty fields.
+async function addAgentConfig(){
+  const r = await (await fetch('/api/agents',{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({})})).json();
+  await loadAgents();
+  if(r&&r.agent_id) editAgent(r.agent_id, true);
+}
+
+// Duplicate an existing configuration (tickers/schedule/sources/thresholds), disabled.
+async function cloneAgent(id){
+  const r = await (await fetch('/api/agents',{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({clone_from:id})})).json();
+  await loadAgents();
+  if(r&&r.agent_id) editAgent(r.agent_id);
 }
 
 // ── Edit modal ───────────────────────────────────────────────────────────────
 function closeAgentModal(){ $('#agent-modal').classList.add('hidden'); $('#agent-modal-card').classList.remove('wide'); }
 
-async function editAgent(id){
+async function editAgent(id, isNew){
   $('#agent-modal-card').classList.remove('wide');
   const a = await (await fetch('/api/agents/'+id)).json();
+  if(isNew){ a.agent_name=''; a.description=''; a.query=''; a.tickers=[]; }  // blank create form
   const isInt = (a.schedule_type||'interval')!=='daily_time';
   const tiers = {1:'Tier 1 — Primary filings / issuer',2:'Tier 2 — Top-tier wires & papers',
                  3:'Tier 3 — Data vendors',4:'Tier 4 — Mainstream finance media',5:'Tier 5 — Social / sentiment'};
@@ -2150,14 +3047,21 @@ async function editAgent(id){
     <h2>Edit · ${escapeHtml(a.agent_name)}</h2>
     <div class="muted" style="font-size:12.5px;margin-bottom:6px">${escapeHtml(a.agent_type)}</div>
     <h4>Basic Settings</h4>
-    <div class="fld"><label>Agent Name</label><input type="text" id="f-name" value="${escapeHtml(a.agent_name)}"></div>
+    <div class="fld"><label>Agent Name</label><input type="text" id="f-name" placeholder="New Collector" value="${escapeHtml(a.agent_name)}"></div>
     <div class="fld"><label>Description</label><textarea id="f-desc">${escapeHtml(a.description||'')}</textarea></div>
     <div class="fld inline"><label style="margin:0">Enabled</label>
       <label class="sw"><input type="checkbox" id="f-enabled" ${a.enabled?'checked':''}><span class="sl"></span></label></div>
 
     <h4>Stocks to Track</h4>
+    <div class="fld"><label>Describe in plain English (optional)</label>
+      <textarea id="f-query" placeholder="e.g. AI infrastructure & data-center chip leaders">${escapeHtml(a.query||'')}</textarea>
+      <div class="inline" style="gap:8px;margin-top:6px">
+        <button type="button" class="ex-btn" onclick="resolveAgentQuery('${a.agent_id}')">🔍 Find related stocks</button>
+        <span id="f-resolve-note" class="muted" style="font-size:12px"></span>
+      </div></div>
     <div class="fld"><label>Comma-separated tickers</label>
-      <textarea id="f-tickers">${(a.tickers||[]).join(', ')}</textarea></div>
+      <textarea id="f-tickers">${(a.tickers||[]).join(', ')}</textarea>
+      <div class="muted" style="font-size:11.5px;margin-top:4px">Auto-filled from the statement above — edit freely to override.</div></div>
 
     <h4>Schedule</h4>
     <div class="fld inline">
@@ -2204,13 +3108,29 @@ function agScheduleMode(){
   $('#f-daily-box').classList.toggle('hidden', isInt);
 }
 
+// Resolve the plain-English statement → tickers and drop them into the tickers box.
+async function resolveAgentQuery(id){
+  const q = ($('#f-query').value||'').trim();
+  const note = $('#f-resolve-note');
+  if(!q){ note.textContent = 'Type a statement first.'; return; }
+  note.textContent = 'Finding related stocks…';
+  try {
+    const res = await fetch(`/api/agents/${id}/resolve`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({query:q})});
+    const d = await res.json();
+    if(!res.ok){ note.textContent = '⚠ '+(d.error||'could not resolve'); return; }
+    $('#f-tickers').value = (d.tickers||[]).join(', ');
+    note.textContent = `${(d.tickers||[]).length} stocks · via ${d.provider}${d.summary?' · '+d.summary:''}`;
+  } catch(e){ note.textContent = '⚠ '+e; }
+}
+
 async function saveAgent(id){
   const sources = {};
   document.querySelectorAll('#agent-modal-card input[data-src]').forEach(c=>{ sources[c.getAttribute('data-src')] = c.checked; });
   const body = {
-    agent_name: $('#f-name').value.trim(),
+    agent_name: $('#f-name').value.trim() || 'New Collector',
     description: $('#f-desc').value.trim(),
     enabled: $('#f-enabled').checked,
+    query: ($('#f-query').value||'').trim(),
     tickers: $('#f-tickers').value,
     schedule_type: document.querySelector('input[name="f-stype"]:checked').value,
     interval_value: parseInt($('#f-ival').value)||1,
@@ -2240,7 +3160,7 @@ async function viewResults(id){
   try { d = await (await fetch(`/api/agents/${id}/results`)).json(); }
   catch(e){ card.innerHTML = `<div class="err">Failed to load results: ${e}</div><div class="modal-actions"><button class="ghost" onclick="closeAgentModal()">Close</button></div>`; return; }
   _res = { id, data:d, tickers:aggregateTickers(d), q:'', ticker:'', source:'', sentiment:'',
-           sort:'signals', view:'ticker', exp:{}, sub:{}, sig:{} };
+           sort:'signals', view:'ticker', exp:{}, sub:{}, sig:{}, asum:{} };
   renderResults();
 }
 
@@ -2249,11 +3169,14 @@ async function viewResults(id){
 function aggregateTickers(d){
   const per = (d.last_run && d.last_run.per_ticker) || {};
   const map = {};
-  const ensure = tk => map[tk] || (map[tk] = {ticker:tk, collected:0, relevant:0, signals:0, pos:0, neg:0, neu:0, headlines:[], sources:{}});
+  const ensure = tk => map[tk] || (map[tk] = {ticker:tk, company:'', collected:0, relevant:0, signals:0, pos:0, neg:0, neu:0, netImpact:0, headlines:[], sources:{}});
   Object.entries(per).forEach(([tk,v])=>{ const t=ensure(tk); t.collected=v.fetched||0; t.relevant=v.relevant||0; t.signals=v.signals||0; });
   (d.headlines||[]).forEach(h=>{
     const t=ensure(h.ticker||'?'); t.headlines.push(h);
-    if(h.sentiment==='positive') t.pos++; else if(h.sentiment==='negative') t.neg++; else t.neu++;
+    if(h.company && !t.company) t.company=h.company;
+    if(h.sentiment==='positive'){ t.pos++; t.netImpact += (h.impact_score||0); }
+    else if(h.sentiment==='negative'){ t.neg++; t.netImpact -= (h.impact_score||0); }
+    else t.neu++;
     const s=(h.source||'').split(':')[0]||'other'; t.sources[s]=(t.sources[s]||0)+1;
   });
   Object.values(map).forEach(t=>{
@@ -2272,7 +3195,8 @@ function renderResults(){
   const allSources=Object.keys(d.by_source||{}).sort();
   $('#agent-modal-card').innerHTML = `
     <div class="res-head"><h2>📊 Results</h2><span class="st ${last.status||''}">${last.status||(d.running?'running':'—')}</span>
-      <span class="sub">Stock News Collector · last run ${fmtTime(last.completed_at)}</span>
+      ${last.trigger_source?`<span class="trig ${last.trigger_source}">${last.trigger_source}</span>`:''}
+      <span class="sub">${escapeHtml(last.agent_name||'Stock News Collector')} · last run ${fmtTime(last.completed_at)}${last.query?` · “${escapeHtml(last.query)}”`:''}</span>
       <button class="ex-btn" style="margin-left:auto" onclick="closeAgentModal()">✕ Close</button></div>
     <div class="kpibar">
       <div class="rkpi"><div class="v">${t.articles_collected??'—'}</div><div class="l">Articles Collected</div></div>
@@ -2326,6 +3250,52 @@ function resSrcBadges(sources){
   return Object.entries(sources).sort((a,b)=>b[1]-a[1]).slice(0,6)
     .map(([s,n])=>`<span class="srcbadge">${escapeHtml(s)} <b>${n}</b></span>`).join('') || '<span class="muted">—</span>';
 }
+// Instant, deterministic stats line over a ticker's headlines (no API needed).
+function _detArticleStats(hls){
+  let pos=0,neg=0,neu=0; const src={}; const dates=[];
+  hls.forEach(h=>{ const s=h.sentiment;
+    if(s==='positive')pos++; else if(s==='negative')neg++; else neu++;
+    const so=(h.source||'').split(':')[0]||'other'; src[so]=(src[so]||0)+1;
+    if(h.published) dates.push(h.published.slice(0,10)); });
+  dates.sort();
+  const topSrc=Object.entries(src).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([s,n])=>`${s} (${n})`).join(', ');
+  const range = dates.length ? (dates[0]===dates[dates.length-1]?dates[0]:`${dates[0]} → ${dates[dates.length-1]}`) : '—';
+  return {pos,neg,neu,topSrc,range,total:hls.length};
+}
+// Summary block: AI narrative (lazy-loaded) + an always-present stats line.
+function articleSummaryBox(tk, hls){
+  const st=_detArticleStats(hls);
+  const s=_res.asum[tk];
+  let body;
+  if(s && s.summary){ body=escapeHtml(s.summary); }
+  else if(s==='loading' || s===undefined){
+    if(s===undefined) loadArticleSummary(tk);
+    const tone = st.pos>st.neg?'broadly positive':st.neg>st.pos?'broadly negative':'mixed';
+    body=`<span class="muted">Generating AI summary…</span><br>${st.total} relevant article(s), sentiment ${tone}.`;
+  } else { // failed → deterministic fallback
+    const tone = st.pos>st.neg?'broadly positive':st.neg>st.pos?'broadly negative':'mixed';
+    body=`${st.total} relevant article(s) on ${escapeHtml(tk)}, sentiment ${tone} (${st.pos} positive · ${st.neg} negative). Top sources: ${escapeHtml(st.topSrc||'—')}.`;
+  }
+  return `<div class="asum">
+    <div class="h">📋 Article Summary</div>
+    <div class="body">${body}</div>
+    <div class="stats">
+      <span><b>${st.total}</b> articles</span>
+      <span class="pos"><b>${st.pos}</b> positive</span>
+      <span class="neg"><b>${st.neg}</b> negative</span>
+      <span><b>${st.neu}</b> neutral</span>
+      <span>sources: ${escapeHtml(st.topSrc||'—')}</span>
+      <span>${escapeHtml(st.range)}</span>
+    </div></div>`;
+}
+async function loadArticleSummary(tk){
+  _res.asum[tk]='loading';
+  try {
+    const d=await (await fetch('/api/news_summary?ticker='+encodeURIComponent(tk))).json();
+    _res.asum[tk] = (d && d.ok && d.summary) ? {summary:d.summary} : null;
+  } catch(e){ _res.asum[tk]=null; }
+  renderResultsBody();
+}
 function hlRow(h){
   const sent=h.sentiment==='positive'?'pos':h.sentiment==='negative'?'neg':'neu';
   return `<div class="hl"><span class="dot ${sent}"></span><div style="flex:1">
@@ -2343,13 +3313,14 @@ function tickerCard(t){
   return `<div class="tcard">
     <div class="tcard-head">
       ${sentRing(t.pos,t.neu,t.neg,46)}
-      <div><div class="tk">${t.ticker}</div><div class="co">${t.relevant} relevant · ${t.signals} signals</div></div>
+      <div><div class="tk" data-fav-ticker="${t.ticker}">${t.ticker}${favStar(t.ticker,'news_collector')}</div><div class="co">${t.company?escapeHtml(t.company)+' · ':''}${t.relevant} relevant · ${t.signals} signals</div></div>
       <div class="tmini">
         <div class="m"><b>${t.collected}</b><span>Collected</span></div>
         <div class="m"><b>${t.relevant}</b><span>Relevant</span></div>
         <div class="m"><b>${t.signals}</b><span>Signals</span></div>
         <div class="m"><b class="pos">${t.pos}</b><span>Positive</span></div>
         <div class="m"><b class="neg">${t.neg}</b><span>Negative</span></div>
+        <div class="m"><b class="${t.netImpact>=0?'pos':'neg'}">${t.netImpact>=0?'+':'−'}${Math.abs(t.netImpact)}</b><span>Net Impact</span></div>
       </div>
     </div>
     <div class="tprev">
@@ -2379,7 +3350,8 @@ function resExpanded(t){
   else if(sub==='timeline'){
     const tl=[...hls].sort((a,b)=>(a.published||'')<(b.published||'')?1:-1);
     inner = tl.length ? `<div class="timeline">`+tl.map(h=>`<div class="tl-item"><div class="t">${escapeHtml((h.published||'—').slice(0,16))} · ${escapeHtml((h.source||'').split(':')[0])} · ${escapeHtml(h.sentiment||'')}</div>${escapeHtml((h.headline||'').slice(0,130))}</div>`).join('')+`</div>` : '<div class="muted">No timeline data.</div>';
-  } else inner = hls.length ? hls.map(hlRow).join('') : '<div class="muted">No relevant articles.</div>';
+  } else inner = (hls.length ? articleSummaryBox(t.ticker, hls) + hls.map(hlRow).join('')
+                             : '<div class="muted">No relevant articles.</div>');
   return `<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:4px"><div class="rtabs">${tabs}</div>${inner}</div>`;
 }
 function resSignalsView(tk){
@@ -2418,6 +3390,55 @@ function renderResultsTime(){
     : '<div class="muted" style="padding:24px">No headlines match.</div>';
 }
 
+// ── Run History (all collector runs: scheduled / manual / search) ─────────────
+let _hist = { trigger:'all', runs:[] };
+async function viewRunHistory(){
+  const card = $('#agent-modal-card'); card.classList.add('wide');
+  card.innerHTML = '<div class="spin">Loading run history…</div>';
+  $('#agent-modal').classList.remove('hidden');
+  await reloadRunHistory();
+}
+async function reloadRunHistory(){
+  try {
+    const d = await (await fetch('/api/news_collector/runs?trigger_source='+encodeURIComponent(_hist.trigger)+'&limit=200')).json();
+    _hist.runs = d.runs||[];
+  } catch(e){ _hist.runs = []; }
+  renderRunHistory();
+}
+function trigBadge(t){ return t?`<span class="trig ${t}">${escapeHtml(t)}</span>`:'<span class="muted">—</span>'; }
+function renderRunHistory(){
+  const tabs=[['all','All'],['scheduled','Scheduled'],['manual','Manual'],['search','Search']]
+    .map(([k,l])=>`<button class="rtab ${_hist.trigger===k?'on':''}" onclick="_hist.trigger='${k}';reloadRunHistory()">${l}</button>`).join('');
+  const rows = _hist.runs.map(r=>{
+    const tks=(r.tickers||[]);
+    const tkChips = tks.slice(0,8).map(t=>`<span class="tchip">${escapeHtml(t)}</span>`).join('')+(tks.length>8?` <span class="muted">+${tks.length-8}</span>`:'') || '<span class="muted">—</span>';
+    return `<div class="runrow">
+      <div class="rr-top">
+        <span class="st ${r.status||'unknown'}">${escapeHtml(r.status||'—')}</span>
+        ${trigBadge(r.trigger_source)}
+        <span class="rr-name">${escapeHtml(r.agent_name||'News Collector')}</span>
+        <span class="rr-time">${fmtTime(r.completed_at||r.started_at)}</span>
+      </div>
+      ${r.query?`<div class="rr-q">“${escapeHtml(r.query)}”</div>`:''}
+      <div class="rr-chips">${tkChips}</div>
+      <div class="rr-kpis">
+        <span><b>${r.articles_collected??'—'}</b> collected</span>
+        <span><b>${r.articles_relevant??'—'}</b> relevant</span>
+        <span><b>${r.signals_generated??'—'}</b> signals</span>
+        <span class="pos"><b>${r.signals_positive??'—'}</b> +</span>
+        <span class="neg"><b>${r.signals_negative??'—'}</b> −</span>
+        ${(r.errors&&r.errors.length)?`<span class="neg"><b>${r.errors.length}</b> errors</span>`:''}
+      </div>
+    </div>`;
+  }).join('');
+  $('#agent-modal-card').innerHTML = `
+    <div class="res-head"><h2>🕓 Run History</h2>
+      <span class="sub">Scheduled · manual · search-triggered collector runs</span>
+      <button class="ex-btn" style="margin-left:auto" onclick="closeAgentModal()">✕ Close</button></div>
+    <div class="rtabs" style="margin-bottom:14px">${tabs}</div>
+    <div>${rows || '<div class="muted" style="padding:24px">No runs recorded yet for this filter.</div>'}</div>`;
+}
+
 // ── View Logs ────────────────────────────────────────────────────────────────
 async function viewLogs(id){
   $('#agent-modal-card').classList.remove('wide');
@@ -2431,9 +3452,385 @@ async function viewLogs(id){
     <div class="modal-actions"><button class="ghost" onclick="closeAgentModal()">Close</button></div>`;
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// Current user + admin User Management (DB-backed accounts).
+// ══════════════════════════════════════════════════════════════════════════════
+window._me = null;
+async function initMe(){
+  try { const d = await (await fetch('/api/me')).json();
+    window._me = d.authenticated ? d.user : null;
+    window._devOpen = !!d.dev_open;
+  } catch(e){ window._me=null; }
+  renderUserBadge();
+  // Reveal the admin-only Users tab.
+  const isAdmin = window._me && window._me.role==='admin';
+  const t=$('#tab-users'); if(t) t.classList.toggle('hidden', !isAdmin);
+}
+function renderUserBadge(){
+  const el=$('#user-badge'); if(!el) return;
+  if(!window._me){
+    if(window._devOpen){ el.className='user-badge'; el.innerHTML='<span class="ub-name">Dev (open access)</span>'; }
+    else el.classList.add('hidden');
+    return;
+  }
+  const u=window._me;
+  el.className='user-badge';
+  el.innerHTML = `<button class="ub-btn" onclick="toggleUserMenu(event)">
+      <span class="ub-av">${escapeHtml((u.full_name||u.username||'?').slice(0,1).toUpperCase())}</span>
+      <span class="ub-name">${escapeHtml(u.full_name||u.username)}</span>
+      <span class="ub-role ${u.role}">${u.role}</span>
+    </button>
+    <div class="ub-menu hidden" id="ub-menu">
+      <div class="ub-info">${escapeHtml(u.email)}</div>
+      ${u.role==='admin'?`<button class="ci" onclick="showTab('users');closeUserMenu()">👥 User Management</button>`:''}
+      <button class="ci" onclick="location.href='/change-password'">🔑 Change Password</button>
+      <a class="ci" href="/logout">↪ Sign out</a>
+    </div>`;
+}
+function toggleUserMenu(e){ e.stopPropagation(); const m=$('#ub-menu'); if(m) m.classList.toggle('hidden'); }
+function closeUserMenu(){ const m=$('#ub-menu'); if(m) m.classList.add('hidden'); }
+document.addEventListener('click',()=>closeUserMenu());
+
+// ── Admin: User Management page ───────────────────────────────────────────────
+let _users=[];
+async function loadUsers(){
+  const out=$('#users-out'); if(out) out.innerHTML='<div class="spin">Loading users…</div>';
+  try {
+    const r=await fetch('/api/users');
+    if(r.status===403){ if(out) out.innerHTML='<div class="err">Admin access required.</div>'; return; }
+    const d=await r.json(); _users=d.users||[];
+    if($('#users-meta')) $('#users-meta').textContent=`${_users.length} user(s)`;
+    renderUsers();
+  } catch(e){ if(out) out.innerHTML='<div class="err">Failed to load users: '+e+'</div>'; }
+}
+function fmtDateT(s){ if(!s) return '—'; try{ const d=new Date(s); return d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'2-digit'})+' '+d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}); }catch(e){ return s; } }
+function renderUsers(){
+  const out=$('#users-out'); if(!out) return;
+  const me=window._me||{};
+  const rows=_users.map(u=>`<tr class="row">
+    <td><b>${escapeHtml(u.full_name||'—')}</b>${u.id===me.id?' <span class="muted" style="font-size:11px">(you)</span>':''}</td>
+    <td class="muted">${escapeHtml(u.email)}</td>
+    <td class="muted">${escapeHtml(u.username)}</td>
+    <td><span class="ub-role ${u.role}">${u.role}</span></td>
+    <td>${u.is_active?'<span class="badge BUY">Active</span>':'<span class="badge SELL">Inactive</span>'}${u.must_reset_password?' <span class="badge HOLD" title="Must reset password on next login">reset</span>':''}</td>
+    <td class="muted">${fmtDateT(u.last_login_at)}</td>
+    <td class="muted">${fmtDateT(u.created_at)}</td>
+    <td style="white-space:nowrap">
+      <button class="ex-btn" onclick="userEditModal(${u.id})">✏️ Edit</button>
+      <button class="ex-btn" onclick="userResetModal(${u.id})">🔑 Reset</button>
+      <button class="ex-btn" onclick="userToggleActive(${u.id},${u.is_active?'false':'true'})">${u.is_active?'⏸ Deactivate':'✅ Activate'}</button>
+      <button class="ex-btn" onclick="userDelete(${u.id})">🗑</button>
+    </td></tr>`).join('');
+  out.innerHTML=`<table class="utable"><thead><tr>
+    <th>Name</th><th>Email</th><th>Username</th><th>Role</th><th>Status</th><th>Last Login</th><th>Created</th><th>Actions</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+}
+function userById(id){ return _users.find(u=>u.id===id); }
+function closeUserModal(){ $('#user-modal').classList.add('hidden'); }
+function openUserModal(){ $('#user-modal').classList.remove('hidden'); }
+
+function _userForm(u){
+  return `<div class="fld"><label>Full name</label><input id="u-name" type="text" value="${u?escapeHtml(u.full_name||''):''}"></div>
+    <div class="fld"><label>Email</label><input id="u-email" type="email" value="${u?escapeHtml(u.email):''}"></div>
+    <div class="fld"><label>Username</label><input id="u-username" type="text" value="${u?escapeHtml(u.username):''}"></div>
+    <div class="fld"><label>Role</label><select id="u-role">
+      <option value="user" ${u&&u.role==='user'?'selected':''}>user</option>
+      <option value="financial_analyst" ${u&&u.role==='financial_analyst'?'selected':''}>financial_analyst</option>
+      <option value="admin" ${u&&u.role==='admin'?'selected':''}>admin</option></select></div>`;
+}
+function userAddModal(){
+  $('#user-modal-card').innerHTML=`<h2>➕ Add User</h2>
+    ${_userForm(null)}
+    <div class="fld"><label>Temporary password</label><input id="u-pass" type="text" placeholder="user changes this on first login"></div>
+    <div class="fld inline"><label style="margin:0">Force password reset on first login</label>
+      <label class="sw"><input type="checkbox" id="u-reset" checked><span class="sl"></span></label></div>
+    <div id="u-err" class="err" style="display:none"></div>
+    <div class="modal-actions"><button class="ghost" onclick="closeUserModal()">Cancel</button><button onclick="userCreate()">Create User</button></div>`;
+  openUserModal();
+}
+async function userCreate(){
+  const body={ full_name:$('#u-name').value.trim(), email:$('#u-email').value.trim(), username:$('#u-username').value.trim(),
+    role:$('#u-role').value, password:$('#u-pass').value, must_reset_password:$('#u-reset').checked };
+  const r=await fetch('/api/users',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+  const d=await r.json(); if(!r.ok){ _userErr(d.error||'Failed'); return; }
+  closeUserModal(); loadUsers();
+}
+function userEditModal(id){ const u=userById(id); if(!u) return;
+  $('#user-modal-card').innerHTML=`<h2>✏️ Edit User</h2>${_userForm(u)}
+    <div class="fld inline"><label style="margin:0">Active</label>
+      <label class="sw"><input type="checkbox" id="u-active" ${u.is_active?'checked':''}><span class="sl"></span></label></div>
+    <div class="fld inline"><label style="margin:0">Require password reset</label>
+      <label class="sw"><input type="checkbox" id="u-reset" ${u.must_reset_password?'checked':''}><span class="sl"></span></label></div>
+    <div id="u-err" class="err" style="display:none"></div>
+    <div class="modal-actions"><button class="ghost" onclick="closeUserModal()">Cancel</button><button onclick="userSave(${id})">Save</button></div>`;
+  openUserModal();
+}
+async function userSave(id){
+  const body={ full_name:$('#u-name').value.trim(), email:$('#u-email').value.trim(), username:$('#u-username').value.trim(),
+    role:$('#u-role').value, is_active:$('#u-active').checked, must_reset_password:$('#u-reset').checked };
+  const r=await fetch('/api/users/'+id,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+  const d=await r.json(); if(!r.ok){ _userErr(d.error||'Failed'); return; }
+  closeUserModal(); loadUsers(); if(id===(window._me||{}).id) initMe();
+}
+function userResetModal(id){ const u=userById(id); if(!u) return;
+  $('#user-modal-card').innerHTML=`<h2>🔑 Reset Password</h2>
+    <div class="muted" style="font-size:12.5px;margin-bottom:10px">Set a temporary password for <b>${escapeHtml(u.username)}</b>. They must change it on next login. The existing password cannot be viewed.</div>
+    <div class="fld"><label>Temporary password</label><input id="u-pass" type="text" placeholder="temporary password"></div>
+    <div id="u-err" class="err" style="display:none"></div>
+    <div class="modal-actions"><button class="ghost" onclick="closeUserModal()">Cancel</button><button onclick="userReset(${id})">Reset Password</button></div>`;
+  openUserModal();
+}
+async function userReset(id){
+  const pw=$('#u-pass').value; if(!pw){ _userErr('Enter a temporary password'); return; }
+  const r=await fetch('/api/users/'+id+'/reset-password',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({password:pw})});
+  const d=await r.json(); if(!r.ok){ _userErr(d.error||'Failed'); return; }
+  closeUserModal(); loadUsers();
+}
+async function userToggleActive(id,on){
+  const r=await fetch('/api/users/'+id+'/'+(on?'activate':'deactivate'),{method:'POST'});
+  const d=await r.json(); if(!r.ok){ alert(d.error||'Failed'); } loadUsers();
+}
+async function userDelete(id){ const u=userById(id); if(!u) return;
+  if(!confirm('Delete user "'+u.username+'"? This cannot be undone.')) return;
+  const r=await fetch('/api/users/'+id,{method:'DELETE'});
+  const d=await r.json(); if(!r.ok){ alert(d.error||'Failed'); } loadUsers();
+}
+function _userErr(m){ const e=$('#u-err'); if(e){ e.style.display='block'; e.textContent=m; } }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Skills Management — view / review / edit / version the Artik methodology skills.
+// (Editing never changes scoring automatically; the engine is deterministic Python.)
+// ══════════════════════════════════════════════════════════════════════════════
+let _skills=[], _skillPerm={can_edit:false,can_publish:false,role:null}, _curSkill=null, _skillEditing=false;
+const _SKILL_CATEGORY_ORDER=['agents','core','business_quality','portfolio','quant','research','orchestrator','mandate','risk','technical'];
+
+// Minimal, faithful markdown → HTML (headings, lists, tables, code, bold/italic, links, hr).
+function skillMd(md){
+  const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const inline=s=>esc(s)
+    .replace(/`([^`]+)`/g,'<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*]+)\*/g,'$1<em>$2</em>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  const lines=(md||'').split('\n'); let h='', list=null, tbl=[], inCode=false, code='';
+  const flushList=()=>{ if(list){ h+=`<${list.t}>`+list.items.map(x=>`<li>${inline(x)}</li>`).join('')+`</${list.t}>`; list=null; } };
+  const flushTbl=()=>{ if(!tbl.length) return;
+    const rows=tbl.map(r=>r.replace(/^\||\|$/g,'').split('|').map(c=>c.trim())).filter(c=>!c.every(x=>/^:?-{2,}:?$/.test(x)||x===''));
+    if(rows.length){ const head=rows.shift();
+      h+='<table><thead><tr>'+head.map(c=>`<th>${inline(c)}</th>`).join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(c=>`<td>${inline(c)}</td>`).join('')+'</tr>').join('')+'</tbody></table>'; }
+    tbl=[]; };
+  for(const raw of lines){
+    if(/^```/.test(raw.trim())){ if(inCode){ h+=`<pre><code>${esc(code)}</code></pre>`; code=''; inCode=false; } else { flushList(); flushTbl(); inCode=true; } continue; }
+    if(inCode){ code+=raw+'\n'; continue; }
+    const ln=raw.trim();
+    if(/^\|.*\|/.test(ln)){ flushList(); tbl.push(ln); continue; }
+    flushTbl();
+    if(!ln){ flushList(); continue; }
+    const hm=ln.match(/^(#{1,6})\s+(.+)$/);
+    if(hm){ flushList(); const n=hm[1].length; h+=`<h${n}>${inline(hm[2])}</h${n}>`; continue; }
+    if(/^(-{3,}|\*{3,})$/.test(ln)){ flushList(); h+='<hr>'; continue; }
+    const um=ln.match(/^[-*+]\s+(.+)$/), om=ln.match(/^\d+\.\s+(.+)$/);
+    if(um){ if(!list||list.t!=='ul'){ flushList(); list={t:'ul',items:[]}; } list.items.push(um[1]); continue; }
+    if(om){ if(!list||list.t!=='ol'){ flushList(); list={t:'ol',items:[]}; } list.items.push(om[1]); continue; }
+    flushList(); h+=`<p>${inline(ln)}</p>`;
+  }
+  flushList(); flushTbl(); if(inCode) h+=`<pre><code>${esc(code)}</code></pre>`;
+  return h;
+}
+
+async function loadSkills(){
+  const tree=$('#skills-tree'); if(tree) tree.innerHTML='<div class="spin">Loading skills…</div>';
+  try {
+    const d=await (await fetch('/api/skills')).json();
+    _skills=d.skills||[]; _skillPerm={can_edit:!!d.can_edit,can_publish:!!d.can_publish,role:d.role};
+    if($('#skills-meta')) $('#skills-meta').textContent=`${_skills.length} skills · role: ${d.role||'view-only'}`;
+    const nb=$('#skills-new-btn'); if(nb) nb.style.display=_skillPerm.can_edit?'':'none';
+    renderSkillTree();
+  } catch(e){ if(tree) tree.innerHTML='<div class="err">Failed to load skills: '+e+'</div>'; }
+}
+function renderSkillTree(){
+  const tree=$('#skills-tree'); if(!tree) return;
+  const byCat={}; _skills.forEach(s=>{ (byCat[s.category]=byCat[s.category]||[]).push(s); });
+  const cats=Object.keys(byCat).sort((a,b)=>{ const ia=_SKILL_CATEGORY_ORDER.indexOf(a), ib=_SKILL_CATEGORY_ORDER.indexOf(b);
+    return (ia<0?99:ia)-(ib<0?99:ib); });
+  tree.innerHTML = cats.map(cat=>{
+    const items=byCat[cat].sort((a,b)=>a.name.localeCompare(b.name)).map(s=>`
+      <button class="sk-item ${_curSkill&&_curSkill.skill_id===s.skill_id?'on':''}" onclick="openSkill('${s.skill_id}')">
+        <span class="sk-nm">${escapeHtml(s.name)}</span>
+        ${s.impact_component?`<span class="sk-imp" title="Affects ${escapeHtml(s.impact_component)}">⚙ ${escapeHtml(s.impact_component)}</span>`:''}
+        ${s.has_draft?`<span class="sk-badge draft" title="Has unpublished draft">draft</span>`:''}
+      </button>`).join('');
+    return `<div class="sk-cat"><div class="sk-cat-h">${escapeHtml(byCat[cat][0].category_label)} <span class="muted">${byCat[cat].length}</span></div>${items}</div>`;
+  }).join('');
+}
+
+async function openSkill(id){
+  const main=$('#skills-main'); main.innerHTML='<div class="spin">Loading skill…</div>';
+  _skillEditing=false;
+  try { _curSkill=await (await fetch('/api/skills/'+id)).json(); }
+  catch(e){ main.innerHTML='<div class="err">Failed: '+e+'</div>'; return; }
+  renderSkillTree(); renderSkillView();
+}
+function renderSkillView(){
+  const s=_curSkill, main=$('#skills-main'); if(!s) return;
+  const impacts=(s.impacts||[]).map(x=>`<span class="chip-t">${escapeHtml(x)}</span>`).join('');
+  const usedBadge=s.used_by_engine?'<span class="badge BUY">Used by engine</span>':'<span class="badge" style="background:rgba(139,148,158,.16);color:var(--mut)">Reference</span>';
+  const draftNote=s.has_draft?`<div class="grid-banner" style="margin:0 0 12px">📝 Unpublished draft by <b>${escapeHtml((s.draft||{}).author||'')}</b>${(s.draft||{}).requested?' · <b>publish requested</b>':''} — ${escapeHtml((s.draft||{}).change_summary||'no summary')}</div>`:'';
+  const actions = _skillPerm.can_edit
+    ? `<button class="ex-btn" onclick="editSkill()">✏️ Edit</button>
+       <button class="ex-btn" onclick="duplicateSkill('${s.skill_id}')">⧉ Duplicate</button>
+       <button class="ex-btn" onclick="skillVersionsModal('${s.skill_id}')">🕓 Versions (${s.version_count||0})</button>
+       ${_skillPerm.can_publish?`<button class="ex-btn" onclick="deleteSkill('${s.skill_id}')">🗑 Delete</button>`:''}`
+    : `<button class="ex-btn" onclick="skillVersionsModal('${s.skill_id}')">🕓 Versions (${s.version_count||0})</button>`;
+  main.innerHTML = `
+    <div class="sk-head">
+      <div style="min-width:0">
+        <h2>${escapeHtml(s.name)}</h2>
+        <div class="muted" style="font-size:12.5px">${escapeHtml(s.category_label)} · <code>${escapeHtml(s.path)}</code> · v${s.version} · updated ${fmtDateT(s.last_updated)}</div>
+      </div>
+      <div class="sk-actions">${actions}</div>
+    </div>
+    ${draftNote}
+    <div class="sk-impact">
+      ${usedBadge}
+      ${s.impact_component?`<span class="sk-pill">Scoring component: <b>${escapeHtml(s.impact_component)}</b></span>`:''}
+      ${impacts?`<div class="sk-impacts"><span class="muted" style="font-size:11.5px">Impacts:</span> ${impacts}</div>`:''}
+    </div>
+    <div class="rtabs" style="margin:14px 0 0">
+      <button class="rtab on" id="sk-tab-r" onclick="skillTab('rendered')">Rendered</button>
+      <button class="rtab" id="sk-tab-raw" onclick="skillTab('raw')">Raw Markdown</button>
+    </div>
+    <div id="sk-body" class="sk-body md-body">${skillMd(s.content)}</div>`;
+}
+function skillTab(which){
+  $('#sk-tab-r').classList.toggle('on',which==='rendered'); $('#sk-tab-raw').classList.toggle('on',which==='raw');
+  const b=$('#sk-body');
+  if(which==='raw'){ b.className='sk-body'; b.innerHTML=`<pre class="sk-raw">${escapeHtml(_curSkill.content)}</pre>`; }
+  else { b.className='sk-body md-body'; b.innerHTML=skillMd(_curSkill.content); }
+}
+
+function editSkill(){
+  const s=_curSkill; if(!s) return; _skillEditing=true;
+  const draftContent=(s.draft&&s.draft.content)||s.content;
+  $('#skills-main').innerHTML = `
+    <div class="sk-head"><div style="min-width:0"><h2>✏️ Editing · ${escapeHtml(s.name)}</h2>
+      <div class="muted" style="font-size:12.5px"><code>${escapeHtml(s.path)}</code> · changes are saved as a DRAFT — the live skill is only updated on Publish.</div></div></div>
+    <div class="sk-edit">
+      <div class="sk-edit-pane"><label class="muted" style="font-size:11.5px">Markdown</label>
+        <textarea id="sk-editor" oninput="skillPreview()">${escapeHtml(draftContent)}</textarea></div>
+      <div class="sk-edit-pane"><label class="muted" style="font-size:11.5px">Preview</label>
+        <div id="sk-preview" class="sk-body md-body">${skillMd(draftContent)}</div></div>
+    </div>
+    <div id="sk-edit-err" class="err" style="display:none"></div>
+    <div class="sk-editbar">
+      <button class="ghost" onclick="renderSkillView()">Cancel</button>
+      <button class="ex-btn" onclick="saveSkillDraft(false)">💾 Save Draft</button>
+      ${_skillPerm.can_publish
+        ? `<button onclick="publishSkillModal()">🚀 Publish</button>`
+        : `<button onclick="saveSkillDraft(true)">📩 Request Publish</button>`}
+    </div>`;
+}
+function skillPreview(){ const v=$('#sk-editor').value; const p=$('#sk-preview'); if(p) p.innerHTML=skillMd(v); }
+async function saveSkillDraft(requested){
+  const content=$('#sk-editor').value;
+  const r=await fetch('/api/skills/'+_curSkill.skill_id+'/draft',{method:'PUT',headers:{'content-type':'application/json'},
+    body:JSON.stringify({content, change_summary:'', requested:!!requested})});
+  const d=await r.json(); if(!r.ok){ _skErr(d.error||'Failed'); return; }
+  _curSkill=d; toast(requested?'Draft saved — publish requested for admin review.':'Draft saved.');
+  await loadSkills(); renderSkillView();
+}
+function _skErr(m){ const e=$('#sk-edit-err'); if(e){ e.style.display='block'; e.textContent=m; } }
+
+// Governance: publish requires a change summary + confirmation warning.
+function publishSkillModal(){
+  const content=$('#sk-editor')?$('#sk-editor').value:(_curSkill.content);
+  window._skillPublishContent=content;
+  $('#skill-modal-card').innerHTML = `
+    <h2>🚀 Publish · ${escapeHtml(_curSkill.name)}</h2>
+    <div class="gov-warn">⚠ This skill documents <b>${escapeHtml(_curSkill.impact_component||'the Artik methodology')}</b> and may affect Artik scoring behaviour. Publish only after review.</div>
+    <div class="fld"><label>Change summary (required)</label>
+      <textarea id="sk-summary" placeholder="What changed and why…"></textarea></div>
+    <div id="sk-pub-err" class="err" style="display:none"></div>
+    <div class="modal-actions"><button class="ghost" onclick="closeSkillModal()">Cancel</button>
+      <button onclick="doPublishSkill()">Publish live</button></div>`;
+  $('#skill-modal').classList.remove('hidden');
+}
+async function doPublishSkill(){
+  const summary=($('#sk-summary').value||'').trim();
+  if(!summary){ const e=$('#sk-pub-err'); e.style.display='block'; e.textContent='A change summary is required to publish.'; return; }
+  const r=await fetch('/api/skills/'+_curSkill.skill_id+'/publish',{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({content:window._skillPublishContent, change_summary:summary})});
+  const d=await r.json(); if(!r.ok){ const e=$('#sk-pub-err'); e.style.display='block'; e.textContent=d.error||'Failed'; return; }
+  closeSkillModal(); _curSkill=d; toast('Published — live skill updated (v'+d.version+').'); await loadSkills(); renderSkillView();
+}
+function closeSkillModal(){ $('#skill-modal').classList.add('hidden'); }
+
+async function duplicateSkill(id){
+  const r=await fetch('/api/skills/'+id+'/duplicate',{method:'POST'}); const d=await r.json();
+  if(!r.ok){ alert(d.error||'Failed'); return; } toast('Duplicated.'); await loadSkills(); openSkill(d.skill_id);
+}
+async function deleteSkill(id){
+  const s=_curSkill; if(!s) return;
+  if(!confirm('Delete skill "'+s.name+'"?\n\nThis removes the live markdown file. This cannot be undone.')) return;
+  const r=await fetch('/api/skills/'+id,{method:'DELETE'}); const d=await r.json();
+  if(!r.ok){ alert(d.error||'Failed'); return; } _curSkill=null; toast('Skill deleted.');
+  await loadSkills(); $('#skills-main').innerHTML='<div class="skills-empty">Select a skill from the left to view it.</div>';
+}
+
+function skillCreateModal(){
+  const cats=_SKILL_CATEGORY_ORDER.map(c=>`<option value="${c}">${escapeHtml((_skills.find(s=>s.category===c)||{}).category_label||c)}</option>`).join('');
+  $('#skill-modal-card').innerHTML = `
+    <h2>➕ Create New Skill</h2>
+    <div class="fld"><label>Skill name</label><input type="text" id="ns-name" placeholder="e.g. Dividend Safety Skill"></div>
+    <div class="fld"><label>Category</label><select id="ns-cat">${cats}</select></div>
+    <div class="fld"><label>Skill type</label><select id="ns-type">
+      <option>Core scoring</option><option>Agent</option><option>Research</option>
+      <option>Portfolio</option><option>Quant</option><option>Mandate</option></select></div>
+    <div class="fld"><label>Description</label><input type="text" id="ns-desc" placeholder="One-line purpose"></div>
+    <div class="fld"><label>Markdown body (optional — a template is generated if blank)</label>
+      <textarea id="ns-body" style="min-height:120px"></textarea></div>
+    <div id="ns-err" class="err" style="display:none"></div>
+    <div class="modal-actions"><button class="ghost" onclick="closeSkillModal()">Cancel</button>
+      <button onclick="createSkill()">Create Skill</button></div>`;
+  $('#skill-modal').classList.remove('hidden');
+}
+async function createSkill(){
+  const body={ name:$('#ns-name').value.trim(), category:$('#ns-cat').value,
+    description:$('#ns-desc').value.trim(), content:$('#ns-body').value };
+  if(!body.name){ const e=$('#ns-err'); e.style.display='block'; e.textContent='Skill name is required.'; return; }
+  const r=await fetch('/api/skills',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+  const d=await r.json(); if(!r.ok){ const e=$('#ns-err'); e.style.display='block'; e.textContent=d.error||'Failed'; return; }
+  closeSkillModal(); toast('Skill created.'); await loadSkills(); openSkill(d.skill_id);
+}
+
+async function skillVersionsModal(id){
+  $('#skill-modal-card').innerHTML='<div class="spin">Loading versions…</div>'; $('#skill-modal').classList.remove('hidden');
+  let d; try { d=await (await fetch('/api/skills/'+id+'/versions')).json(); } catch(e){ d={versions:[]}; }
+  const rows=(d.versions||[]).map(v=>`<div class="ver-row">
+    <span class="ver-n">v${v.version}</span>
+    <span class="badge ${v.status==='published'?'BUY':v.status==='archived'?'':'HOLD'}" ${v.status==='archived'?'style="background:rgba(139,148,158,.16);color:var(--mut)"':''}>${v.status}</span>
+    <span class="muted" style="font-size:12px">${escapeHtml(v.author||'')} · ${fmtDateT(v.created_at)}</span>
+    <div class="ver-sum">${escapeHtml(v.change_summary||'—')}</div>
+  </div>`).join('') || '<div class="muted" style="padding:12px">No version history yet — this skill has not been edited through the manager.</div>';
+  $('#skill-modal-card').innerHTML=`<h2>🕓 Version History · ${escapeHtml((_curSkill||{}).name||'')}</h2>
+    <div class="vers">${rows}</div>
+    <div class="modal-actions"><button onclick="closeSkillModal()">Close</button></div>`;
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
+initMe();                   // current user → header badge + admin Users tab
 renderModeChips();          // mode pills under the hero
 renderCopilot();            // persistent right-rail AI panel (empty welcome state)
+updateFavNavCount();        // favorites badge in the sidebar
+_ensureFavMenu();           // right-click ticker context menu
+toggleClearBtn();           // search-box clear (✕) initial state
+// Restore Search Tools collapsed/expanded preference (collapsed by default).
+try { if(localStorage.getItem('artik_broker_tools_open')==='1') openTools(true); } catch(e){}
+// Restore Artik Copilot collapsed preference.
+try { if(localStorage.getItem('artik_broker_cop_collapsed')==='1') $('#app').classList.add('copcollapsed'); } catch(e){}
+// Restore left-menu collapsed preference + hover tooltips for the icon rail.
+try { if(localStorage.getItem('artik_broker_nav_collapsed')==='1'){ $('#app').classList.add('collapsed'); const b=$('.brand .collapse'); if(b) b.title='Expand menu'; } } catch(e){}
+initNavTooltips();
 // Shareable deep-link: #q=NVDA,GOOGL  or  #q=AI%20infrastructure%20stocks
 if(location.hash.startsWith('#q=')){
   const q = decodeURIComponent(location.hash.slice(3));
@@ -2456,7 +3853,7 @@ $('#tab-portfolio').classList.add('hidden');
       showTab('analyze','nav-dashboard');   // never land on a hidden tab
     }
     window._newsAvail = !!cfg.news_signals;
-    if(window._newsAvail) $('#news-toggle').classList.remove('hidden');
+    applyNewsAvail(window._newsAvail);
     if(cfg.agents) $('#tab-agents').classList.remove('hidden');
     // Settings view read-outs.
     if($('#set-news')) $('#set-news').textContent = cfg.news_signals ? 'Available' : 'Not configured';
