@@ -19,13 +19,27 @@ docker push "$IMG" >/dev/null
 echo "▶ Pushed ${TAG}; updating service (image only, secrets/roles preserved)"
 
 "$(dirname "$0")/../artikAPIs/venv/bin/python" - "$IMG" "$REGION" <<'PY'
-import sys, boto3
+import os, sys, boto3
 img, region = sys.argv[1], sys.argv[2]
 ar = boto3.client("apprunner", region_name=region)
 svc = next(s for s in ar.list_services()["ServiceSummaryList"] if s["ServiceName"] == "artikbroker")
 d = ar.describe_service(ServiceArn=svc["ServiceArn"])["Service"]
 sc, ic = d["SourceConfiguration"], d["InstanceConfiguration"]
 ir = sc["ImageRepository"]; ir["ImageIdentifier"] = img
+imgcfg = ir.setdefault("ImageConfiguration", {})
+
+# Preserve existing plaintext env + Secrets Manager refs; additively ensure the
+# per-user-auth vars. Existing secrets (APP_SECRET, API keys, …) are untouched.
+envv = dict(imgcfg.get("RuntimeEnvironmentVariables", {}))
+envv["ENVIRONMENT"] = "production"            # strict auth — no dev fallback admin
+# Bootstrap admin only when provided (and only used the first time the users DB is
+# empty). Pass via env to this script; it never has to live in the repo.
+if os.environ.get("INITIAL_ADMIN_PASSWORD"):
+    envv["INITIAL_ADMIN_PASSWORD"] = os.environ["INITIAL_ADMIN_PASSWORD"]
+    envv["INITIAL_ADMIN_EMAIL"] = os.environ.get("INITIAL_ADMIN_EMAIL", "admin@artikbroker.local")
+    envv["INITIAL_ADMIN_USERNAME"] = os.environ.get("INITIAL_ADMIN_USERNAME", "admin")
+imgcfg["RuntimeEnvironmentVariables"] = envv
+
 ar.update_service(
     ServiceArn=svc["ServiceArn"],
     SourceConfiguration={
@@ -35,7 +49,11 @@ ar.update_service(
     },
     InstanceConfiguration={"Cpu": ic["Cpu"], "Memory": ic["Memory"], "InstanceRoleArn": ic["InstanceRoleArn"]},
 )
-secs = sorted(ir["ImageConfiguration"].get("RuntimeEnvironmentSecrets", {}).keys())
-print("✅ submitted. secrets preserved:", secs, "| plaintext:", sorted(ir["ImageConfiguration"].get("RuntimeEnvironmentVariables", {}).keys()) or "NONE")
+secs = sorted(imgcfg.get("RuntimeEnvironmentSecrets", {}).keys())
+print("✅ submitted. secrets preserved:", secs)
+print("   plaintext env:", sorted(envv.keys()))
+if not os.environ.get("INITIAL_ADMIN_PASSWORD") and "INITIAL_ADMIN_PASSWORD" not in envv:
+    print("   ⚠ INITIAL_ADMIN_PASSWORD not set and not already on the service — startup will FAIL "
+          "in production until you set it. Re-run with INITIAL_ADMIN_PASSWORD=...")
 print("   URL: https://" + svc["ServiceUrl"])
 PY
