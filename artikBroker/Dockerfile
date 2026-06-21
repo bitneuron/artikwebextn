@@ -21,6 +21,9 @@ RUN pip install --no-deps /tmp/engine
 
 # 3) The app itself
 COPY artikBroker/ /app/
+# Never ship local dev runtime state — these are created fresh at runtime. (Belt &
+# suspenders alongside .dockerignore; guarantees prod bootstraps a clean users DB.)
+RUN rm -rf /app/config /app/cache /app/search_history
 
 # 4) Stock-analysis methodology skills (read/edited by Skills Management).
 #    SKILLS_DIR points the app at this baked-in copy. NOTE: like the users DB, edits
