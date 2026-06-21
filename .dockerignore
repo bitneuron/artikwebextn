@@ -16,7 +16,11 @@ artikTools/
 # Private / not needed for the build
 memory/
 artikAgents/src/
-artikAgents/agents/knowledge_bases/        # contains private Stock_Portfolio data
+# Exclude private knowledge bases (Stock_Portfolio etc.) but KEEP the stock-analysis
+# methodology so Skills Management can read/edit the skill .md files in production.
+artikAgents/agents/knowledge_bases/*
+!artikAgents/agents/knowledge_bases/stock_analysis
+artikBroker/config/                         # runtime state (users.db, .app_secret, schedules) — never bake into the image
 artikBroker/cache/                          # regenerable daily cache
 artikBroker/search_history/                 # local dev history store (S3 used on AWS)
 artikBroker/Dockerfile

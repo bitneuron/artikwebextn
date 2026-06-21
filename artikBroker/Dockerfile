@@ -22,6 +22,12 @@ RUN pip install --no-deps /tmp/engine
 # 3) The app itself
 COPY artikBroker/ /app/
 
+# 4) Stock-analysis methodology skills (read/edited by Skills Management).
+#    SKILLS_DIR points the app at this baked-in copy. NOTE: like the users DB, edits
+#    here are on the container FS and reset on redeploy until backed by a volume.
+COPY artikAgents/agents/knowledge_bases/stock_analysis/skills /app/skills_library
+ENV SKILLS_DIR=/app/skills_library
+
 # App Runner sends traffic to $PORT (default 8080)
 ENV PORT=8080
 EXPOSE 8080
