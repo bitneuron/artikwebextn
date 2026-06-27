@@ -578,6 +578,51 @@
     .sugg { flex:none; }
     #go { padding:0 18px; }
     .tool-grid { grid-template-columns:1fr; }
+
+    /* ── header: drop the verbose crumb, keep it compact ── */
+    .wtop { padding:11px 13px; gap:8px; }
+    .wtop h2 { font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .wtop .crumb { display:none; }
+    .ub-name, .ub-role { display:none; }            /* user badge → avatar only */
+    .ub-btn { padding:4px; }
+    .ub-menu { right:0; top:42px; }
+
+    /* hero a touch smaller */
+    .hero h1 { font-size:22px; } .hero .tag { font-size:12.5px; }
+
+    /* ── wide tables → scroll horizontally within their section ── */
+    #analyze-results, #sp500-out, #dow-out, #pf-out, #users-out, #fav-out, #hist-out {
+       overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    #analyze-results table, #sp500-out table, #dow-out table,
+    #pf-out table, #users-out table, #fav-out table { min-width:560px; }
+
+    /* card grids → single column (avoid minmax overflow) */
+    .cards, .agrid, .hist-cards, .ana-grid { grid-template-columns:1fr; }
+
+    /* per-view toolbars + filter rows wrap tighter */
+    .pf-bar { gap:8px; padding:12px 13px; }
+    .res-toolbar, .fbar, .res-filters { gap:8px; }
+
+    /* stock detail stacks */
+    .detail-inner { grid-template-columns:1fr; }
+    .det-head { flex-wrap:wrap; }
+    .dtabs { overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+    .dtabs::-webkit-scrollbar { display:none; }
+
+    /* modals fill the small screen cleanly */
+    .modal { padding:14px 8px; align-items:flex-start; }
+    .modal-card, .modal-card.wide { padding:18px 15px; max-width:100%; }
+
+    /* skills: cap the tree so the viewer is reachable; hide component labels in the tree */
+    .skills-tree { max-height:38vh; }
+    .sk-item .sk-imp { display:none; }
+    .sk-head .sk-actions { margin-left:0; }
+  }
+  /* extra-narrow phones */
+  @media (max-width:430px){
+    .wviews { padding:14px 11px 80px; }
+    .seg button { padding:5px 9px; }
+    .ex-btn { padding:6px 9px; font-size:11.5px; }
   }
   .scrim { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:38; display:none; }
   .app.navopen .scrim, .app.copopen .scrim { display:block; }
