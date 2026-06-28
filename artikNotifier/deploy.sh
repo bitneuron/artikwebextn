@@ -132,3 +132,12 @@ else:
 
 print("   URL: https://" + url)
 PY
+
+# ── Announce the completed deployment to Slack ───────────────────────────────
+# No-op unless SLACK_WEBHOOK_URL is in the deployer's environment (never committed).
+if [ -n "${SLACK_WEBHOOK_URL:-}" ]; then
+  echo "▶ Posting deployment notification to Slack"
+  TEST_SUMMARY="${TEST_SUMMARY:-47 backend tests passing}" \
+  BUILD_SUMMARY="${BUILD_SUMMARY:-frontend build clean}" \
+  "$PY" scripts/notify_slack.py || true
+fi

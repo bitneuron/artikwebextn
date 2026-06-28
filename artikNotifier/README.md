@@ -101,6 +101,9 @@ conversion, chatbot integration, and per-user isolation).
 - **Notifications** — scheduler generates per-channel notifications, deduped & retried;
   in-app, email, and **Slack** providers (set `SLACK_WEBHOOK_URL`; falls back to console
   logging when unset); bell with unread/due/overdue counts; notification center.
+  `deploy.sh` also posts an "Artik Notifier Deployment Complete" summary to Slack via
+  `scripts/notify_slack.py` when `SLACK_WEBHOOK_URL` is set (the webhook is read from the
+  environment — never committed).
 - **Dashboard** — upcoming / due-today / overdue / completed / unread + recent activity.
 - **Calendar** — month view with per-day reminders.
 - **🤖 Ask Artik Assistant** — a chatbot that reviews **your own** reminders,
