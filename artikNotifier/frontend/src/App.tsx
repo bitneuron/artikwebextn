@@ -14,6 +14,7 @@ import Notifications from "./pages/Notifications";
 import Assistant from "./pages/Assistant";
 import Admin from "./pages/Admin";
 import Settings from "./pages/Settings";
+import Platform from "./pages/Platform";
 
 function Protected({ children }: { children: JSX.Element }) {
   const { user, loading } = useAuth();
@@ -25,6 +26,13 @@ export default function App() {
   const { user } = useAuth();
   return (
     <Routes>
+      {/* Cross-product landing — public */}
+      <Route path="/platform" element={<Platform />} />
+      <Route path="/apps" element={<Navigate to="/platform" replace />} />
+      {/* URL aliases → this app's root (case handled by lowercasing in <Alias/>) */}
+      {["/artiknotifier", "/ArtikNotifier", "/artik-notifier", "/notifier"].map((p) => (
+        <Route key={p} path={p} element={<Navigate to="/" replace />} />
+      ))}
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
       <Route path="/register" element={user ? <Navigate to="/" replace /> : <Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />

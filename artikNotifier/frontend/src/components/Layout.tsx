@@ -3,6 +3,8 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { useTheme } from "../theme/ThemeContext";
 import NotificationBell from "./NotificationBell";
+import AppSwitcher from "./AppSwitcher";
+import { APP_ENV, APP_VERSION } from "../platform/apps";
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: "🏠", end: true },
@@ -37,11 +39,17 @@ export default function Layout() {
     <div className="min-h-screen md:grid md:grid-cols-[220px_1fr]">
       {/* sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-56 border-r border-slate-200 bg-white p-4 transition-transform dark:border-slate-800 dark:bg-[#0b0f15] md:static md:w-auto md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 w-56 border-r border-slate-200 bg-white p-4 transition-transform dark:border-slate-800 dark:bg-[#0b0f15] md:relative md:w-auto md:translate-x-0 ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="mb-6 flex items-center gap-2 text-lg font-bold">🔔 Artik <span className="text-brand">Notifier</span></div>
+        <button
+          onClick={() => { setOpen(false); nav("/platform"); }}
+          className="mb-6 flex items-center gap-2 text-lg font-bold"
+          title="Artik Platform"
+        >
+          🔔 Artik <span className="text-brand">Notifier</span>
+        </button>
         <nav className="space-y-1">
           {[...NAV, ...(user?.role === "admin" ? [{ to: "/admin", label: "Admin", icon: "🛡️" }] : [])].map((n) => (
             <NavLink
@@ -59,6 +67,9 @@ export default function Layout() {
             </NavLink>
           ))}
         </nav>
+        <div className="absolute bottom-4 left-4 text-[11px] text-slate-400">
+          v{APP_VERSION} · {APP_ENV}
+        </div>
       </aside>
       {open && <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setOpen(false)} />}
 
@@ -66,6 +77,7 @@ export default function Layout() {
       <div className="flex min-h-screen flex-col">
         <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-200 bg-white/80 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-[#0d1117]/80">
           <button className="md:hidden" onClick={() => setOpen(true)}>☰</button>
+          <AppSwitcher />
           <button className="btn-primary !px-3 !py-1.5" onClick={() => nav("/reminders/new")}>+ New Reminder</button>
           <div className="ml-auto flex items-center gap-3">
             <NotificationBell />

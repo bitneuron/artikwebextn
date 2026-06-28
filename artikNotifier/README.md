@@ -90,6 +90,13 @@ channel preferences, bell counts, dashboard, and calendar.
 - **Admin** — role-based user management (`/admin`), audit-logged, admin-only.
 - **UI** — responsive (desktop/tablet/mobile), light + dark mode, per-page browser
   titles (`ArtikNotifier — Dashboard/Calendar/AI Assistant/…`), SEO + Open Graph meta.
+- **Artik Platform** — a shared `/platform` landing ("Choose your application") and an
+  in-app product switcher to move between Artik apps, plus URL aliases
+  (`/artiknotifier`, `/artik-notifier`, `/notifier` → app root). Everything is driven
+  by one registry (`frontend/src/platform/apps.ts`): **registering a new Artik app =
+  appending a single entry** (name, logo, aliases, url, metadata) — the landing page,
+  switcher, and aliases pick it up automatically. SSO-ready (cross-app links are the
+  forwarding point for a shared bearer token).
 
 ## Security
 
