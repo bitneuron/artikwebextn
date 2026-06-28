@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;background:#0d1117;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#e6edf3;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0d1117;padding:28px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#161b22;border:1px solid #30363d;border-radius:14px;overflow:hidden;">
+        <tr><td style="padding:20px 26px;background:linear-gradient(90deg,#1f6feb33,transparent);border-bottom:1px solid #30363d;">
+          <span style="font-size:18px;font-weight:700;">🔔 {{ brand }}</span>
+        </td></tr>
+        <tr><td style="padding:26px;">
+          <p style="margin:0 0 6px;color:#8b949e;font-size:13px;">Hi {{ name }}, you have a reminder:</p>
+          <h1 style="margin:0 0 14px;font-size:21px;color:#fff;">{{ title }}</h1>
+          {% if due_at %}<p style="margin:0 0 14px;"><span style="display:inline-block;background:#1f6feb22;color:#79c0ff;border:1px solid #1f6feb55;border-radius:999px;padding:4px 12px;font-size:13px;">📅 Due: {{ due_at }}</span></p>{% endif %}
+          {% if description %}<p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#d7dee7;">{{ description }}</p>{% endif %}
+          {% if notes %}<div style="margin:0 0 18px;padding:12px 14px;background:#0d1117;border:1px solid #30363d;border-radius:10px;font-size:13.5px;color:#aab4c2;"><b style="color:#8b949e;">Notes</b><br>{{ notes }}</div>{% endif %}
+          <a href="{{ frontend_url }}/reminders/{{ reminder_id }}" style="display:inline-block;background:#1f6feb;color:#fff;text-decoration:none;font-weight:600;padding:11px 22px;border-radius:10px;font-size:14px;">Open reminder →</a>
+        </td></tr>
+        <tr><td style="padding:16px 26px;border-top:1px solid #30363d;color:#6e7681;font-size:11.5px;">
+          You're receiving this because you set a reminder in {{ brand }}. Manage your notification preferences in the app.
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
