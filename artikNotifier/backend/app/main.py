@@ -4,10 +4,12 @@ from __future__ import annotations
 import time
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routers import auth, dashboard, health, meta, notifications, reminders
 from app.core.config import settings
@@ -70,6 +72,29 @@ for r in (auth.router, reminders.router, notifications.router, dashboard.router,
     app.include_router(r)
 
 
-@app.get("/")
+# ── Serve the built frontend (single-image deploy). In dev (no build) the root
+# returns API info; in the container, frontend_dist/ holds the Vite build. ───────
+_FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend_dist"
+_HAS_FRONTEND = (_FRONTEND_DIST / "index.html").exists()
+
+if _HAS_FRONTEND and (_FRONTEND_DIST / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=str(_FRONTEND_DIST / "assets")), name="assets")
+
+
+@app.get("/", include_in_schema=False)
 def root():
+    if _HAS_FRONTEND:
+        return FileResponse(str(_FRONTEND_DIST / "index.html"))
     return {"app": settings.app_name, "docs": "/docs", "health": "/api/health"}
+
+
+if _HAS_FRONTEND:
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa_fallback(full_path: str):
+        # API/docs paths are handled by their routers; everything else is SPA routing.
+        if full_path.startswith(("api/", "docs", "redoc", "openapi.json")):
+            return JSONResponse({"detail": "not found"}, status_code=404)
+        candidate = _FRONTEND_DIST / full_path
+        if candidate.is_file():
+            return FileResponse(str(candidate))
+        return FileResponse(str(_FRONTEND_DIST / "index.html"))
