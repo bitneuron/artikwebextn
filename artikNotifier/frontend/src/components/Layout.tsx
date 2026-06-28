@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { useTheme } from "../theme/ThemeContext";
 import NotificationBell from "./NotificationBell";
@@ -9,14 +9,29 @@ const NAV = [
   { to: "/reminders", label: "Reminders", icon: "⏰" },
   { to: "/calendar", label: "Calendar", icon: "🗓️" },
   { to: "/notifications", label: "Notifications", icon: "🔔" },
+  { to: "/assistant", label: "AI Assistant", icon: "🤖" },
   { to: "/settings", label: "Settings", icon: "⚙️" },
 ];
+
+// Per-route browser-tab titles → "ArtikNotifier — <Page>"
+const TITLES: Record<string, string> = {
+  "/": "Dashboard", "/reminders": "Reminders", "/calendar": "Calendar",
+  "/notifications": "Notifications", "/assistant": "AI Assistant", "/settings": "Settings",
+  "/admin": "Admin",
+};
 
 export default function Layout() {
   const { user, logout } = useAuth();
   const { theme, toggle } = useTheme();
   const nav = useNavigate();
+  const loc = useLocation();
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const base = loc.pathname.startsWith("/reminders/") ? "Reminder"
+      : TITLES[loc.pathname] ?? "Dashboard";
+    document.title = `ArtikNotifier — ${base}`;
+  }, [loc.pathname]);
 
   return (
     <div className="min-h-screen md:grid md:grid-cols-[220px_1fr]">
@@ -28,7 +43,7 @@ export default function Layout() {
       >
         <div className="mb-6 flex items-center gap-2 text-lg font-bold">🔔 Artik <span className="text-brand">Notifier</span></div>
         <nav className="space-y-1">
-          {NAV.map((n) => (
+          {[...NAV, ...(user?.role === "admin" ? [{ to: "/admin", label: "Admin", icon: "🛡️" }] : [])].map((n) => (
             <NavLink
               key={n.to}
               to={n.to}

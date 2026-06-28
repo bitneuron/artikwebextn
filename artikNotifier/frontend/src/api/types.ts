@@ -71,6 +71,18 @@ export interface CalendarMonth {
   days: { date: string; reminders: Reminder[] }[];
 }
 
+export interface ChatMessage {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+}
+
+export interface ChatResponse {
+  reply: string;
+  insights: string[];
+}
+
 export interface Options {
   categories: string[];
   priorities: string[];

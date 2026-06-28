@@ -36,8 +36,12 @@ class AuthService:
         email = email.lower().strip()
         if self.users.get_by_email(email):
             raise AuthError("an account with that email already exists", 409)
+        # RBAC bootstrap: emails listed in ADMIN_EMAILS get the admin role. Self-
+        # registration can NEVER set its own role otherwise (RegisterIn has no role field).
+        from app.core.config import settings
+        role = "admin" if email in settings.admin_email_set else "user"
         user = User(email=email, full_name=full_name, password_hash=hash_password(password),
-                    timezone=timezone_ or "UTC")
+                    timezone=timezone_ or "UTC", role=role)
         self.users.add(user)
         self.db.add(UserPreferences(user_id=user.id))
         # seed default categories for the user

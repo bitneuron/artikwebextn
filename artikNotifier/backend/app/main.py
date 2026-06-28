@@ -11,7 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routers import auth, dashboard, health, meta, notifications, reminders
+from app.api.routers import (admin, assistant, auth, dashboard, health, meta,
+                             notifications, reminders)
 from app.core.config import settings
 from app.core.database import init_db
 from app.core.logging_config import log_event, setup_logging
@@ -21,6 +22,7 @@ from app.scheduler.scheduler import start_scheduler, stop_scheduler
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging("INFO")
+    settings.assert_secure_for_production()   # fail fast on insecure prod config
     init_db()
     start_scheduler()
     log_event("app", "startup", environment=settings.environment)
@@ -68,7 +70,7 @@ async def rate_limit_and_headers(request: Request, call_next):
 
 
 for r in (auth.router, reminders.router, notifications.router, dashboard.router,
-          meta.router, health.router):
+          meta.router, assistant.router, admin.router, health.router):
     app.include_router(r)
 
 

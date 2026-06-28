@@ -59,6 +59,29 @@ This makes the platform **idempotent** (no duplicate notifications) and **extens
 `email`. Adding SMS/Push/Slack/Webhook = implement a provider + `register(...)`. The
 scheduler and notification engine never change.
 
+## Assistant (chatbot) data flow
+
+`POST /api/assistant/chat` → `get_current_user` (JWT) → `AssistantService(db, user)`.
+The service is **constructed with the authenticated user** and every query inside it is
+filtered by `self.user_id`, so it can only ever read that user's reminders,
+notifications, and preferences. It is deterministic (intent routing + insight rules —
+no external LLM, no raw SQL exposed) and **read-only** (no edits/deletes). Each turn is
+persisted to `chat_messages` (per-user) so history is private and resumable.
+`GET /api/assistant/insights` returns proactive suggestions over the same scoped data.
+
+## Security data flow (defense in depth)
+
+```
+request → rate-limit + security-header middleware
+        → router (Pydantic validates body; int path params reject injection)
+        → get_current_user (JWT) / require_admin (role from DB)
+        → service → repository.get_for_user(id, user_id)   ← ownership/IDOR gate
+        → ORM (parameterized) → DB
+response ← Pydantic response_model (UserOut never includes password_hash)
+        ← React escapes on render (no HTML sinks) ; emails Jinja-autoescaped
+```
+Admin actions additionally write an `audit_logs` row. See `docs/SECURITY.md`.
+
 ## Future AWS mapping
 
 `dispatch_due(db)` is the unit of work — the same function a **Lambda** handler calls.

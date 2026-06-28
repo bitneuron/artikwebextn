@@ -12,6 +12,10 @@ os.environ["DATABASE_URL"] = f"sqlite:///{_TMP_DB}"
 os.environ["SCHEDULER_ENABLED"] = "false"
 os.environ["ENVIRONMENT"] = "development"
 os.environ["EMAIL_CONSOLE_FALLBACK"] = "true"
+# The default fixture user is an admin (so dispatch tests can trigger the scheduler).
+# RBAC tests register their own separate NORMAL users to verify 403s.
+os.environ["ADMIN_EMAILS"] = "tester@example.com"
+os.environ["RATE_LIMIT_PER_MINUTE"] = "100000"   # don't throttle the test suite
 
 from fastapi.testclient import TestClient  # noqa: E402
 

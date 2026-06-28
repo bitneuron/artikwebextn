@@ -11,6 +11,8 @@ import ReminderForm from "./pages/ReminderForm";
 import ReminderDetail from "./pages/ReminderDetail";
 import CalendarPage from "./pages/Calendar";
 import Notifications from "./pages/Notifications";
+import Assistant from "./pages/Assistant";
+import Admin from "./pages/Admin";
 import Settings from "./pages/Settings";
 
 function Protected({ children }: { children: JSX.Element }) {
@@ -35,6 +37,8 @@ export default function App() {
         <Route path="/reminders/:id/edit" element={<ReminderForm />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/notifications" element={<Notifications />} />
+        <Route path="/assistant" element={<Assistant />} />
+        <Route path="/admin" element={<Admin />} />
         <Route path="/settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

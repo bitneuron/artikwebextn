@@ -83,7 +83,22 @@ channel preferences, bell counts, dashboard, and calendar.
   in-app + email providers; bell with unread/due/overdue counts; notification center.
 - **Dashboard** — upcoming / due-today / overdue / completed / unread + recent activity.
 - **Calendar** — month view with per-day reminders.
-- **UI** — responsive (desktop/tablet/mobile), light + dark mode.
+- **🤖 Ask Artik Assistant** — a chatbot that reviews **your own** reminders,
+  notifications, and settings and answers questions ("What's due this week?", "Any
+  overdue payments?", "How should I improve my settings?") with safe, read-only
+  insights. Strictly scoped to the logged-in user; performs no destructive actions.
+- **Admin** — role-based user management (`/admin`), audit-logged, admin-only.
+- **UI** — responsive (desktop/tablet/mobile), light + dark mode, per-page browser
+  titles (`ArtikNotifier — Dashboard/Calendar/AI Assistant/…`), SEO + Open Graph meta.
+
+## Security
+
+Per-user auth (Argon2 + JWT access/refresh + revocable sessions), strict
+**ownership/IDOR** checks on every reminder/notification/setting/chat endpoint,
+**RBAC** for admin features (audit-logged), parameterized queries, CSP + security
+headers, rate limiting, env-only secrets, and a production guard that refuses to boot
+with a default `SECRET_KEY`. Full review + the automated security test suite are in
+[`docs/SECURITY.md`](docs/SECURITY.md).
 
 ## Docs
 
