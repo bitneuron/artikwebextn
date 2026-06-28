@@ -47,6 +47,16 @@ class Settings(BaseSettings):
     # When set, the "slack" channel POSTs notifications to this webhook URL.
     slack_webhook_url: str = ""
 
+    # ── Centralized notifications API (cross-app) ─────────────────────────────
+    # Comma-separated API keys accepted by POST /api/v1/notifications/slack, so other
+    # Artik apps (e.g. artikBroker) can route notifications through this service.
+    notify_api_keys: str = ""
+    notify_default_channel: str = "#artik-notify"
+
+    @property
+    def notify_api_key_set(self) -> set[str]:
+        return {k.strip() for k in self.notify_api_keys.split(",") if k.strip()}
+
     # ── Scheduler ─────────────────────────────────────────────────────────────
     scheduler_enabled: bool = True
     scheduler_interval_minutes: int = 60   # spec: runs hourly

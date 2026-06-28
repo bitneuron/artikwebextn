@@ -193,6 +193,29 @@ def run_async(agent_id: str, cfg: dict, trigger_source: str = "manual",
         except Exception:  # noqa: BLE001
             pass
 
+        # ── generic agent lifecycle hook ────────────────────────────────────────
+        # Every managed agent run funnels through here on completion, so a single
+        # call covers all current and future agents (no per-agent code). Routes the
+        # terminal event to Artik Notifier → Slack #artik-notify. Never raises.
+        try:
+            from notifications import notify_agent_terminal
+            errors = rec.get("errors") or []
+            status = rec.get("status") or "completed"
+            if any("timeout" in str(e).lower() for e in errors):
+                status = "timeout"
+            notify_agent_terminal(
+                agent_name=cfg.get("agent_name", "Stock News Collector"),
+                agent_id=agent_id,
+                job_id=rec.get("run_id") or state(agent_id).get("run_id") or agent_id,
+                task_name=query or f"{trigger_source} run",
+                status=status,
+                started_at=started,
+                completed_at=rec.get("completed_at") or _now(),
+                error_message="; ".join(str(e) for e in errors) or None,
+            )
+        except Exception:  # noqa: BLE001 — notifications must never break a run
+            pass
+
     threading.Thread(target=_worker, name=f"agent-{agent_id}", daemon=True).start()
     return {"started": True, "started_at": started, "trigger_source": trigger_source}
 

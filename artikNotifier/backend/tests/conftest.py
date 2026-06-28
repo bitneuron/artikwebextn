@@ -16,6 +16,7 @@ os.environ["EMAIL_CONSOLE_FALLBACK"] = "true"
 # RBAC tests register their own separate NORMAL users to verify 403s.
 os.environ["ADMIN_EMAILS"] = "tester@example.com"
 os.environ["RATE_LIMIT_PER_MINUTE"] = "100000"   # don't throttle the test suite
+os.environ["NOTIFY_API_KEYS"] = "test-key-123"   # centralized notifications API auth
 
 from fastapi.testclient import TestClient  # noqa: E402
 

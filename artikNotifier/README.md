@@ -104,6 +104,11 @@ conversion, chatbot integration, and per-user isolation).
   `deploy.sh` also posts an "Artik Notifier Deployment Complete" summary to Slack via
   `scripts/notify_slack.py` when `SLACK_WEBHOOK_URL` is set (the webhook is read from the
   environment — never committed).
+- **Centralized notifications API** — `POST /api/v1/notifications/slack` lets other Artik
+  apps (e.g. artikBroker agents) route notifications through this service to Slack. Auth
+  via an `X-API-Key` header matched against `NOTIFY_API_KEYS`; each call is audit-logged
+  (keys are never logged). Payload: `source_app`, `event_type`, `severity`, `title`,
+  `message`, `channel`, `metadata{...}` → formatted Slack message with severity emoji.
 - **Dashboard** — upcoming / due-today / overdue / completed / unread + recent activity.
 - **Calendar** — month view with per-day reminders.
 - **🤖 Ask Artik Assistant** — a chatbot that reviews **your own** reminders,

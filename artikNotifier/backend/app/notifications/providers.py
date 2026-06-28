@@ -36,6 +36,29 @@ class EmailProvider(NotificationProvider):
         return send_email(context.to_email, title, html)
 
 
+def post_slack(text: str, *, blocks: list | None = None) -> tuple[bool, str]:
+    """Post a message to Slack via the configured Incoming Webhook.
+
+    Shared by the SlackProvider (reminders) and the centralized notifications API
+    (cross-app events). Degrades to console-fallback when SLACK_WEBHOOK_URL is unset,
+    and never raises — returns (ok, detail) so callers can record + retry.
+    """
+    url = settings.slack_webhook_url
+    if not url:
+        log_event("notification", "slack (console fallback)", preview=text[:80])
+        return True, "console-fallback"
+    payload: dict = {"text": text}
+    if blocks:
+        payload["blocks"] = blocks
+    try:
+        resp = httpx.post(url, json=payload, timeout=10)
+        if resp.status_code == 200:
+            return True, "delivered"
+        return False, f"slack http {resp.status_code}: {resp.text[:120]}"
+    except Exception as exc:  # noqa: BLE001 — must never raise into the caller
+        return False, f"slack error: {exc}"
+
+
 class SlackProvider(NotificationProvider):
     """Delivers notifications to a Slack channel via an Incoming Webhook.
 
@@ -55,15 +78,4 @@ class SlackProvider(NotificationProvider):
         return "\n".join(lines)
 
     def send(self, *, title, body, context: DeliveryContext) -> tuple[bool, str]:
-        text = self._format(title, body, context)
-        url = settings.slack_webhook_url
-        if not url:
-            log_event("notification", "slack (console fallback)", title=title)
-            return True, "console-fallback"
-        try:
-            resp = httpx.post(url, json={"text": text}, timeout=10)
-            if resp.status_code == 200:
-                return True, "delivered"
-            return False, f"slack http {resp.status_code}: {resp.text[:120]}"
-        except Exception as exc:  # noqa: BLE001 — must never raise into the engine
-            return False, f"slack error: {exc}"
+        return post_slack(self._format(title, body, context))

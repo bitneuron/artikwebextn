@@ -46,6 +46,40 @@ Then open **http://localhost:8100**
   ../artikAgents/agents/stock_broker_agent`). The same package backs the
   stock_broker CLI agent, so the engine has one home and two consumers.
 
+## Agent completion notifications (→ Artik Notifier → Slack)
+
+Every managed agent posts a notification when it reaches a **terminal state**
+(`completed` / `failed` / `cancelled` / `timeout` / `skipped`). Notifications are routed
+through the **centralized Artik Notifier API** (`POST /api/v1/notifications/slack`), which
+forwards them to Slack **#artik-notify** — so all Artik apps share one notification system
+instead of each talking to Slack directly.
+
+**How it works (generic — no per-agent code):** the `notifications/` package
+(`client.py` · `events.py` · `schemas.py`) holds an env-driven client; a single lifecycle
+hook in `agent_runner._worker()` calls `notify_agent_terminal(...)` after every run, so
+**all current and future agents are covered automatically**. The client retries with
+backoff, times out, logs every attempt (never the API key), and **never raises** — a
+notification failure cannot break agent execution. Status→severity:
+completed→success, failed→error, cancelled→warning, timeout→error, skipped→info.
+
+**Configuration** (see `.env.example`; secrets live in env / Secrets Manager, never in git):
+
+| Variable | Purpose |
+|----------|---------|
+| `NOTIFICATIONS_ENABLED` | `true`/`false` master switch |
+| `ARTIK_NOTIFY_API_URL` | Base URL of the Artik Notifier service |
+| `ARTIK_NOTIFY_API_KEY` | Must match one of the Notifier's `NOTIFY_API_KEYS` |
+| `ARTIK_BROKER_APP_NAME` | `source_app` in the payload (default `artikBroker`) |
+| `ARTIK_BROKER_BASE_URL` | Builds the "View Job" link |
+| `NOTIFICATION_TIMEOUT_SECONDS` / `NOTIFICATION_RETRY_COUNT` | Transport tuning |
+
+**Enable/disable:** set `NOTIFICATIONS_ENABLED=false` to turn off; unset URL/key also
+disables (logged, no error). **Test locally:** `python -m pytest tests/` (no network —
+the HTTP transport is injectable). **Add a future agent:** nothing to do — if its run
+goes through `agent_runner`, it notifies automatically. **Troubleshoot:** check the
+`artikbroker.notifications` logger (CloudWatch in prod) — it records agent, job id,
+status, attempt count, and the error on failure.
+
 ## Notes / limits
 
 - ETFs/funds (ARKK, EWY, QQQ, …) return an "engine does not apply" row — the
