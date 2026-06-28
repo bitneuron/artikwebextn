@@ -237,6 +237,7 @@
   .cop-tag { display:inline-block; text-transform:uppercase; letter-spacing:.04em; font-size:10px; font-weight:700;
              color:var(--acc); border:1px solid var(--line); border-radius:6px; padding:1px 6px; margin:0 0 6px; }
   .cop-in { display:flex; gap:8px; padding:10px 14px; border-top:1px solid var(--line); }
+  .cop-in.cop-in-top { border-top:0; border-bottom:1px solid var(--line); }
   .cop-in input { flex:1; background:var(--bg); color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:9px 12px; font-size:14px; }
   .cop-in button { background:var(--acc); color:#fff; border:none; border-radius:8px; padding:9px 16px; font-size:14px; cursor:pointer; }
   .cop-in button:disabled { opacity:.5; cursor:default; }
@@ -2453,13 +2454,13 @@ function renderCopilot(){
       <button class="cop-collapse" onclick="toggleCopilot()" title="Collapse panel">›</button>
     </div>
     ${meta}
-    ${ctxCard?`<div style="padding:12px 14px 0;flex:none">${ctxCard}</div>`:''}
-    <div class="cop-body" id="cop-body">${msgs}${welcome}${copFollowups(c)}</div>
-    <div class="cop-in">
+    <div class="cop-in cop-in-top">
       <input id="cop-input" placeholder="Ask Artik Copilot…" ${c.busy?'disabled':''}
         onkeydown="if(event.key==='Enter'){event.preventDefault();copilotAsk();}" />
       <button id="cop-send" onclick="copilotAsk()" ${c.busy?'disabled':''}>Send</button>
-    </div>`;
+    </div>
+    ${ctxCard?`<div style="padding:12px 14px 0;flex:none">${ctxCard}</div>`:''}
+    <div class="cop-body" id="cop-body">${msgs}${welcome}${copFollowups(c)}</div>`;
   const inp = $('#cop-input'); if(inp && !c.busy) inp.focus();
   const body = $('#cop-body'); if(body) body.scrollTop = body.scrollHeight;
 }
