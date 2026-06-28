@@ -20,7 +20,8 @@ class ReminderBase(BaseModel):
     timezone: str = "UTC"
     recurrence: Recurrence = Recurrence.one_time
     schedule: list[str] = Field(default_factory=lambda: ["on_due"])
-    channels: list[Channel] = Field(default_factory=lambda: [Channel.email, Channel.in_app])
+    channels: list[Channel] = Field(
+        default_factory=lambda: [Channel.email, Channel.in_app, Channel.slack])
     tags: list[str] = Field(default_factory=list)
 
     @field_validator("schedule")

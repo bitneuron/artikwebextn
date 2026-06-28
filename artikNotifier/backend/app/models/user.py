@@ -61,7 +61,7 @@ class UserPreferences(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True)
     theme: Mapped[str] = mapped_column(String(16), default="dark")  # light | dark | system
-    default_channels: Mapped[str] = mapped_column(String(255), default="email,in_app")
+    default_channels: Mapped[str] = mapped_column(String(255), default="email,in_app,slack")
     email_notifications: Mapped[bool] = mapped_column(Boolean, default=True)
     in_app_notifications: Mapped[bool] = mapped_column(Boolean, default=True)
     digest_enabled: Mapped[bool] = mapped_column(Boolean, default=False)

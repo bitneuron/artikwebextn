@@ -18,6 +18,19 @@ def test_slack_options_exposed(auth):
     assert "slack" in opts["channels"]            # now registered → available
 
 
+def test_slack_is_a_default_channel(auth):
+    headers, _, client = auth
+    # new user's default-channels preference includes slack
+    prefs = client.get("/api/preferences", headers=headers).json()
+    assert "slack" in prefs["default_channels"]
+    # a reminder created without explicit channels defaults to include slack
+    r = client.post("/api/reminders", headers=headers,
+                    json={"title": "Pay rent",
+                          "due_at": "2030-01-01T09:00:00+00:00"})
+    assert r.status_code == 201
+    assert "slack" in r.json()["channels"]
+
+
 def test_slack_console_fallback_when_unset(monkeypatch):
     from app.core import config
     monkeypatch.setattr(config.settings, "slack_webhook_url", "", raising=False)

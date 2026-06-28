@@ -25,6 +25,14 @@ export default function ReminderForm() {
   });
 
   useEffect(() => { api.get<Options>("/api/options").then(setOptions); }, []);
+  // New reminders default their channels to the user's preference (Settings → default channels).
+  useEffect(() => {
+    if (editing) return;
+    api.get<{ default_channels: string }>("/api/preferences").then((p) => {
+      const ch = (p.default_channels || "").split(",").map((s) => s.trim()).filter(Boolean);
+      if (ch.length) setForm((f) => ({ ...f, channels: ch }));
+    }).catch(() => { /* keep built-in default */ });
+  }, [editing]);
   useEffect(() => {
     if (!editing) return;
     api.get<Reminder>(`/api/reminders/${id}`).then((r) => setForm({
