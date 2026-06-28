@@ -8,6 +8,8 @@ const SUGGESTIONS = [
   "Which notifications are unread?",
   "How should I improve my reminder settings?",
   "Show me finance-related reminders",
+  "Show my finance notes",
+  "What notes are due this week?",
   "Summarize my calendar for this month",
 ];
 

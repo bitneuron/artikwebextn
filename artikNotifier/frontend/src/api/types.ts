@@ -37,6 +37,31 @@ export interface Reminder {
   updated_at: string;
 }
 
+export interface QuickNote {
+  id: number;
+  user_id: number;
+  title: string | null;
+  note_text: string;
+  category: string;
+  priority: string;
+  status: string;
+  due_date: string | null;
+  due_time: string | null;
+  reminder_id: number | null;
+  archived: boolean;
+  deleted: boolean;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NoteOptions {
+  categories: string[];
+  priorities: string[];
+  statuses: string[];
+  sorts: string[];
+}
+
 export interface Notification {
   id: number;
   reminder_id: number | null;

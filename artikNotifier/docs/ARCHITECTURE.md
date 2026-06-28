@@ -34,7 +34,8 @@ both the web framework and the data store.
   the notification engine (`dispatch_due`), dashboard, calendar, email.
 - **Repositories** (`app/repositories`): typed CRUD/queries per aggregate. The only
   code that touches the session. Swappable for another store.
-- **Models** (`app/models`): SQLAlchemy 2.0 typed models = the 14 tables.
+- **Models** (`app/models`): SQLAlchemy 2.0 typed models = the 16 tables (incl.
+  `quick_notes` + `quick_note_tags` for the Quick Notes module).
 
 ## Notification flow (the core)
 

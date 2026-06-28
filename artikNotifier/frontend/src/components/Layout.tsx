@@ -11,6 +11,7 @@ const NAV = [
   { to: "/reminders", label: "Reminders", icon: "⏰" },
   { to: "/calendar", label: "Calendar", icon: "🗓️" },
   { to: "/notifications", label: "Notifications", icon: "🔔" },
+  { to: "/notes", label: "Quick Notes", icon: "📝" },
   { to: "/assistant", label: "AI Assistant", icon: "🤖" },
   { to: "/settings", label: "Settings", icon: "⚙️" },
 ];
@@ -18,8 +19,8 @@ const NAV = [
 // Per-route browser-tab titles → "ArtikNotifier — <Page>"
 const TITLES: Record<string, string> = {
   "/": "Dashboard", "/reminders": "Reminders", "/calendar": "Calendar",
-  "/notifications": "Notifications", "/assistant": "AI Assistant", "/settings": "Settings",
-  "/admin": "Admin",
+  "/notifications": "Notifications", "/notes": "Quick Notes", "/assistant": "AI Assistant",
+  "/settings": "Settings", "/admin": "Admin",
 };
 
 export default function Layout() {

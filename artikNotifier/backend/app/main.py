@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.routers import (admin, assistant, auth, dashboard, health, meta,
-                             notifications, reminders)
+                             notifications, quick_notes, reminders)
 from app.core.config import settings
 from app.core.database import init_db
 from app.core.logging_config import log_event, setup_logging
@@ -69,8 +69,8 @@ async def rate_limit_and_headers(request: Request, call_next):
     return response
 
 
-for r in (auth.router, reminders.router, notifications.router, dashboard.router,
-          meta.router, assistant.router, admin.router, health.router):
+for r in (auth.router, reminders.router, quick_notes.router, notifications.router,
+          dashboard.router, meta.router, assistant.router, admin.router, health.router):
     app.include_router(r)
 
 

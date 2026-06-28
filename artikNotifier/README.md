@@ -78,9 +78,11 @@ docker compose up --build   # frontend → http://localhost:8088 · backend → 
 # or: cd backend && . .venv/bin/activate && pytest
 ```
 
-16 backend tests cover auth, reminder CRUD + lifecycle (snooze/complete/restore/
+41 backend tests cover auth, reminder CRUD + lifecycle (snooze/complete/restore/
 duplicate/recurring roll-forward), scheduler dispatch, **duplicate prevention**,
-channel preferences, bell counts, dashboard, and calendar.
+channel preferences, bell counts, dashboard, calendar, the AI assistant, security
+(IDOR/RBAC/XSS/hashing), and **Quick Notes** (CRUD, search/filter/sort, tags, reminder
+conversion, chatbot integration, and per-user isolation).
 
 ---
 
@@ -90,6 +92,12 @@ channel preferences, bell counts, dashboard, and calendar.
 - **Reminders** — create / edit / delete / complete / archive / snooze / duplicate /
   restore / search / filter / sort. Categories, priorities, tags, timezone, recurrence
   (one-time → yearly), multi-stage schedule (1mo / 1wk / 2d / same-day / custom).
+- **Quick Notes** — lightweight capture (note text is the only required field) with
+  optional title, due date/time, priority, category, and unlimited tags. Full-text
+  search (incl. `tag:` / category), filter, sort, status lifecycle
+  (active/completed/archived/deleted), and **one-click “Convert to Reminder”** that
+  copies the fields and links the reminder back to the preserved note. Mobile floating
+  “+” capture. The AI assistant searches notes too.
 - **Notifications** — scheduler generates per-channel notifications, deduped & retried;
   in-app + email providers; bell with unread/due/overdue counts; notification center.
 - **Dashboard** — upcoming / due-today / overdue / completed / unread + recent activity.

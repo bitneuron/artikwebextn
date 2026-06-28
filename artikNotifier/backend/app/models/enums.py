@@ -24,6 +24,13 @@ class ReminderStatus(str, enum.Enum):
     deleted = "deleted"
 
 
+class QuickNoteStatus(str, enum.Enum):
+    active = "active"
+    completed = "completed"
+    archived = "archived"
+    deleted = "deleted"
+
+
 class Recurrence(str, enum.Enum):
     one_time = "one_time"
     daily = "daily"
@@ -59,6 +66,12 @@ DEFAULT_CATEGORIES = [
     "Payment", "Finance", "Investment", "Medical", "Insurance", "Vehicle",
     "Tax", "Subscription", "Family", "Personal", "Business", "Education",
     "Shopping", "Custom",
+]
+
+# Categories offered for Quick Notes (lighter-weight than reminder categories).
+NOTE_CATEGORIES = [
+    "Personal", "Business", "Finance", "Medical", "Shopping", "Travel",
+    "Research", "Education", "Ideas", "Other",
 ]
 
 # Offsets (in minutes before due) for the reminder schedule presets.
