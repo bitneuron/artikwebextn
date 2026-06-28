@@ -53,6 +53,17 @@ hit **POST /api/scheduler/run** to fire due notifications immediately.
 In dev, SMTP is unset so reminder emails are **logged to the console** — no mail server
 needed. Forgot-password returns a `dev_token` so you can test the reset flow locally.
 
+## Data durability on AWS
+
+App Runner has **no persistent disk** — each deploy starts a fresh container. To keep
+accounts and reminders across deploys, the production image runs SQLite under
+**[Litestream](https://litestream.io)**, which continuously replicates the DB to S3 and
+**restores it on every container boot** (`docker-entrypoint.sh`). `deploy.sh` provisions
+a versioned, private S3 bucket and an App Runner instance role with scoped S3 access, and
+wires `LITESTREAM_BUCKET`/`LITESTREAM_REGION` into the service. Locally (no bucket) the app
+just uses an ephemeral SQLite file. For multi-instance scale, switch `DATABASE_URL` to
+Postgres/RDS (no code change) and drop the single-instance cap.
+
 ## Quick start (Docker)
 
 ```bash

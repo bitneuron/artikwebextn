@@ -27,7 +27,8 @@ if settings.database_url.startswith("sqlite"):
     def _sqlite_pragmas(dbapi_conn, _):  # noqa: ANN001
         cur = dbapi_conn.cursor()
         cur.execute("PRAGMA foreign_keys=ON")
-        cur.execute("PRAGMA journal_mode=WAL")
+        cur.execute("PRAGMA journal_mode=WAL")   # required for Litestream S3 replication
+        cur.execute("PRAGMA busy_timeout=5000")  # wait out Litestream checkpoints, don't error
         cur.close()
 
 

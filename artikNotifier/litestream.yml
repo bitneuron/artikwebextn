@@ -1,0 +1,11 @@
+# Litestream — continuously replicate the SQLite DB to S3 so account/reminder data
+# SURVIVES every App Runner redeploy (App Runner has no persistent disk). The DB is
+# restored from S3 on container boot by docker-entrypoint.sh, then streamed back to S3
+# (WAL shipping) while the app runs. Bucket/region come from env vars set by deploy.sh.
+dbs:
+  - path: ${LITESTREAM_DB}
+    replicas:
+      - type: s3
+        bucket: ${LITESTREAM_BUCKET}
+        path: artik_notifier
+        region: ${LITESTREAM_REGION}
