@@ -53,7 +53,7 @@ docker push "$IMG" >/dev/null
 echo "▶ Pushed ${TAG}"
 
 SECRET_KEY="$SECRET_KEY" IMG="$IMG" REGION="$REGION" ACCESS_ROLE="$ACCESS_ROLE" REPO="$REPO" \
-BUCKET="$BUCKET" INSTANCE_ROLE_ARN="$INSTANCE_ROLE_ARN" \
+BUCKET="$BUCKET" INSTANCE_ROLE_ARN="$INSTANCE_ROLE_ARN" SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL:-}" \
 "$PY" - <<'PY'
 import os, time, boto3
 img, region, repo = os.environ["IMG"], os.environ["REGION"], os.environ["REPO"]
@@ -61,6 +61,9 @@ access_role, secret_key = os.environ["ACCESS_ROLE"], os.environ["SECRET_KEY"]
 bucket, instance_role = os.environ["BUCKET"], os.environ["INSTANCE_ROLE_ARN"]
 # Litestream needs these set on the container so the entrypoint restores/replicates.
 litestream_env = {"LITESTREAM_BUCKET": bucket, "LITESTREAM_REGION": region}
+# Optional Slack channel — only set when provided (preserved across redeploys otherwise).
+if os.environ.get("SLACK_WEBHOOK_URL"):
+    litestream_env["SLACK_WEBHOOK_URL"] = os.environ["SLACK_WEBHOOK_URL"]
 ar = boto3.client("apprunner", region_name=region)
 
 # Single-instance autoscaling (SQLite is on the instance FS → keep it to one).

@@ -240,7 +240,7 @@ class AssistantService:
 
     def history(self, limit: int = 50) -> list[ChatMessage]:
         stmt = (select(ChatMessage).where(ChatMessage.user_id == self.user_id)
-                .order_by(ChatMessage.created_at.desc()).limit(limit))
+                .order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc()).limit(limit))
         rows = list(self.db.execute(stmt).scalars().all())
         rows.reverse()
         return rows

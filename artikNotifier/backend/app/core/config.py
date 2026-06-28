@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     # When SMTP is unconfigured, emails are written to the console/log instead of sent.
     email_console_fallback: bool = True
 
+    # ── Slack (Incoming Webhook) ──────────────────────────────────────────────
+    # When set, the "slack" channel POSTs notifications to this webhook URL.
+    slack_webhook_url: str = ""
+
     # ── Scheduler ─────────────────────────────────────────────────────────────
     scheduler_enabled: bool = True
     scheduler_interval_minutes: int = 60   # spec: runs hourly

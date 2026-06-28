@@ -3,7 +3,7 @@
 The centralized **reminder & notification platform** for the Artik ecosystem. Create
 recurring and one-time reminders (payments, finance reviews, mortgage, insurance,
 taxes, medical, subscriptions, …); a scheduler fires multi-stage notifications over
-pluggable channels (email + in-app today, SMS/Push/Slack/Webhook ready).
+pluggable channels (email, in-app, and **Slack** today; SMS/Push/Webhook ready).
 
 Part of the **ArtikProjects** monorepo (`artikNotifier/`), alongside `artikBroker`.
 
@@ -99,7 +99,8 @@ conversion, chatbot integration, and per-user isolation).
   copies the fields and links the reminder back to the preserved note. Mobile floating
   “+” capture. The AI assistant searches notes too.
 - **Notifications** — scheduler generates per-channel notifications, deduped & retried;
-  in-app + email providers; bell with unread/due/overdue counts; notification center.
+  in-app, email, and **Slack** providers (set `SLACK_WEBHOOK_URL`; falls back to console
+  logging when unset); bell with unread/due/overdue counts; notification center.
 - **Dashboard** — upcoming / due-today / overdue / completed / unread + recent activity.
 - **Calendar** — month view with per-day reminders.
 - **🤖 Ask Artik Assistant** — a chatbot that reviews **your own** reminders,

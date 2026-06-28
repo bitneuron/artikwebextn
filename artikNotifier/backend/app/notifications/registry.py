@@ -3,7 +3,7 @@ the notification engine. Unregistered channels degrade gracefully (skipped + log
 from __future__ import annotations
 
 from app.notifications.base import NotificationProvider
-from app.notifications.providers import EmailProvider, InAppProvider
+from app.notifications.providers import EmailProvider, InAppProvider, SlackProvider
 
 _REGISTRY: dict[str, NotificationProvider] = {}
 
@@ -20,6 +20,7 @@ def available_channels() -> list[str]:
     return sorted(_REGISTRY.keys())
 
 
-# Built-in MVP channels.
+# Built-in channels (Slack degrades to console-fallback until SLACK_WEBHOOK_URL is set).
 register(InAppProvider())
 register(EmailProvider())
+register(SlackProvider())
