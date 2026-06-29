@@ -31,6 +31,13 @@ RUN rm -rf /app/config /app/cache /app/search_history
 COPY artikAgents/agents/knowledge_bases/stock_analysis/skills /app/skills_library
 ENV SKILLS_DIR=/app/skills_library
 
+# 5) News Collector agent — the Broker runs it as a subprocess. Bake it in and point
+#    the app at it (deps: anthropic + yfinance, already installed above; PyYAML optional).
+COPY artikAgents/agents/news_collector_agent /opt/news_collector_agent
+RUN rm -rf /opt/news_collector_agent/__pycache__ /opt/news_collector_agent/data/news_collector
+ENV NEWS_COLLECTOR_DIR=/opt/news_collector_agent \
+    NEWS_COLLECTOR_DATA_DIR=/app/data/news_collector
+
 # App Runner sends traffic to $PORT (default 8080)
 ENV PORT=8080
 EXPOSE 8080

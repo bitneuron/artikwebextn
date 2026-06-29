@@ -34,13 +34,17 @@ _RESERVED = {_DELETED_KEY}
 
 # Shared data dir with the standalone collector (so the subprocess, news_signals.py,
 # and run-history all line up). Overridable for tests/containers.
-DATA_DIR = Path(os.environ.get(
-    "NEWS_COLLECTOR_DATA_DIR",
-    str(HERE.parent / "artikAgents" / "agents" / "news_collector_agent"
-        / "data" / "news_collector"),
+# Collector location is env-overridable so the agent works both in local dev (sibling
+# artikAgents/ checkout) and in the Broker Docker image (collector baked at NEWS_COLLECTOR_DIR).
+COLLECTOR_DIR = Path(os.environ.get(
+    "NEWS_COLLECTOR_DIR",
+    str(HERE.parent / "artikAgents" / "agents" / "news_collector_agent"),
 ))
-COLLECTOR_DIR = HERE.parent / "artikAgents" / "agents" / "news_collector_agent"
-COLLECTOR_SCRIPT = COLLECTOR_DIR / "news_collector_agent.py"
+COLLECTOR_SCRIPT = Path(os.environ.get(
+    "NEWS_COLLECTOR_SCRIPT", str(COLLECTOR_DIR / "news_collector_agent.py")))
+DATA_DIR = Path(os.environ.get(
+    "NEWS_COLLECTOR_DATA_DIR", str(COLLECTOR_DIR / "data" / "news_collector"),
+))
 
 CONFIG_DIR = HERE / "config"
 CONFIG_PATH = CONFIG_DIR / "agent_schedules.json"
