@@ -38,6 +38,12 @@ if os.environ.get("INITIAL_ADMIN_PASSWORD"):
     envv["INITIAL_ADMIN_PASSWORD"] = os.environ["INITIAL_ADMIN_PASSWORD"]
     envv["INITIAL_ADMIN_EMAIL"] = os.environ.get("INITIAL_ADMIN_EMAIL", "admin@artikbroker.local")
     envv["INITIAL_ADMIN_USERNAME"] = os.environ.get("INITIAL_ADMIN_USERNAME", "admin")
+# Agent-completion notifications → Artik Notifier. Set additively when provided via the
+# deployer env (the API key is a secret, never in the repo); preserved across redeploys.
+for _k in ("NOTIFICATIONS_ENABLED", "ARTIK_NOTIFY_API_URL", "ARTIK_NOTIFY_API_KEY",
+           "ARTIK_BROKER_APP_NAME", "ARTIK_BROKER_BASE_URL"):
+    if os.environ.get(_k):
+        envv[_k] = os.environ[_k]
 imgcfg["RuntimeEnvironmentVariables"] = envv
 
 ar.update_service(
