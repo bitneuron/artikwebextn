@@ -1,0 +1,11 @@
+# Litestream — continuously replicate the Broker's SQLite users DB to S3 so accounts
+# (and admin password changes) SURVIVE App Runner redeploys (App Runner has no
+# persistent disk). Restored on container boot by docker-entrypoint.sh. Bucket/region/
+# db-path come from env vars set by redeploy.sh + the Dockerfile.
+dbs:
+  - path: ${LITESTREAM_DB}
+    replicas:
+      - type: s3
+        bucket: ${LITESTREAM_BUCKET}
+        path: users_db
+        region: ${LITESTREAM_REGION}

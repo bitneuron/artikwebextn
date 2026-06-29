@@ -55,7 +55,8 @@ def _conn() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     c = sqlite3.connect(str(DB_PATH), timeout=10, check_same_thread=False)
     c.row_factory = sqlite3.Row
-    c.execute("PRAGMA journal_mode=WAL")
+    c.execute("PRAGMA journal_mode=WAL")    # required for Litestream S3 replication
+    c.execute("PRAGMA busy_timeout=5000")   # ride out Litestream checkpoints
     return c
 
 

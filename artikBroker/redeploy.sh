@@ -18,6 +18,23 @@ docker tag artikbroker:latest "$IMG"
 docker push "$IMG" >/dev/null
 echo "▶ Pushed ${TAG}; updating service (image only, secrets/roles preserved)"
 
+# ── Durable users DB: Litestream replicates SQLite to S3 (App Runner has no disk). ──
+LS_BUCKET="artik-broker-db-${ACCOUNT}"
+LS_ROLE="AppRunnerInstanceRole-artikbroker"
+echo "▶ Ensuring S3 bucket ${LS_BUCKET} (versioned, private)"
+if ! aws s3api head-bucket --bucket "$LS_BUCKET" 2>/dev/null; then
+  aws s3api create-bucket --bucket "$LS_BUCKET" --region "$REGION" \
+    --create-bucket-configuration LocationConstraint="$REGION" >/dev/null
+fi
+aws s3api put-public-access-block --bucket "$LS_BUCKET" --public-access-block-configuration \
+  BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true >/dev/null
+aws s3api put-bucket-versioning --bucket "$LS_BUCKET" \
+  --versioning-configuration Status=Enabled >/dev/null
+echo "▶ Granting ${LS_ROLE} access to the bucket"
+aws iam put-role-policy --role-name "$LS_ROLE" --policy-name litestream-users-db \
+  --policy-document "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"s3:GetObject\",\"s3:PutObject\",\"s3:DeleteObject\",\"s3:ListBucket\"],\"Resource\":[\"arn:aws:s3:::${LS_BUCKET}\",\"arn:aws:s3:::${LS_BUCKET}/*\"]}]}" >/dev/null
+
+LS_BUCKET="$LS_BUCKET" LS_REGION="$REGION" \
 "$(dirname "$0")/../artikAPIs/venv/bin/python" - "$IMG" "$REGION" <<'PY'
 import os, sys, boto3
 img, region = sys.argv[1], sys.argv[2]
@@ -32,6 +49,9 @@ imgcfg = ir.setdefault("ImageConfiguration", {})
 # per-user-auth vars. Existing secrets (APP_SECRET, API keys, …) are untouched.
 envv = dict(imgcfg.get("RuntimeEnvironmentVariables", {}))
 envv["ENVIRONMENT"] = "production"            # strict auth — no dev fallback admin
+# Litestream: persist the users DB to S3 across redeploys.
+envv["LITESTREAM_BUCKET"] = os.environ["LS_BUCKET"]
+envv["LITESTREAM_REGION"] = os.environ["LS_REGION"]
 # Bootstrap admin only when provided (and only used the first time the users DB is
 # empty). Pass via env to this script; it never has to live in the repo.
 if os.environ.get("INITIAL_ADMIN_PASSWORD"):

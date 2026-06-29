@@ -10,6 +10,14 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# 0) Litestream: streams the SQLite users DB to S3 so accounts survive redeploys.
+ARG LITESTREAM_VERSION=0.3.13
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates wget \
+ && wget -qO /tmp/ls.tar.gz "https://github.com/benbjohnson/litestream/releases/download/v${LITESTREAM_VERSION}/litestream-v${LITESTREAM_VERSION}-linux-amd64.tar.gz" \
+ && tar -C /usr/local/bin -xzf /tmp/ls.tar.gz litestream \
+ && rm /tmp/ls.tar.gz \
+ && apt-get purge -y wget && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+
 # 1) Pinned web + scientific deps (cached layer — changes rarely)
 COPY artikBroker/requirements.txt /app/requirements.txt
 RUN pip install --upgrade pip && pip install -r /app/requirements.txt
@@ -38,7 +46,15 @@ RUN rm -rf /opt/news_collector_agent/__pycache__ /opt/news_collector_agent/data/
 ENV NEWS_COLLECTOR_DIR=/opt/news_collector_agent \
     NEWS_COLLECTOR_DATA_DIR=/app/data/news_collector
 
+# 6) Persistent users DB (Litestream-backed). The DB lives at /data/users.db (outside
+#    /app/config, which is wiped above); Litestream restores/replicates it to S3.
+COPY artikBroker/litestream.yml /etc/litestream.yml
+COPY artikBroker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh && mkdir -p /data
+ENV USERS_DB_PATH=/data/users.db \
+    LITESTREAM_DB=/data/users.db
+
 # App Runner sends traffic to $PORT (default 8080)
 ENV PORT=8080
 EXPOSE 8080
-CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port ${PORT:-8080}"]
+CMD ["/usr/local/bin/docker-entrypoint.sh"]
