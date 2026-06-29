@@ -1060,6 +1060,12 @@
       <button class="ghost" style="margin-left:auto" onclick="userAddModal()">➕ Add User</button>
       <button class="ghost" onclick="loadUsers()">🔄 Refresh</button>
     </div>
+    <div class="pf-bar" style="align-items:center">
+      <span class="up-label">🔔 Notifications</span>
+      <span class="pf-meta">Send a sample agent completion to Artik Notifier → Slack #artik-notify</span>
+      <button class="ghost" style="margin-left:auto" id="notify-test-btn" onclick="sendTestNotification()">📨 Send test notification</button>
+      <span class="pf-meta" id="notify-test-result"></span>
+    </div>
     <div id="users-out"><div class="spin">Loading users…</div></div>
   </section>
 
@@ -3536,6 +3542,19 @@ function renderUserBadge(){
 function toggleUserMenu(e){ e.stopPropagation(); const m=$('#ub-menu'); if(m) m.classList.toggle('hidden'); }
 function closeUserMenu(){ const m=$('#ub-menu'); if(m) m.classList.add('hidden'); }
 document.addEventListener('click',()=>closeUserMenu());
+
+// ── Admin: send a test agent-completion notification ──────────────────────────
+async function sendTestNotification(){
+  const btn=$('#notify-test-btn'), res=$('#notify-test-result');
+  if(btn) btn.disabled=true; if(res){ res.textContent='Sending…'; res.style.color=''; }
+  try {
+    const r=await fetch('/api/notifications/test',{method:'POST'});
+    const d=await r.json();
+    if(r.ok && d.sent){ if(res){ res.textContent='✅ '+(d.detail||'Sent'); res.style.color='#34d399'; } }
+    else { if(res){ res.textContent='⚠ '+(d.detail||d.error||'Not delivered'); res.style.color='#fbbf24'; } }
+  } catch(e){ if(res){ res.textContent='❌ '+e; res.style.color='#f87171'; } }
+  finally { if(btn) btn.disabled=false; }
+}
 
 // ── Admin: User Management page ───────────────────────────────────────────────
 let _users=[];

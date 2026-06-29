@@ -385,6 +385,36 @@ def api_users_list(request: Request):
     return {"users": users_db.list_users()}
 
 
+@app.post("/api/notifications/test")
+def api_notifications_test(request: Request):
+    """Admin-only: send a sample agent-completion notification through the same path
+    real agents use (Artik Notifier → Slack #artik-notify). One-click end-to-end check."""
+    admin = _require_admin(request)
+    if not admin:
+        return JSONResponse({"error": "admin only"}, status_code=403)
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
+    try:
+        from notifications import notify_agent_terminal
+        ok = notify_agent_terminal(
+            agent_name="Notification Test Agent",
+            status="completed",
+            agent_id="test",
+            job_id=f"test-{int(now.timestamp())}",
+            task_name=f"Manual test by {admin.get('username') or admin.get('email') or 'admin'}",
+            started_at=(now - timedelta(seconds=3)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            completed_at=now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        )
+        return {
+            "sent": bool(ok),
+            "detail": ("Delivered to Artik Notifier → Slack #artik-notify." if ok else
+                       "Not delivered — check NOTIFICATIONS_ENABLED / ARTIK_NOTIFY_API_URL / "
+                       "ARTIK_NOTIFY_API_KEY on this service."),
+        }
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"sent": False, "error": str(e)}, status_code=500)
+
+
 @app.post("/api/users")
 async def api_users_create(request: Request):
     admin = _require_admin(request)
