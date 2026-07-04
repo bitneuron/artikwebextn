@@ -40,6 +40,7 @@ import news_signals  # noqa: E402  (read-only overlay from the news-collector ag
 import agents_store  # noqa: E402  (agent registry + config/agent_schedules.json)
 import agent_runner  # noqa: E402  (non-blocking agent execution)
 import etrade  # noqa: E402  (E*TRADE OAuth 1.0a client)
+import portfolio_store  # noqa: E402  (persistent E*TRADE portfolio snapshots)
 import news_runs  # noqa: E402  (run history + results reader)
 import news_data  # noqa: E402  (deletes a config's run history/logs + exclusive-ticker articles)
 import nl_tickers  # noqa: E402  (plain-English statement → tickers, for agent config)
@@ -224,6 +225,11 @@ async def _auth_gate(request: Request, call_next):
             return JSONResponse({"error": "unauthorized — please sign in"}, status_code=401)
         return RedirectResponse("/login", status_code=302)
     request.state.user = user
+    # Role-based access: E*TRADE + Portfolio APIs are admin-only (server-side enforced,
+    # not just hidden in the sidebar).
+    _ADMIN_ONLY = ("/api/etrade", "/api/portfolio", "/api/analyze_portfolio")
+    if user.get("role") != "admin" and any(path.startswith(p) for p in _ADMIN_ONLY):
+        return JSONResponse({"error": "admin only"}, status_code=403)
     if user["must_reset_password"] and path not in (
             "/change-password", "/api/change-password", "/logout", "/api/me"):
         if path.startswith("/api/"):
@@ -527,6 +533,64 @@ def etrade_portfolio(account_id_key: str, request: Request):
         return etrade.ETradeClient().portfolio(sess["token"], sess["secret"], account_id_key)
     except Exception as e:  # noqa: BLE001
         return JSONResponse({"error": str(e)}, 502)
+
+
+def _extract_etrade_holdings(data: dict) -> tuple:
+    """Parse an E*TRADE portfolio response → (holdings, total_value, total_gain).
+    holdings = [{ticker, qty, cost_basis}]. NO tokens/credentials are touched."""
+    pos = (((data or {}).get("PortfolioResponse") or {}).get("AccountPortfolio") or [{}])[0].get("Position") or []
+    if isinstance(pos, dict):
+        pos = [pos]
+    holdings, tv, tg = [], 0.0, 0.0
+    for p in pos:
+        sym = ((p.get("Product") or {}).get("symbol") or p.get("symbolDescription") or "").strip().upper()
+        if not sym:
+            continue
+        qty = _num(p.get("quantity"))
+        mv = _num(p.get("marketValue"))
+        gain = _num(p.get("totalGain"))
+        # cost basis: prefer totalCost; else pricePaid*qty; else marketValue − gain.
+        cost = _num(p.get("totalCost"))
+        if not cost:
+            pp = _num(p.get("pricePaid"))
+            cost = round(pp * qty, 2) if (pp and qty) else round(mv - gain, 2)
+        holdings.append({"ticker": sym, "qty": qty, "cost_basis": round(cost, 2)})
+        tv += mv
+        tg += gain
+    return holdings, round(tv, 2), round(tg, 2)
+
+
+@app.post("/api/etrade/analyze")
+async def etrade_analyze(request: Request):
+    """Create a persistent portfolio snapshot from the selected E*TRADE account's
+    holdings (source='etrade'), then it can be opened + analyzed on the Portfolio page.
+    Stores holdings + totals only — never tokens/credentials."""
+    sess, err = _et_session_or_error(request)
+    if err:
+        return err
+    _, user = _et_uid(request)
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        body = {}
+    key = (body.get("account_id_key") or "").strip()
+    ending = (body.get("account_ending") or "").strip()
+    if not key:
+        return JSONResponse({"error": "account_id_key is required"}, status_code=400)
+    try:
+        data = etrade.ETradeClient().portfolio(sess["token"], sess["secret"], key)
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": str(e)}, 502)
+    holdings, total_value, total_gain = _extract_etrade_holdings(data)
+    if not holdings:
+        return JSONResponse({"error": "No positions found in this E*TRADE account."}, status_code=400)
+    label = f"E*TRADE ••{ending}" if ending else "E*TRADE account"
+    sid = portfolio_store.create(
+        user_id=(user or {}).get("id"), source="etrade", label=label,
+        account_ending=ending, holdings=holdings,
+        total_value=total_value, total_gain=total_gain)
+    return {"snapshot_id": sid, "key": f"et:{sid}", "label": label,
+            "positions": len(holdings), "total_value": total_value, "total_gain": total_gain}
 
 
 @app.post("/api/users")
@@ -1489,13 +1553,89 @@ def _list_portfolio_snapshots() -> list:
     return out
 
 
+def _score_holdings(holdings: list) -> tuple:
+    """holdings: [{ticker, qty, cost_basis}] → (rows, totals) via the LIVE engine.
+    The single analysis path shared by snapshot refresh and E*TRADE snapshots."""
+    tickers = list(dict.fromkeys(h["ticker"] for h in holdings))
+    with ThreadPoolExecutor(max_workers=3) as ex:
+        scored = {r["ticker"]: r for r in ex.map(analyze_one, tickers) if r}
+    rows, t_cost, t_val, t_pl = [], 0.0, 0.0, 0.0
+    for i, h in enumerate(holdings, 1):
+        t = h["ticker"]
+        qty = _num(h.get("qty")) or 0
+        cost = _num(h.get("cost_basis")) or 0
+        sr = scored.get(t) or {}
+        price = sr.get("price")
+        if price is None:
+            lp = _live_price(t)
+            price = round(lp, 2) if lp else None
+        value = round(qty * price, 2) if (qty and price is not None) else None
+        pl = round(value - cost, 2) if (value is not None and cost) else None
+        pl_pct = round(pl / cost * 100, 2) if (pl is not None and cost) else None
+        t_cost += cost or 0
+        t_val += value or 0
+        t_pl += pl or 0
+        rows.append({
+            "n": i, "ticker": t, "qty": qty,
+            "archetype": (sr.get("breakdown") or {}).get("archetype", "") or "",
+            "cost_basis": cost, "price": price, "value": value,
+            "score": sr.get("score"), "rating": sr.get("rating"),
+            "rsi": sr.get("rsi"), "status": sr.get("status"),
+            "pl": pl, "pl_pct": pl_pct, "error": sr.get("error"),
+        })
+    totals = {"qty": None, "cost": round(t_cost, 2), "value": round(t_val, 2),
+              "pl": round(t_pl, 2), "pl_pct": round(t_pl / t_cost * 100, 2) if t_cost else None}
+    return rows, totals
+
+
+def _etrade_snapshots_unified() -> list:
+    """E*TRADE snapshots in the same shape as file snapshots, with a `key`/`source`."""
+    out = []
+    for s in portfolio_store.list_snapshots(source="etrade"):
+        out.append({
+            "key": f"et:{s['id']}", "source": "etrade", "id": s["id"],
+            "date": (s.get("created_at") or "")[:10], "label": s.get("label") or "E*TRADE",
+            "account_ending": s.get("account_ending"),
+            "total_value": s.get("total_value"), "created_at": s.get("created_at"),
+        })
+    return out
+
+
 @app.get("/api/portfolio/dates")
-def api_portfolio_dates():
-    return {"snapshots": _list_portfolio_snapshots()}
+def api_portfolio_dates(source: str = Query(None)):
+    excel = [{**s, "key": f"xl:{s['file']}", "source": "excel",
+              "label": f"{s['date']} ({s['folder']})"} for s in _list_portfolio_snapshots()]
+    etrade_snaps = _etrade_snapshots_unified()
+    snaps = excel if source == "excel" else etrade_snaps if source == "etrade" else excel + etrade_snaps
+    return {"snapshots": snaps, "sources": ["excel", "etrade"]}
+
+
+def _etrade_portfolio_response(key: str):
+    """Load an E*TRADE snapshot's holdings and score them live via the shared engine."""
+    try:
+        sid = int(key.split(":", 1)[1])
+    except (ValueError, IndexError):
+        return JSONResponse({"error": "invalid snapshot key"}, status_code=400)
+    snap = portfolio_store.get(sid)
+    if not snap:
+        return JSONResponse({"error": "E*TRADE snapshot not found."}, status_code=404)
+    rows, totals = _score_holdings(snap["holdings"])
+    now = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
+    return {
+        "date": (snap.get("created_at") or "")[:10], "folder": snap.get("label"),
+        "file": key, "key": key, "source": "etrade", "label": snap.get("label"),
+        "account_ending": snap.get("account_ending"),
+        "as_of": f"E*TRADE holdings · live scored {now}", "refreshed": True,
+        "count": len(rows), "rows": rows, "totals": totals,
+    }
 
 
 @app.get("/api/portfolio")
-def api_portfolio(date: str = Query(None), file: str = Query(None)):
+def api_portfolio(date: str = Query(None), file: str = Query(None), key: str = Query(None)):
+    if key and key.startswith("et:"):
+        return _etrade_portfolio_response(key)
+    if key and key.startswith("xl:"):
+        file = key[3:]
     snaps = _list_portfolio_snapshots()
     if not snaps:
         return JSONResponse({"error": "No saved portfolio snapshots found."}, status_code=404)
@@ -1537,7 +1677,7 @@ def api_portfolio(date: str = Query(None), file: str = Query(None)):
 
 
 @app.get("/api/portfolio/refresh")
-def api_portfolio_refresh(date: str = Query(None), file: str = Query(None)):
+def api_portfolio_refresh(date: str = Query(None), file: str = Query(None), key: str = Query(None)):
     """Re-score a saved snapshot's holdings against LIVE data.
 
     Share counts + cost basis come from the broker export (only as fresh as the
@@ -1545,6 +1685,10 @@ def api_portfolio_refresh(date: str = Query(None), file: str = Query(None)):
     live via the engine. Returns the same shape as /api/portfolio so the same
     renderer can display it.
     """
+    if key and key.startswith("et:"):        # E*TRADE snapshots are always scored live
+        return _etrade_portfolio_response(key)
+    if key and key.startswith("xl:"):
+        file = key[3:]
     snaps = _list_portfolio_snapshots()
     if not snaps:
         return JSONResponse({"error": "No saved portfolio snapshots found."}, status_code=404)
@@ -1570,39 +1714,7 @@ def api_portfolio_refresh(date: str = Query(None), file: str = Query(None)):
     if not holdings:
         return JSONResponse({"error": "snapshot has no holdings to refresh."}, status_code=404)
 
-    # Score every holding live (NOT _score_many — that caps at 25 for AI Search).
-    tickers = list(dict.fromkeys(h["ticker"] for h in holdings))
-    with ThreadPoolExecutor(max_workers=3) as ex:
-        scored = {r["ticker"]: r for r in ex.map(analyze_one, tickers) if r}
-
-    rows, t_cost, t_val, t_pl = [], 0.0, 0.0, 0.0
-    for i, h in enumerate(holdings, 1):
-        t, qty, cost = h["ticker"], h["qty"], h["cost_basis"]
-        sr = scored.get(t) or {}
-        price = sr.get("price")
-        if price is None:  # ETFs / unscored — still price the position for the totals
-            lp = _live_price(t)
-            price = round(lp, 2) if lp else None
-        value = round(qty * price, 2) if (qty and price is not None) else None
-        pl = round(value - cost, 2) if (value is not None and cost) else None
-        pl_pct = round(pl / cost * 100, 2) if (pl is not None and cost) else None
-        t_cost += cost or 0
-        t_val += value or 0
-        t_pl += pl or 0
-        rows.append({
-            "n": i, "ticker": t, "qty": qty,
-            "archetype": (sr.get("breakdown") or {}).get("archetype", "") or "",
-            "cost_basis": cost, "price": price, "value": value,
-            "score": sr.get("score"), "rating": sr.get("rating"),
-            "rsi": sr.get("rsi"), "status": sr.get("status"),
-            "pl": pl, "pl_pct": pl_pct,
-            "error": sr.get("error"),
-        })
-
-    totals = {
-        "qty": None, "cost": round(t_cost, 2), "value": round(t_val, 2),
-        "pl": round(t_pl, 2), "pl_pct": round(t_pl / t_cost * 100, 2) if t_cost else None,
-    }
+    rows, totals = _score_holdings(holdings)   # shared live-scoring path
     now = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
     return {
         "date": chosen["date"], "folder": chosen["folder"], "file": chosen["file"],

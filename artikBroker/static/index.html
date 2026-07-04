@@ -979,6 +979,11 @@
   <!-- PORTFOLIO VIEW (saved snapshots by date) -->
   <section id="view-portfolio" class="hidden">
     <div class="pf-bar">
+      <span class="up-label">Source:</span>
+      <select id="pf-source" onchange="pfSourceChanged(this.value)">
+        <option value="excel">Uploaded Excel</option>
+        <option value="etrade">E*TRADE</option>
+      </select>
       <span class="up-label">📅 Snapshot:</span>
       <select id="pf-date" onchange="loadPortfolio(this.value)"></select>
       <input id="pf-search" placeholder="Search ticker…" oninput="applyPfView()" style="width:160px" />
@@ -2563,6 +2568,10 @@ const _VIEWS = ['analyze','detail','portfolio','etrade','favorites','sp500','dow
 const _TITLES = {analyze:'Analyze', detail:'Stock Detail', portfolio:'Portfolio', etrade:'E*TRADE', favorites:'Favorites',
                  sp500:'S&P 500', dow:'Dow Jones', history:'History', agents:'Agents', skills:'Skills Management', users:'User Management', settings:'Settings'};
 function showTab(name, navId){
+  // Admin-only views: block non-admins (belt & suspenders; backend also returns 403).
+  if(window._me && !window._isAdmin && (name==='etrade'||name==='portfolio'||name==='users')){
+    name='analyze'; navId='nav-dashboard';
+  }
   _VIEWS.forEach(v => { const el=$('#view-'+v); if(el) el.classList.toggle('hidden', v!==name); });
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
   const nav = $('#'+(navId || ('tab-'+name))); if(nav) nav.classList.add('active');
@@ -2802,24 +2811,48 @@ function toggleGen(pfx, i){
 }
 
 // ── Portfolio (saved snapshots by date) ──────────────────────────────────────
+let _pfPendingKey=null, _pfPendingSource=null;
+function pfEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function pfLabel(s){
+  if(s.source==='etrade'){
+    const dt=(s.created_at||s.date||'').slice(0,16).replace('T',' ');
+    const val=s.total_value!=null?(' · $'+Math.round(s.total_value).toLocaleString()):'';
+    return (s.label||'E*TRADE')+' · '+dt+val;
+  }
+  return s.label || (s.date+' ('+s.folder+')');
+}
+function pfSourceChanged(src){ _pfPendingSource=src; loadPortfolioDates(); }
+
 async function loadPortfolioDates(){
+  const src = _pfPendingSource || ($('#pf-source')||{}).value || 'excel';
+  if($('#pf-source')) $('#pf-source').value = src;
   try {
-    const res = await fetch('/api/portfolio/dates');
+    const res = await fetch('/api/portfolio/dates?source='+encodeURIComponent(src));
     const data = await res.json();
     const snaps = data.snapshots || [];
-    if(!snaps.length){ $('#pf-out').innerHTML = '<div class="err">No saved portfolio snapshots found.</div>'; return; }
-    $('#pf-date').innerHTML = snaps.map(s =>
-      `<option value="${s.date}">${s.date}  (${s.folder})</option>`).join('');
-    loadPortfolio(snaps[0].date);
+    if(!snaps.length){
+      $('#pf-date').innerHTML='';
+      $('#pf-out').innerHTML = '<div class="err">No '+(src==='etrade'?'E*TRADE':'uploaded Excel')+' snapshots yet.'
+        + (src==='etrade'?' Go to the E*TRADE page and click “Analyze Portfolio”.':'')+'</div>';
+      window._pfRows=[]; if(typeof applyPfView==='function') applyPfView();
+      return;
+    }
+    $('#pf-date').innerHTML = snaps.map(s => `<option value="${pfEsc(s.key)}">${pfEsc(pfLabel(s))}</option>`).join('');
+    let key = snaps[0].key;
+    if(_pfPendingKey && snaps.some(s=>s.key===_pfPendingKey)) key=_pfPendingKey;
+    _pfPendingKey=null; _pfPendingSource=null;
+    $('#pf-date').value = key;
+    loadPortfolio(key);
   } catch(e){
     $('#pf-out').innerHTML = '<div class="err">Failed to load snapshots: '+e+'</div>';
   }
 }
 
-async function loadPortfolio(date){
-  $('#pf-out').innerHTML = '<div class="spin">Loading '+date+'…</div>';
+async function loadPortfolio(key){
+  if(!key) return;
+  $('#pf-out').innerHTML = '<div class="spin">Loading…</div>';
   try {
-    const res = await fetch('/api/portfolio?date='+encodeURIComponent(date));
+    const res = await fetch('/api/portfolio?key='+encodeURIComponent(key));
     const data = await res.json();
     if(data.error){ $('#pf-out').innerHTML = '<div class="err">'+data.error+'</div>'; return; }
     renderSavedPortfolio(data);
@@ -2829,13 +2862,13 @@ async function loadPortfolio(date){
 }
 
 async function refreshPortfolio(){
-  const date = $('#pf-date').value;
-  if(!date){ return; }
+  const key = $('#pf-date').value;
+  if(!key){ return; }
   const btn = $('#pf-refresh');
   btn.disabled = true; btn.textContent = '⏳ Refreshing…';
   $('#pf-out').innerHTML = '<div class="spin">Re-scoring holdings against live market data… (this can take ~1 min for a large portfolio)</div>';
   try {
-    const res = await fetch('/api/portfolio/refresh?date='+encodeURIComponent(date));
+    const res = await fetch('/api/portfolio/refresh?key='+encodeURIComponent(key));
     const data = await res.json();
     if(data.error){ $('#pf-out').innerHTML = '<div class="err">'+data.error+'</div>'; return; }
     renderSavedPortfolio(data);
@@ -3527,9 +3560,12 @@ async function initMe(){
     window._devOpen = !!d.dev_open;
   } catch(e){ window._me=null; }
   renderUserBadge();
-  // Reveal the admin-only Users tab.
-  const isAdmin = window._me && window._me.role==='admin';
-  const t=$('#tab-users'); if(t) t.classList.toggle('hidden', !isAdmin);
+  // Admin-only sidebar items (Users, E*TRADE, Portfolio). Backend also enforces 403.
+  const isAdmin = (window._me && window._me.role==='admin') || window._devOpen;
+  window._isAdmin = isAdmin;
+  ['tab-users','tab-etrade','tab-portfolio'].forEach(id=>{
+    const el=$('#'+id); if(el) el.classList.toggle('hidden', !isAdmin);
+  });
 }
 function renderUserBadge(){
   const el=$('#user-badge'); if(!el) return;
@@ -3681,9 +3717,10 @@ function etradeSelectAccount(sel){
           <div style="font-weight:600">${etEsc(a.accountDesc||a.accountName||a.accountId||'Account')}</div>
           <div class="pf-meta">${etEsc(a.accountId||'')} · ${etEsc(a.institutionType||'')} · ${etEsc(a.accountType||'')} · ${etEsc(a.accountStatus||'')}</div>
         </div>
-        <div style="display:flex;gap:6px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="ghost" onclick="etradeDetail('${key}','balance')">💰 Balance</button>
           <button class="ghost" onclick="etradeDetail('${key}','portfolio')">🔄 Refresh holdings</button>
+          <button class="ex-btn" onclick="etradeAnalyze('${key}','${etEsc(String(a.accountId||'').slice(-4))}')">📊 Analyze Portfolio</button>
         </div>
       </div>
       <div style="margin-top:8px;font-weight:600" class="up-label">📈 Your holdings</div>
@@ -3692,6 +3729,19 @@ function etradeSelectAccount(sel){
   }).join('');
   // Auto-load holdings for the selected account(s).
   list.forEach(a=>{ const k=a.accountIdKey||''; if(k) etradeDetail(k,'portfolio'); });
+}
+
+async function etradeAnalyze(key, ending){
+  try {
+    const r=await fetch('/api/etrade/analyze',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({account_id_key:key, account_ending:ending})});
+    const d=await r.json();
+    if(!r.ok || !d.snapshot_id){ throw new Error(d.error||'Analyze failed'); }
+    // Open the Portfolio page on the E*TRADE source and auto-select the new snapshot.
+    _pfPendingSource='etrade'; _pfPendingKey=d.key; _pfLoaded=true;
+    showTab('portfolio');
+    loadPortfolioDates();
+  } catch(e){ alert('Analyze Portfolio failed: '+e.message); }
 }
 
 async function etradeDetail(key, kind){
