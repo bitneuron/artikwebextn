@@ -3643,15 +3643,37 @@ async function etradeDisconnect(){
   etradeLoad();
 }
 
+let _etAccounts=[];
 async function etradeAccounts(){
   const out=$('#et-out'); if(out) out.innerHTML='<div class="spin">Loading accounts…</div>';
   let d;
   try { d=await (await fetch('/api/etrade/accounts')).json(); }
   catch(e){ if(out) out.innerHTML='<div class="err">'+etEsc(e)+'</div>'; return; }
   if(d.error){ out.innerHTML='<div class="err">'+etEsc(d.error)+'</div>'; return; }
-  const accts=d.accounts||[];
-  if(!accts.length){ out.innerHTML='<div class="card">No accounts returned.</div>'; return; }
-  out.innerHTML = accts.map(a=>{
+  _etAccounts=d.accounts||[];
+  if(!_etAccounts.length){ out.innerHTML='<div class="card">No accounts returned.</div>'; return; }
+  // Account picker: default to a saved choice, else the account ending 8524, else the first.
+  const saved=localStorage.getItem('et_acct_sel');
+  const valid = saved && (saved==='__all' || _etAccounts.some(a=>a.accountIdKey===saved));
+  const def = valid ? saved
+    : (_etAccounts.find(a=>String(a.accountId||'').endsWith('8524'))||_etAccounts[0]).accountIdKey;
+  const opts = _etAccounts.map(a=>{
+    const last4=String(a.accountId||'').slice(-4);
+    return `<option value="${etEsc(a.accountIdKey)}">Account ending ${etEsc(last4)}${a.accountDesc?(' — '+etEsc(a.accountDesc)):''}</option>`;
+  }).join('') + (_etAccounts.length>1?`<option value="__all">All accounts</option>`:'');
+  out.innerHTML = `<div class="pf-bar" style="margin-bottom:10px">
+      <span class="up-label">Account</span>
+      <select id="et-acct-sel" style="min-width:220px" onchange="etradeSelectAccount(this.value)">${opts}</select>
+    </div><div id="et-accts"></div>`;
+  const sel=$('#et-acct-sel'); if(sel) sel.value=def;
+  etradeSelectAccount(def);
+}
+
+function etradeSelectAccount(sel){
+  localStorage.setItem('et_acct_sel', sel);
+  const box=$('#et-accts'); if(!box) return;
+  const list = sel==='__all' ? _etAccounts : _etAccounts.filter(a=>a.accountIdKey===sel);
+  box.innerHTML = list.map(a=>{
     const key=etEsc(a.accountIdKey||'');
     return `<div class="card" style="margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
@@ -3668,8 +3690,8 @@ async function etradeAccounts(){
       <div id="et-detail-${key}"><div class="spin">Loading holdings…</div></div>
     </div>`;
   }).join('');
-  // Auto-load each account's holdings so stocks show without an extra click.
-  accts.forEach(a=>{ const k=a.accountIdKey||''; if(k) etradeDetail(k,'portfolio'); });
+  // Auto-load holdings for the selected account(s).
+  list.forEach(a=>{ const k=a.accountIdKey||''; if(k) etradeDetail(k,'portfolio'); });
 }
 
 async function etradeDetail(key, kind){
