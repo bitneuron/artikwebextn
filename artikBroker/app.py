@@ -42,6 +42,7 @@ import agents_store  # noqa: E402  (agent registry + config/agent_schedules.json
 import agent_runner  # noqa: E402  (non-blocking agent execution)
 import etrade  # noqa: E402  (E*TRADE OAuth 1.0a client)
 import schwab  # noqa: E402  (Charles Schwab OAuth 2.0 client)
+import fmp  # noqa: E402  (Financial Modeling Prep — third data provider)
 import portfolio_store  # noqa: E402  (persistent broker portfolio snapshots)
 import models as _models  # noqa: E402  (LLM model chains + version fallback)
 import news_runs  # noqa: E402  (run history + results reader)
@@ -2164,6 +2165,229 @@ def api_index(name: str, refresh: bool = False):
     except Exception:
         pass
     return payload
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Multi-provider deep analysis: Yahoo Finance → Alpha Vantage → FMP → Claude/GPT
+# ──────────────────────────────────────────────────────────────────────────────
+def _iso_now() -> str:
+    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _first(x):
+    if isinstance(x, list):
+        return x[0] if x else {}
+    return x if isinstance(x, dict) else {}
+
+
+def _pick(d, *keys):
+    for k in keys:
+        if isinstance(d, dict) and d.get(k) not in (None, ""):
+            return d[k]
+    return None
+
+
+def _pnum(d, *keys):
+    v = _pick(d, *keys)
+    try:
+        return float(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _provider_yahoo(ticker: str) -> dict:
+    ts = _iso_now()
+    try:
+        row = analyze_one(ticker, allow_llm=False)   # existing engine (Yahoo)
+        ok = bool(row and row.get("score") is not None and not row.get("error"))
+        return {"ok": ok, "ts": ts, "data": row or {}, "error": (row or {}).get("error")}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "ts": ts, "data": {}, "error": str(e)}
+
+
+def _provider_alpha(ticker: str) -> dict:
+    ts = _iso_now()
+    data, err = {}, None
+    try:
+        ov = av.overview(ticker)
+        if isinstance(ov, dict) and ov.get("Symbol"):
+            data["overview"] = ov
+    except Exception as e:  # noqa: BLE001
+        err = str(e)
+    try:
+        rr = (av.rsi(ticker) or {}).get("Technical Analysis: RSI") or {}
+        if rr:
+            data["rsi"] = _num_av(next(iter(rr.values())).get("RSI"))
+    except Exception:  # noqa: BLE001
+        pass
+    ok = bool(data)
+    return {"ok": ok, "ts": ts, "data": data, "error": None if ok else (err or "no data")}
+
+
+def _provider_fmp(ticker: str) -> dict:
+    ts = _iso_now()
+    cl = fmp.FMPClient()
+    if not cl.configured:
+        return {"ok": False, "ts": ts, "data": {}, "errors": {}, "error": "FMP_API_KEY not configured"}
+    try:
+        b = cl.bundle(ticker)
+        return {"ok": b["ok"], "ts": ts, "data": b["data"], "errors": b.get("errors", {}),
+                "error": None if b["ok"] else "FMP returned no data"}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "ts": ts, "data": {}, "errors": {}, "error": fmp._scrub(str(e), cl.key)}
+
+
+def _normalize_context(y: dict, a: dict, f: dict) -> dict:
+    yd, ad, fd = y.get("data") or {}, a.get("data") or {}, f.get("data") or {}
+    ov = ad.get("overview") or {}
+    prof, quote = _first(fd.get("profile")), _first(fd.get("quote"))
+    inc_list = fd.get("income_statement") if isinstance(fd.get("income_statement"), list) else []
+    inc, inc_prev = _first(inc_list), (inc_list[1] if len(inc_list) > 1 else {})
+    bal, cf = _first(fd.get("balance_sheet")), _first(fd.get("cash_flow"))
+    rat, km, ev = _first(fd.get("ratios")), _first(fd.get("key_metrics")), _first(fd.get("enterprise_values"))
+    est = _first(fd.get("analyst_estimates"))
+
+    def growth(cur, prev, *keys):
+        c, p = _pnum(cur, *keys), _pnum(prev, *keys)
+        return round((c - p) / abs(p) * 100, 1) if (c is not None and p) else None
+
+    missing, conflicts = [], []
+    price = yd.get("price") or _pnum(quote, "price") or _pnum(prof, "price")
+    if yd.get("price") and _pnum(quote, "price") and abs(yd["price"] - _pnum(quote, "price")) / (yd["price"] or 1) > 0.03:
+        conflicts.append(f"price: Yahoo {yd['price']} vs FMP {_pnum(quote, 'price')}")
+
+    norm = {
+        "price": {"price": price, "change": _pnum(quote, "change"),
+                  "changePct": _pnum(quote, "changePercentage", "changesPercentage"),
+                  "volume": _pnum(quote, "volume")},
+        "technicalIndicators": {"rsi": ad.get("rsi") or (yd.get("technicals") or {}).get("rsi"),
+                                "macd_state": (yd.get("technicals") or {}).get("macd_state"),
+                                "ma50": (yd.get("technicals") or {}).get("ma50"),
+                                "ma200": (yd.get("technicals") or {}).get("ma200")},
+        "fundamentals": {"company": _pick(prof, "companyName") or yd.get("company") or ov.get("Name"),
+                         "sector": _pick(prof, "sector") or yd.get("sector") or ov.get("Sector"),
+                         "industry": _pick(prof, "industry") or ov.get("Industry"),
+                         "beta": _pnum(prof, "beta") or _num_av(ov.get("Beta")),
+                         "marketCap": _pnum(quote, "marketCap") or _pnum(prof, "marketCap") or _num_av(ov.get("MarketCapitalization")),
+                         "eps": _pnum(quote, "eps") or _pnum(inc, "eps") or _num_av(ov.get("EPS"))},
+        "financialStatements": {
+            "revenue": _pnum(inc, "revenue"), "grossProfit": _pnum(inc, "grossProfit"),
+            "operatingIncome": _pnum(inc, "operatingIncome"), "netIncome": _pnum(inc, "netIncome"),
+            "eps": _pnum(inc, "eps"),
+            "totalAssets": _pnum(bal, "totalAssets"), "totalLiabilities": _pnum(bal, "totalLiabilities"),
+            "cash": _pnum(bal, "cashAndCashEquivalents", "cashAndShortTermInvestments"),
+            "debt": _pnum(bal, "totalDebt", "netDebt"),
+            "operatingCashFlow": _pnum(cf, "operatingCashFlow", "netCashProvidedByOperatingActivities"),
+            "freeCashFlow": _pnum(cf, "freeCashFlow")},
+        "ratios": {
+            "pe": _pnum(rat, "priceToEarningsRatio", "priceEarningsRatio", "peRatio") or _pnum(quote, "pe") or _num_av(ov.get("PERatio")),
+            "ps": _pnum(rat, "priceToSalesRatio") or _num_av(ov.get("PriceToSalesRatioTTM")),
+            "pb": _pnum(rat, "priceToBookRatio") or _num_av(ov.get("PriceToBookRatio")),
+            "roe": _pnum(rat, "returnOnEquity") or _num_av(ov.get("ReturnOnEquityTTM")),
+            "roa": _pnum(rat, "returnOnAssets") or _num_av(ov.get("ReturnOnAssetsTTM")),
+            "grossMargin": _pnum(rat, "grossProfitMargin"),
+            "operatingMargin": _pnum(rat, "operatingProfitMargin") or _num_av(ov.get("OperatingMarginTTM")),
+            "netMargin": _pnum(rat, "netProfitMargin") or _num_av(ov.get("ProfitMargin")),
+            "debtToEquity": _pnum(rat, "debtToEquityRatio", "debtEquityRatio"),
+            "currentRatio": _pnum(rat, "currentRatio"), "quickRatio": _pnum(rat, "quickRatio")},
+        "growth": {"revenueYoY": growth(inc, inc_prev, "revenue"),
+                   "epsYoY": growth(inc, inc_prev, "eps"),
+                   "netIncomeYoY": growth(inc, inc_prev, "netIncome")},
+        "valuation": {"marketCap": _pnum(km, "marketCap") or _pnum(quote, "marketCap"),
+                      "enterpriseValue": _pnum(ev, "enterpriseValue") or _pnum(km, "enterpriseValue"),
+                      "evToEbitda": _pnum(km, "evToEBITDA", "enterpriseValueOverEBITDA") or _num_av(ov.get("EVToEBITDA")),
+                      "evToSales": _pnum(km, "evToSales")},
+        "dividends": {"lastDividend": _pnum(prof, "lastDividend", "lastDiv"),
+                      "yield": _pnum(rat, "dividendYield") or _num_av(ov.get("DividendYield"))},
+        "earnings": {"records": (fd.get("earnings") or [])[:4] if isinstance(fd.get("earnings"), list) else []},
+        "analystEstimates": {"revenueAvg": _pnum(est, "revenueAvg", "estimatedRevenueAvg"),
+                             "epsAvg": _pnum(est, "epsAvg", "estimatedEpsAvg")},
+    }
+    for k, v in norm["financialStatements"].items():
+        if v is None:
+            missing.append(f"financialStatements.{k}")
+    providers_ok = {"yahooFinance": y["ok"], "alphaVantage": a["ok"], "financialModelingPrep": f["ok"]}
+    confidence = round(sum(providers_ok.values()) / 3 * 100)
+    norm["dataQuality"] = {"providers": providers_ok, "confidence": confidence,
+                           "missingFields": missing[:20], "conflicts": conflicts}
+    return norm
+
+
+_DEEP_SYSTEM = (
+    "You are a senior equity analyst. You receive multi-provider stock data (Yahoo Finance, "
+    "Alpha Vantage, Financial Modeling Prep) as raw provider payloads PLUS a normalized merge, "
+    "with source names, per-provider timestamps, missing fields, data conflicts, and a "
+    "data-confidence score. Weigh data quality/freshness and note conflicts. Return ONLY a JSON "
+    "object with keys: technical_score (0-100), fundamental_score (0-100), valuation_score (0-100), "
+    "risk_score (0-100), artik_score (0-100 overall), rating (BUY|HOLD|SELL), summary (2-3 sentences), "
+    "strengths (array of 3 short strings), risks (array of 3 short strings), data_notes (array of short "
+    "strings about missing/conflicting data). Base: technical=Alpha Vantage/Yahoo indicators; "
+    "fundamental=FMP statements+ratios; valuation=FMP key metrics+enterprise value; risk=debt, cash flow, "
+    "volatility, earnings trend. JSON only, no prose.")
+
+
+def _ai_deep_analysis(context: dict):
+    akey, okey = _anthropic_key(), _openai_key()
+    if not (akey or okey):
+        return None, "no LLM key configured"
+    payload = json.dumps(context)[:60000]
+    try:
+        if akey:
+            import anthropic
+            client = anthropic.Anthropic(api_key=akey)
+            msg = _models.with_fallback(_models.CLAUDE, lambda mdl: client.messages.create(
+                model=mdl, max_tokens=1400, system=_DEEP_SYSTEM,
+                messages=[{"role": "user", "content": payload}]))
+            txt = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
+        else:
+            from openai import OpenAI
+            client = OpenAI(api_key=okey)
+            r = _models.with_fallback(_models.GPT, lambda mdl: client.chat.completions.create(
+                model=mdl, max_completion_tokens=1400, reasoning_effort="minimal",
+                messages=[{"role": "system", "content": _DEEP_SYSTEM}, {"role": "user", "content": payload}]))
+            txt = r.choices[0].message.content or ""
+        return json.loads(txt[txt.find("{"):txt.rfind("}") + 1]), None
+    except Exception as e:  # noqa: BLE001
+        return None, str(e)
+
+
+@app.get("/api/stocks/analyze/{ticker}")
+def api_stocks_analyze(ticker: str):
+    """Multi-provider deep analysis: Yahoo → Alpha Vantage → FMP → Claude/GPT.
+    Resilient: any provider can fail and the rest still flow to the LLM. The FMP API
+    key is read from the environment and never returned to the client."""
+    t = (ticker or "").strip().upper()
+    if not t or not re.match(r"^[A-Z][A-Z0-9.\-]{0,9}$", t):
+        return JSONResponse({"error": "invalid ticker"}, status_code=400)
+
+    y, a, f = _provider_yahoo(t), _provider_alpha(t), _provider_fmp(t)
+    normalized = _normalize_context(y, a, f)
+
+    # Full context (raw + normalized) goes to the LLM server-side; NEVER the API key.
+    context = {
+        "ticker": t,
+        "providers": {
+            "yahooFinance": {"status": "success" if y["ok"] else "failure", "timestamp": y["ts"],
+                             "data": y["data"], "error": y.get("error")},
+            "alphaVantage": {"status": "success" if a["ok"] else "failure", "timestamp": a["ts"],
+                             "data": a["data"], "error": a.get("error")},
+            "financialModelingPrep": {"status": "success" if f["ok"] else "failure", "timestamp": f["ts"],
+                                      "data": f["data"], "errors": f.get("errors"), "error": f.get("error")},
+        },
+        "normalized": normalized,
+    }
+    ai, ai_err = _ai_deep_analysis(context)
+
+    # Response to the browser: status + normalized + AI (no raw key anywhere).
+    return {
+        "ticker": t,
+        "provider_status": {"yahooFinance": y["ok"], "alphaVantage": a["ok"],
+                            "financialModelingPrep": f["ok"], "ai": bool(ai)},
+        "providers_meta": {k: {"status": v["status"], "timestamp": v["timestamp"], "error": v.get("error")}
+                           for k, v in context["providers"].items()},
+        "normalized": normalized,
+        "ai": ai, "ai_error": ai_err,
+    }
 
 
 def _portfolio_enabled() -> bool:

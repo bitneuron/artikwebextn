@@ -2020,7 +2020,7 @@ function detailFor(r){
     .map(c=>`<span class="pill acc">${escapeHtml(c)}</span>`).join('');
   const ni = r.news_overlay ? `<span class="pill ${r.news_overlay.aggregate_score_delta>=0?'acc':''}">${r.news_overlay.aggregate_score_delta>=0?'+':''}${r.news_overlay.aggregate_score_delta} News Impact</span>` : '';
   const TABS = [['overview','Overview'],['technicals','Technicals'],['fundamentals','Fundamentals'],
-                ['news','News'],['signals','Signals'],['peers','Peers'],['trade','Trade Plan']];
+                ['deep','🔬 Deep Analysis'],['news','News'],['signals','Signals'],['peers','Peers'],['trade','Trade Plan']];
   $('#view-detail').innerHTML = `
     <button class="ghost" style="margin-bottom:14px" onclick="showTab('${back}')">← Back to results</button>
     <div class="det-head">
@@ -2046,6 +2046,7 @@ function detTab(name){
   document.querySelectorAll('#view-detail .dtab').forEach(b=>b.classList.toggle('active', b.dataset.t===name));
   $('#det-body').innerHTML = detContent(window._detR, name);
   if(name==='news' || name==='signals') loadDetailNews(window._detR, name);
+  if(name==='deep') deepAnalyze((window._detR||{}).ticker);
 }
 function kpiCards(cats){
   return `<div class="kpi-grid">${(cats||[]).map(c=>{
@@ -2059,8 +2060,59 @@ function listCards(items, cls){
   if(!items || !items.length) return '<div class="muted">None reported.</div>';
   return `<div class="cardlist">${items.map(s=>`<div class="litem ${cls}">${cls==='good'?'✅':'⚠️'} <span>${escapeHtml(s)}</span></div>`).join('')}</div>`;
 }
+// ── Deep Analysis (Yahoo + Alpha Vantage + FMP → AI) ──────────────────────────
+async function deepAnalyze(ticker){
+  const out=$('#deep-out'); if(!out || !ticker) return;
+  let d;
+  try { d=await (await fetch('/api/stocks/analyze/'+encodeURIComponent(ticker))).json(); }
+  catch(e){ out.innerHTML='<div class="err">Deep analysis failed: '+escapeHtml(String(e))+'</div>'; return; }
+  if(d.error){ out.innerHTML='<div class="err">'+escapeHtml(d.error)+'</div>'; return; }
+  out.innerHTML = renderDeep(d);
+}
+function renderDeep(d){
+  const ps=d.provider_status||{}, n=d.normalized||{}, ai=d.ai||null;
+  const money=v=>v==null?'—':(Math.abs(v)>=1e9?('$'+(v/1e9).toFixed(2)+'B'):Math.abs(v)>=1e6?('$'+(v/1e6).toFixed(1)+'M'):'$'+Number(v).toLocaleString());
+  const pct=v=>v==null?'—':(Math.abs(v)<=1.5?(v*100).toFixed(1)+'%':Number(v).toFixed(1)+'%');
+  const num=v=>v==null?'—':Number(v).toFixed(2);
+  const badge=(l,ok)=>`<span class="badge" style="background:${ok?'rgba(52,211,153,.15)':'rgba(248,113,113,.15)'};color:${ok?'#34d399':'#f87171'}">${l}: ${ok?'✓':'✕'}</span>`;
+  const col=v=>v==null?'var(--txt)':(v>=75?'#34d399':v>=50?'#fbbf24':'#f87171');
+  const sc=(l,v)=>`<div class="kpi"><div class="lbl">${l}</div><div style="font-size:20px;font-weight:700;color:${col(v)}">${v??'—'}</div></div>`;
+  const status=`<div class="pf-bar" style="gap:8px;flex-wrap:wrap">
+    ${badge('Yahoo Finance',ps.yahooFinance)} ${badge('Alpha Vantage',ps.alphaVantage)}
+    ${badge('Financial Modeling Prep',ps.financialModelingPrep)} ${badge('AI (Claude/GPT)',ps.ai)}
+    <span class="pf-meta" style="margin-left:auto">Data confidence: <b>${(n.dataQuality||{}).confidence??'—'}%</b></span></div>`;
+  let aiHtml='';
+  if(ai){
+    aiHtml=`<div class="panel-card" style="margin-top:12px"><h3>🤖 AI analysis — <span style="color:${col(ai.artik_score)}">${escapeHtml(ai.rating||'')}</span></h3>
+      <div class="kpi-grid">${sc('Artik Score',ai.artik_score)}${sc('Fundamental',ai.fundamental_score)}${sc('Valuation',ai.valuation_score)}${sc('Technical',ai.technical_score)}${sc('Risk',ai.risk_score)}</div>
+      <p style="margin-top:10px">${escapeHtml(ai.summary||'')}</p>
+      ${(ai.strengths||[]).length?`<div class="pf-meta"><b style="color:#34d399">Strengths:</b> ${ai.strengths.map(escapeHtml).join(' · ')}</div>`:''}
+      ${(ai.risks||[]).length?`<div class="pf-meta"><b style="color:#f87171">Risks:</b> ${ai.risks.map(escapeHtml).join(' · ')}</div>`:''}
+      ${(ai.data_notes||[]).length?`<div class="pf-meta" style="margin-top:4px">⚠ ${ai.data_notes.map(escapeHtml).join(' · ')}</div>`:''}</div>`;
+  } else if(d.ai_error){ aiHtml=`<div class="pf-meta" style="margin-top:10px">AI analysis unavailable: ${escapeHtml(d.ai_error)}</div>`; }
+  const fs=n.financialStatements||{};
+  const fsRows=[['Revenue',fs.revenue],['Gross profit',fs.grossProfit],['Operating income',fs.operatingIncome],
+    ['Net income',fs.netIncome],['EPS',fs.eps==null?null:('$'+num(fs.eps))],['Total assets',fs.totalAssets],
+    ['Total liabilities',fs.totalLiabilities],['Cash',fs.cash],['Debt',fs.debt],
+    ['Operating cash flow',fs.operatingCashFlow],['Free cash flow',fs.freeCashFlow]];
+  const statements=`<div class="panel-card" style="margin-top:12px"><h3>📊 Financial statements (FMP)</h3>
+    <table class="mini" style="width:100%">${fsRows.map(([l,v])=>`<tr><td>${l}</td><td style="text-align:right">${v==null?'—':(typeof v==='string'?v:money(v))}</td></tr>`).join('')}</table></div>`;
+  const rt=n.ratios||{};
+  const rtRows=[['P/E',num(rt.pe)],['P/S',num(rt.ps)],['P/B',num(rt.pb)],['ROE',pct(rt.roe)],['ROA',pct(rt.roa)],
+    ['Gross margin',pct(rt.grossMargin)],['Operating margin',pct(rt.operatingMargin)],['Net margin',pct(rt.netMargin)],
+    ['Debt/Equity',num(rt.debtToEquity)],['Current ratio',num(rt.currentRatio)],['Quick ratio',num(rt.quickRatio)]];
+  const ratios=`<div class="panel-card" style="margin-top:12px"><h3>📐 Ratios (FMP)</h3>
+    <table class="mini" style="width:100%">${rtRows.map(([l,v])=>`<tr><td>${l}</td><td style="text-align:right">${v}</td></tr>`).join('')}</table></div>`;
+  const val=n.valuation||{}, gr=n.growth||{};
+  const extra=`<div class="pf-meta" style="margin-top:10px">Market cap ${money(val.marketCap)} · EV ${money(val.enterpriseValue)} · EV/EBITDA ${num(val.evToEbitda)} · Rev YoY ${gr.revenueYoY==null?'—':gr.revenueYoY+'%'} · EPS YoY ${gr.epsYoY==null?'—':gr.epsYoY+'%'}</div>`;
+  return status + aiHtml + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${statements}${ratios}</div>` + extra;
+}
+
 function detContent(r, name){
   const b = r.breakdown||{}, t = r.technicals||{}, tp = r.trade_plan||{};
+  if(name==='deep'){
+    return `<div id="deep-out"><div class="spin">Pulling Yahoo Finance + Alpha Vantage + Financial Modeling Prep, then running AI analysis… (this can take ~20-40s)</div></div>`;
+  }
   if(name==='overview'){
     const arch = b.archetype ? `a <b>${escapeHtml(b.archetype)}</b>` : 'a company';
     const summary = `${r.ticker}${r.company?` (${escapeHtml(r.company)})`:''} scores <b>${r.score}</b> — <b>${r.status}</b> — as ${arch} in ${escapeHtml(r.sector||'its sector')}.`
