@@ -3661,12 +3661,15 @@ async function etradeAccounts(){
         </div>
         <div style="display:flex;gap:6px">
           <button class="ghost" onclick="etradeDetail('${key}','balance')">💰 Balance</button>
-          <button class="ghost" onclick="etradeDetail('${key}','portfolio')">📊 Portfolio</button>
+          <button class="ghost" onclick="etradeDetail('${key}','portfolio')">🔄 Refresh holdings</button>
         </div>
       </div>
-      <div id="et-detail-${key}"></div>
+      <div style="margin-top:8px;font-weight:600" class="up-label">📈 Your holdings</div>
+      <div id="et-detail-${key}"><div class="spin">Loading holdings…</div></div>
     </div>`;
   }).join('');
+  // Auto-load each account's holdings so stocks show without an extra click.
+  accts.forEach(a=>{ const k=a.accountIdKey||''; if(k) etradeDetail(k,'portfolio'); });
 }
 
 async function etradeDetail(key, kind){
@@ -3686,11 +3689,25 @@ async function etradeDetail(key, kind){
   } else {
     let pos=(((d.PortfolioResponse||{}).AccountPortfolio||[])[0]||{}).Position||[];
     if(!Array.isArray(pos)) pos=[pos];
-    summary = pos.length ? `<table class="mini" style="margin-top:8px;width:100%"><tr><th>Symbol</th><th>Qty</th><th>Value</th><th>Gain</th></tr>`+
-      pos.map(p=>`<tr><td>${etEsc((p.Product||{}).symbol||p.symbolDescription||'')}</td>
-        <td>${etEsc(p.quantity ?? '')}</td><td>${etEsc(p.marketValue ?? '')}</td>
-        <td>${etEsc(p.totalGain ?? '')}</td></tr>`).join('')+`</table>`
-      : '<div class="pf-meta" style="margin-top:8px">No open positions.</div>';
+    const money=v=>v==null||v===''?'—':(typeof v==='number'?v.toLocaleString(undefined,{style:'currency',currency:'USD'}):etEsc(v));
+    const gainCell=p=>{ const g=p.totalGain, pct=p.totalGainPct; if(g==null&&pct==null) return '—';
+      const up=(Number(g)||0)>=0; const c=up?'#34d399':'#f87171';
+      return `<span style="color:${c}">${money(g)}${pct!=null?` (${etEsc(Number(pct).toFixed(2))}%)`:''}</span>`; };
+    const totalVal=pos.reduce((s,p)=>s+(Number(p.marketValue)||0),0);
+    const totalGain=pos.reduce((s,p)=>s+(Number(p.totalGain)||0),0);
+    summary = pos.length ? `<table class="mini" style="margin-top:8px;width:100%">
+      <tr><th>Symbol</th><th>Qty</th><th>Last</th><th>Cost basis</th><th>Mkt value</th><th>Gain</th></tr>`+
+      pos.map(p=>{ const q=(p.Quick||{}); return `<tr>
+        <td><b>${etEsc((p.Product||{}).symbol||p.symbolDescription||'')}</b></td>
+        <td>${etEsc(p.quantity ?? '')}</td>
+        <td>${money(q.lastTrade)}</td>
+        <td>${money(p.pricePaid ?? p.costPerShare)}</td>
+        <td>${money(p.marketValue)}</td>
+        <td>${gainCell(p)}</td></tr>`; }).join('')+
+      `<tr style="border-top:1px solid var(--line);font-weight:600">
+        <td>Total</td><td></td><td></td><td></td><td>${money(totalVal)}</td>
+        <td style="color:${totalGain>=0?'#34d399':'#f87171'}">${money(totalGain)}</td></tr></table>`
+      : '<div class="pf-meta" style="margin-top:8px">No open positions in this account.</div>';
   }
   box.innerHTML = summary + `<details style="margin-top:8px"><summary class="pf-meta">Raw JSON</summary>
     <pre style="white-space:pre-wrap;font-size:11px;max-height:280px;overflow:auto">${etEsc(JSON.stringify(d,null,2))}</pre></details>`;
