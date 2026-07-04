@@ -853,6 +853,7 @@
       <button class="nav-item" id="nav-research" onclick="goResearch()"><span class="ic">🧭</span><span>Research</span></button>
       <div class="nav-sec">Markets</div>
       <button class="nav-item" id="tab-portfolio" onclick="showTab('portfolio')"><span class="ic">💼</span><span>Portfolio</span></button>
+      <button class="nav-item" id="tab-etrade" onclick="showTab('etrade')"><span class="ic">🔗</span><span>E*TRADE</span></button>
       <button class="nav-item" id="tab-favorites" onclick="showTab('favorites')"><span class="ic">⭐</span><span>Favorites</span><span id="fav-nav-count" class="navcount"></span></button>
       <button class="nav-item" id="tab-sp500" onclick="showTab('sp500')"><span class="ic">🏛️</span><span>S&amp;P 500</span></button>
       <button class="nav-item" id="tab-dow" onclick="showTab('dow')"><span class="ic">🎩</span><span>Dow</span></button>
@@ -992,6 +993,17 @@
     </div>
     <div id="pf-totals"></div>
     <div id="pf-out"><div class="spin">Loading saved portfolios…</div></div>
+  </section>
+
+  <!-- E*TRADE BROKERAGE CONNECTION -->
+  <section id="view-etrade" class="hidden">
+    <div class="pf-bar">
+      <span class="up-label">🔗 E*TRADE</span>
+      <span class="pf-meta" id="et-status">Checking connection…</span>
+      <button class="ghost" style="margin-left:auto" id="et-refresh" onclick="etradeLoad()">🔄 Refresh</button>
+      <button class="ghost hidden" id="et-disconnect" onclick="etradeDisconnect()">⛔ Disconnect</button>
+    </div>
+    <div id="et-out"><div class="spin">Loading…</div></div>
   </section>
 
   <!-- FAVORITES / WATCHLIST -->
@@ -2547,8 +2559,8 @@ function downloadCSV(){
 // ── Tabs ────────────────────────────────────────────────────────────────────
 let _pfLoaded = false;
 const _idxLoaded = {};
-const _VIEWS = ['analyze','detail','portfolio','favorites','sp500','dow','history','agents','skills','users','settings'];
-const _TITLES = {analyze:'Analyze', detail:'Stock Detail', portfolio:'Portfolio', favorites:'Favorites',
+const _VIEWS = ['analyze','detail','portfolio','etrade','favorites','sp500','dow','history','agents','skills','users','settings'];
+const _TITLES = {analyze:'Analyze', detail:'Stock Detail', portfolio:'Portfolio', etrade:'E*TRADE', favorites:'Favorites',
                  sp500:'S&P 500', dow:'Dow Jones', history:'History', agents:'Agents', skills:'Skills Management', users:'User Management', settings:'Settings'};
 function showTab(name, navId){
   _VIEWS.forEach(v => { const el=$('#view-'+v); if(el) el.classList.toggle('hidden', v!==name); });
@@ -2568,6 +2580,7 @@ function showTab(name, navId){
   if(name==='agents'){ loadAgents(); }
   if(name==='users'){ loadUsers(); }
   if(name==='skills'){ loadSkills(); }
+  if(name==='etrade'){ etradeLoad(); }
 }
 function goResearch(){ setMainMode('research'); showTab('analyze','nav-research'); const s=$('#syms'); if(s) s.focus(); }
 
@@ -3554,6 +3567,133 @@ async function sendTestNotification(){
     else { if(res){ res.textContent='⚠ '+(d.detail||d.error||'Not delivered'); res.style.color='#fbbf24'; } }
   } catch(e){ if(res){ res.textContent='❌ '+e; res.style.color='#f87171'; } }
   finally { if(btn) btn.disabled=false; }
+}
+
+// ── E*TRADE brokerage connection (OAuth 1.0a) ─────────────────────────────────
+function etEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+let _etConnected=false;
+
+async function etradeLoad(){
+  const out=$('#et-out'), st=$('#et-status'), dc=$('#et-disconnect');
+  if(out) out.innerHTML='<div class="spin">Loading…</div>';
+  let s;
+  try { s=await (await fetch('/api/etrade/status')).json(); }
+  catch(e){ if(out) out.innerHTML='<div class="err">Failed to load status: '+etEsc(e)+'</div>'; return; }
+  _etConnected=!!s.connected;
+  if(dc) dc.classList.toggle('hidden', !s.connected);
+  const envTag = s.env ? `<span class="pill">${etEsc(s.env)}</span>` : '';
+  if(st) st.innerHTML = s.connected ? `Connected ${envTag}` : (s.configured ? `Not connected ${envTag}` : 'Not configured');
+
+  if(!s.configured){
+    out.innerHTML = `<div class="card"><p>🔌 E*TRADE is <b>not configured on the server</b>.</p>
+      <p class="pf-meta">Set <code>ETRADE_CONSUMER_KEY</code> and <code>ETRADE_CONSUMER_SECRET</code> (and optionally
+      <code>ETRADE_ENV=sandbox|live</code>) as environment variables on the service, then reconnect.</p></div>`;
+    return;
+  }
+  if(s.connected){ etradeAccounts(); return; }
+  // configured but not connected → connect flow
+  out.innerHTML = `<div class="card" style="max-width:620px">
+    <h3 style="margin:0 0 8px">Connect your E*TRADE account (${etEsc(s.env)})</h3>
+    <p class="pf-meta">Three-step OAuth: authorize on E*TRADE, copy the verification code, paste it back here.</p>
+    <button class="ex-btn" id="et-connect-btn" onclick="etradeConnect()">🔗 Connect to E*TRADE</button>
+    <div id="et-verify" class="hidden" style="margin-top:14px">
+      <p>1) A new tab opened to E*TRADE — sign in and <b>approve access</b>.<br>
+         2) Copy the <b>verification code</b> E*TRADE shows you.<br>
+         3) Paste it below and verify.</p>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <a id="et-auth-link" href="#" target="_blank" rel="noopener" class="ghost">↗ Re-open E*TRADE authorization</a>
+        <input id="et-code" placeholder="Verification code" style="width:200px" />
+        <button class="ex-btn" onclick="etradeVerify()">✓ Verify & connect</button>
+      </div>
+      <div id="et-verify-msg" class="pf-meta" style="margin-top:6px"></div>
+    </div></div>`;
+}
+
+async function etradeConnect(){
+  const btn=$('#et-connect-btn'); if(btn){ btn.disabled=true; btn.textContent='Starting…'; }
+  try {
+    const r=await fetch('/api/etrade/connect',{method:'POST'});
+    const d=await r.json();
+    if(!r.ok){ throw new Error(d.error||'connect failed'); }
+    window.open(d.authorize_url,'_blank','noopener');
+    const link=$('#et-auth-link'); if(link) link.href=d.authorize_url;
+    $('#et-verify').classList.remove('hidden');
+    if(btn){ btn.classList.add('hidden'); }
+  } catch(e){
+    if(btn){ btn.disabled=false; btn.textContent='🔗 Connect to E*TRADE'; }
+    alert('E*TRADE connect failed: '+e.message);
+  }
+}
+
+async function etradeVerify(){
+  const code=($('#et-code')||{}).value||''; const msg=$('#et-verify-msg');
+  if(!code.trim()){ if(msg){ msg.textContent='Enter the verification code.'; msg.style.color='#fbbf24'; } return; }
+  if(msg){ msg.textContent='Verifying…'; msg.style.color=''; }
+  try {
+    const r=await fetch('/api/etrade/verify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:code.trim()})});
+    const d=await r.json();
+    if(!r.ok||!d.connected){ throw new Error(d.error||'verification failed'); }
+    etradeLoad();
+  } catch(e){ if(msg){ msg.textContent='❌ '+e.message; msg.style.color='#f87171'; } }
+}
+
+async function etradeDisconnect(){
+  if(!confirm('Disconnect this E*TRADE session?')) return;
+  await fetch('/api/etrade/disconnect',{method:'POST'});
+  etradeLoad();
+}
+
+async function etradeAccounts(){
+  const out=$('#et-out'); if(out) out.innerHTML='<div class="spin">Loading accounts…</div>';
+  let d;
+  try { d=await (await fetch('/api/etrade/accounts')).json(); }
+  catch(e){ if(out) out.innerHTML='<div class="err">'+etEsc(e)+'</div>'; return; }
+  if(d.error){ out.innerHTML='<div class="err">'+etEsc(d.error)+'</div>'; return; }
+  const accts=d.accounts||[];
+  if(!accts.length){ out.innerHTML='<div class="card">No accounts returned.</div>'; return; }
+  out.innerHTML = accts.map(a=>{
+    const key=etEsc(a.accountIdKey||'');
+    return `<div class="card" style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+        <div>
+          <div style="font-weight:600">${etEsc(a.accountDesc||a.accountName||a.accountId||'Account')}</div>
+          <div class="pf-meta">${etEsc(a.accountId||'')} · ${etEsc(a.institutionType||'')} · ${etEsc(a.accountType||'')} · ${etEsc(a.accountStatus||'')}</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="ghost" onclick="etradeDetail('${key}','balance')">💰 Balance</button>
+          <button class="ghost" onclick="etradeDetail('${key}','portfolio')">📊 Portfolio</button>
+        </div>
+      </div>
+      <div id="et-detail-${key}"></div>
+    </div>`;
+  }).join('');
+}
+
+async function etradeDetail(key, kind){
+  const box=$('#et-detail-'+key); if(!box) return;
+  box.innerHTML='<div class="spin">Loading '+kind+'…</div>';
+  let d;
+  try { d=await (await fetch('/api/etrade/accounts/'+encodeURIComponent(key)+'/'+kind)).json(); }
+  catch(e){ box.innerHTML='<div class="err">'+etEsc(e)+'</div>'; return; }
+  if(d.error){ box.innerHTML='<div class="err">'+etEsc(d.error)+'</div>'; return; }
+  let summary='';
+  if(kind==='balance'){
+    const c=((d.BalanceResponse||{}).Computed)||{};
+    const rtv=c.RealTimeValues||{};
+    summary=`<div class="pf-meta" style="margin-top:8px">
+      Net account value: <b>${etEsc(rtv.totalAccountValue ?? c.netCash ?? '—')}</b> ·
+      Cash available: <b>${etEsc(c.cashAvailableForInvestment ?? '—')}</b></div>`;
+  } else {
+    let pos=(((d.PortfolioResponse||{}).AccountPortfolio||[])[0]||{}).Position||[];
+    if(!Array.isArray(pos)) pos=[pos];
+    summary = pos.length ? `<table class="mini" style="margin-top:8px;width:100%"><tr><th>Symbol</th><th>Qty</th><th>Value</th><th>Gain</th></tr>`+
+      pos.map(p=>`<tr><td>${etEsc((p.Product||{}).symbol||p.symbolDescription||'')}</td>
+        <td>${etEsc(p.quantity ?? '')}</td><td>${etEsc(p.marketValue ?? '')}</td>
+        <td>${etEsc(p.totalGain ?? '')}</td></tr>`).join('')+`</table>`
+      : '<div class="pf-meta" style="margin-top:8px">No open positions.</div>';
+  }
+  box.innerHTML = summary + `<details style="margin-top:8px"><summary class="pf-meta">Raw JSON</summary>
+    <pre style="white-space:pre-wrap;font-size:11px;max-height:280px;overflow:auto">${etEsc(JSON.stringify(d,null,2))}</pre></details>`;
 }
 
 // ── Admin: User Management page ───────────────────────────────────────────────

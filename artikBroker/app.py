@@ -39,6 +39,7 @@ import history_store as hist  # noqa: E402  (server-side search history: S3 on A
 import news_signals  # noqa: E402  (read-only overlay from the news-collector agent; S3 on AWS, local file in dev)
 import agents_store  # noqa: E402  (agent registry + config/agent_schedules.json)
 import agent_runner  # noqa: E402  (non-blocking agent execution)
+import etrade  # noqa: E402  (E*TRADE OAuth 1.0a client)
 import news_runs  # noqa: E402  (run history + results reader)
 import news_data  # noqa: E402  (deletes a config's run history/logs + exclusive-ticker articles)
 import nl_tickers  # noqa: E402  (plain-English statement → tickers, for agent config)
@@ -413,6 +414,117 @@ def api_notifications_test(request: Request):
         }
     except Exception as e:  # noqa: BLE001
         return JSONResponse({"sent": False, "error": str(e)}, status_code=500)
+
+
+# ── E*TRADE brokerage connection (OAuth 1.0a) ─────────────────────────────────
+# Per-user, in-memory token store (single-instance service; tokens expire end-of-day
+# ET anyway, so re-connect is expected after a redeploy). Secrets come from env only.
+_ET_SESSIONS: dict = {}   # user_id -> {"token","secret","connected_at","env"}
+_ET_PENDING: dict = {}    # user_id -> {"req_token","req_secret"}
+
+
+def _et_uid(request: Request):
+    u = _user(request) or _current_user(request)
+    return (u.get("id") if u else "_open"), u
+
+
+@app.get("/api/etrade/status")
+def etrade_status(request: Request):
+    uid, _ = _et_uid(request)
+    cl = etrade.ETradeClient()
+    sess = _ET_SESSIONS.get(uid)
+    return {"configured": cl.configured, "env": cl.env,
+            "connected": bool(sess), "connected_at": sess.get("connected_at") if sess else None}
+
+
+@app.post("/api/etrade/connect")
+def etrade_connect(request: Request):
+    uid, _ = _et_uid(request)
+    cl = etrade.ETradeClient()
+    if not cl.configured:
+        return JSONResponse({"error": "E*TRADE keys are not configured on the server "
+                                      "(set ETRADE_CONSUMER_KEY / ETRADE_CONSUMER_SECRET)."}, 400)
+    try:
+        tok, sec = cl.get_request_token()
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": f"Could not start E*TRADE auth: {e}"}, 502)
+    _ET_PENDING[uid] = {"req_token": tok, "req_secret": sec}
+    return {"authorize_url": cl.authorize_url(tok), "env": cl.env}
+
+
+@app.post("/api/etrade/verify")
+async def etrade_verify(request: Request):
+    uid, _ = _et_uid(request)
+    body = await request.json()
+    code = (body.get("code") or "").strip()
+    if not code:
+        return JSONResponse({"error": "Enter the verification code from E*TRADE."}, 400)
+    pend = _ET_PENDING.get(uid)
+    if not pend:
+        return JSONResponse({"error": "Start with Connect first."}, 400)
+    cl = etrade.ETradeClient()
+    try:
+        tok, sec = cl.get_access_token(pend["req_token"], pend["req_secret"], code)
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": f"Verification failed: {e}"}, 502)
+    _ET_SESSIONS[uid] = {"token": tok, "secret": sec, "env": cl.env,
+                         "connected_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+    _ET_PENDING.pop(uid, None)
+    return {"connected": True}
+
+
+@app.post("/api/etrade/disconnect")
+def etrade_disconnect(request: Request):
+    uid, _ = _et_uid(request)
+    _ET_SESSIONS.pop(uid, None)
+    _ET_PENDING.pop(uid, None)
+    return {"connected": False}
+
+
+def _et_session_or_error(request: Request):
+    uid, _ = _et_uid(request)
+    sess = _ET_SESSIONS.get(uid)
+    if not sess:
+        return None, JSONResponse({"error": "Not connected to E*TRADE."}, 400)
+    return sess, None
+
+
+@app.get("/api/etrade/accounts")
+def etrade_accounts(request: Request):
+    sess, err = _et_session_or_error(request)
+    if err:
+        return err
+    cl = etrade.ETradeClient()
+    try:
+        data = cl.list_accounts(sess["token"], sess["secret"])
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": str(e)}, 502)
+    accts = (((data or {}).get("AccountListResponse") or {}).get("Accounts") or {}).get("Account") or []
+    if isinstance(accts, dict):
+        accts = [accts]
+    return {"accounts": accts}
+
+
+@app.get("/api/etrade/accounts/{account_id_key}/balance")
+def etrade_balance(account_id_key: str, request: Request):
+    sess, err = _et_session_or_error(request)
+    if err:
+        return err
+    try:
+        return etrade.ETradeClient().balance(sess["token"], sess["secret"], account_id_key)
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": str(e)}, 502)
+
+
+@app.get("/api/etrade/accounts/{account_id_key}/portfolio")
+def etrade_portfolio(account_id_key: str, request: Request):
+    sess, err = _et_session_or_error(request)
+    if err:
+        return err
+    try:
+        return etrade.ETradeClient().portfolio(sess["token"], sess["secret"], account_id_key)
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": str(e)}, 502)
 
 
 @app.post("/api/users")

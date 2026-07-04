@@ -80,6 +80,30 @@ goes through `agent_runner`, it notifies automatically. **Troubleshoot:** check 
 `artikbroker.notifications` logger (CloudWatch in prod) — it records agent, job id,
 status, attempt count, and the error on failure.
 
+## E*TRADE brokerage connection (OAuth 1.0a)
+
+The **E*TRADE** menu lets a signed-in user connect their E*TRADE account and view
+accounts, balances, and portfolio positions. It's a standard three-legged OAuth 1.0a
+flow (`etrade.py`, HMAC-SHA1 signed with the stdlib — no external OAuth dependency):
+
+1. **Connect** → server fetches a request token and returns the E*TRADE authorize URL
+   (opens in a new tab).
+2. You sign in on E*TRADE, approve access, and copy the **verification code**.
+3. **Verify** → server exchanges it for an access token (kept server-side, in memory).
+4. Accounts / **Balance** / **Portfolio** load from `/api/etrade/*`.
+
+**Config** (secrets — env / Secrets Manager only, never committed; see `.env.example`):
+
+| Variable | Purpose |
+|----------|---------|
+| `ETRADE_CONSUMER_KEY` / `ETRADE_CONSUMER_SECRET` | OAuth consumer credentials from developer.etrade.com |
+| `ETRADE_ENV` | `sandbox` (apisb.etrade.com) or `live` (api.etrade.com) |
+
+Notes: the consumer secret is never sent to the browser (only a `configured` flag).
+Access tokens expire end-of-day ET and are held in memory, so you re-connect after a
+redeploy or a new day. Endpoints require a logged-in user; each user connects their own
+account. Request your **live** key at https://developer.etrade.com/getting-started.
+
 ## Notes / limits
 
 - ETFs/funds (ARKK, EWY, QQQ, …) return an "engine does not apply" row — the
