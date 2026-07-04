@@ -272,3 +272,30 @@ def ensure_initial_admin(is_production: bool) -> None:
                 role="admin", must_reset_password=False)
     print("[users] ⚠ DEV: no INITIAL_ADMIN_PASSWORD — created dev admin admin/admin. "
           "Set INITIAL_ADMIN_PASSWORD (and ENVIRONMENT=production) before deploying.", flush=True)
+
+
+def apply_admin_password_reset() -> None:
+    """Break-glass recovery: if ADMIN_PASSWORD_RESET is set, force the admin account's
+    password to it on startup — even when the DB already has users (needed now that the
+    users DB is persistent). Requires deploy access to set the env var, so it's an
+    appropriately-gated recovery path. Targets INITIAL_ADMIN_USERNAME/EMAIL if set, else
+    the first admin. Unset the env var after recovering (it re-applies every start)."""
+    new_pw = os.environ.get("ADMIN_PASSWORD_RESET")
+    if not new_pw:
+        return
+    init_db()
+    target = None
+    key = (os.environ.get("INITIAL_ADMIN_USERNAME") or os.environ.get("INITIAL_ADMIN_EMAIL") or "").strip()
+    if key:
+        target = get_by_login(key)
+    if not target:  # fall back to the first admin in the table
+        with _conn() as c:
+            target = _row(c.execute(
+                "SELECT * FROM users WHERE role='admin' ORDER BY id ASC LIMIT 1").fetchone())
+    if not target:
+        print("[users] ADMIN_PASSWORD_RESET set but no admin exists yet — skipping.", flush=True)
+        return
+    set_password(target["id"], new_pw, must_reset=False)
+    update_user(target["id"], is_active=True, role="admin")
+    print(f"[users] ⚠ ADMIN_PASSWORD_RESET applied to '{target.get('username')}'. "
+          f"Remove the env var now to avoid re-applying on every restart.", flush=True)

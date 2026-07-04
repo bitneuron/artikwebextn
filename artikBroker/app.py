@@ -125,6 +125,8 @@ APP_SECRET = _resolve_secret()
 def _init_users():
     # Create the users table + bootstrap the first admin (raises in prod if missing).
     users_db.ensure_initial_admin(is_production=IS_PRODUCTION)
+    # Break-glass: force-reset the admin password when ADMIN_PASSWORD_RESET is set.
+    users_db.apply_admin_password_reset()
 
 
 def _pwd_fp(password_hash: str) -> str:
