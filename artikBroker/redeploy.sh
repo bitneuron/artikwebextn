@@ -63,6 +63,7 @@ if os.environ.get("INITIAL_ADMIN_PASSWORD"):
 for _k in ("NOTIFICATIONS_ENABLED", "ARTIK_NOTIFY_API_URL", "ARTIK_NOTIFY_API_KEY",
            "ARTIK_BROKER_APP_NAME", "ARTIK_BROKER_BASE_URL",
            "ETRADE_CONSUMER_KEY", "ETRADE_CONSUMER_SECRET", "ETRADE_ENV",
+           "SCHWAB_APP_KEY", "SCHWAB_APP_SECRET", "SCHWAB_REDIRECT_URI",
            "ADMIN_PASSWORD_RESET"):
     if os.environ.get(_k):
         envv[_k] = os.environ[_k]

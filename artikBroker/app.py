@@ -17,6 +17,7 @@ import csv
 import io
 import json
 import os
+import secrets
 import re
 import sys
 import time
@@ -40,7 +41,8 @@ import news_signals  # noqa: E402  (read-only overlay from the news-collector ag
 import agents_store  # noqa: E402  (agent registry + config/agent_schedules.json)
 import agent_runner  # noqa: E402  (non-blocking agent execution)
 import etrade  # noqa: E402  (E*TRADE OAuth 1.0a client)
-import portfolio_store  # noqa: E402  (persistent E*TRADE portfolio snapshots)
+import schwab  # noqa: E402  (Charles Schwab OAuth 2.0 client)
+import portfolio_store  # noqa: E402  (persistent broker portfolio snapshots)
 import news_runs  # noqa: E402  (run history + results reader)
 import news_data  # noqa: E402  (deletes a config's run history/logs + exclusive-ticker articles)
 import nl_tickers  # noqa: E402  (plain-English statement → tickers, for agent config)
@@ -215,8 +217,10 @@ async def _auth_gate(request: Request, call_next):
     if OPEN_MODE:                         # dev-only fully-open mode
         return await call_next(request)
     path = request.url.path
-    # Pre-auth public surface (login page + JSON login endpoint + static assets).
+    # Pre-auth public surface (login page + JSON login endpoint + static assets +
+    # the Schwab OAuth redirect callback, which is validated by `state`, not the cookie).
     if (path.startswith("/login") or path == "/api/login"
+            or path == "/api/schwab/callback"
             or path.startswith("/static") or path == "/favicon.ico"):
         return await call_next(request)
     user = _current_user(request)
@@ -227,7 +231,7 @@ async def _auth_gate(request: Request, call_next):
     request.state.user = user
     # Role-based access: E*TRADE + Portfolio APIs are admin-only (server-side enforced,
     # not just hidden in the sidebar).
-    _ADMIN_ONLY = ("/api/etrade", "/api/portfolio", "/api/analyze_portfolio")
+    _ADMIN_ONLY = ("/api/etrade", "/api/schwab", "/api/portfolio", "/api/analyze_portfolio")
     if user.get("role") != "admin" and any(path.startswith(p) for p in _ADMIN_ONLY):
         return JSONResponse({"error": "admin only"}, status_code=403)
     if user["must_reset_password"] and path not in (
@@ -589,8 +593,184 @@ async def etrade_analyze(request: Request):
         user_id=(user or {}).get("id"), source="etrade", label=label,
         account_ending=ending, holdings=holdings,
         total_value=total_value, total_gain=total_gain)
-    return {"snapshot_id": sid, "key": f"et:{sid}", "label": label,
+    return {"snapshot_id": sid, "key": f"pf:{sid}", "label": label,
             "positions": len(holdings), "total_value": total_value, "total_gain": total_gain}
+
+
+# ── Charles Schwab brokerage connection (OAuth 2.0) ───────────────────────────
+_SCHWAB_SESSIONS: dict = {}   # user_id -> {access_token, refresh_token, expires_at, connected_at}
+_SCHWAB_PENDING: dict = {}    # state -> user_id
+
+
+def _schwab_uid(request: Request):
+    u = _user(request) or _current_user(request)
+    return (u.get("id") if u else "_open"), u
+
+
+def _schwab_client() -> "schwab.SchwabClient":
+    cl = schwab.SchwabClient()
+    if not cl.redirect_uri:  # default to this host's callback when not explicitly set
+        base = (os.environ.get("ARTIK_BROKER_BASE_URL") or "").rstrip("/")
+        cl.redirect_uri = f"{base}/api/schwab/callback" if base else ""
+    return cl
+
+
+def _schwab_access(uid) -> str | None:
+    """Return a valid Schwab access token for the user, refreshing if near expiry."""
+    sess = _SCHWAB_SESSIONS.get(uid)
+    if not sess:
+        return None
+    if time.time() < sess.get("expires_at", 0) - 30:
+        return sess["access_token"]
+    try:
+        tok = _schwab_client().refresh(sess["refresh_token"])
+    except Exception:  # noqa: BLE001 — refresh token expired (>7d) → require re-connect
+        _SCHWAB_SESSIONS.pop(uid, None)
+        return None
+    sess["access_token"] = tok.get("access_token")
+    if tok.get("refresh_token"):
+        sess["refresh_token"] = tok["refresh_token"]
+    sess["expires_at"] = time.time() + int(tok.get("expires_in", 1800))
+    return sess["access_token"]
+
+
+@app.get("/api/schwab/status")
+def schwab_status(request: Request):
+    uid, _ = _schwab_uid(request)
+    cl = _schwab_client()
+    sess = _SCHWAB_SESSIONS.get(uid)
+    return {"configured": cl.configured, "connected": bool(sess),
+            "connected_at": sess.get("connected_at") if sess else None,
+            "redirect_uri": cl.redirect_uri}
+
+
+@app.post("/api/schwab/connect")
+def schwab_connect(request: Request):
+    uid, _ = _schwab_uid(request)
+    cl = _schwab_client()
+    if not cl.configured:
+        return JSONResponse({"error": "Schwab is not configured on the server "
+                             "(set SCHWAB_APP_KEY / SCHWAB_APP_SECRET / SCHWAB_REDIRECT_URI)."}, 400)
+    state = secrets.token_urlsafe(24)
+    _SCHWAB_PENDING[state] = uid
+    return {"authorize_url": cl.authorize_url(state)}
+
+
+@app.get("/api/schwab/callback")
+def schwab_callback(code: str = Query(None), state: str = Query(None), error: str = Query(None)):
+    """OAuth 2.0 redirect target — public, validated by `state` (not the cookie)."""
+    if error:
+        return RedirectResponse("/?schwab=error", status_code=302)
+    uid = _SCHWAB_PENDING.pop(state, None)
+    if not code or uid is None:
+        return RedirectResponse("/?schwab=invalid", status_code=302)
+    try:
+        tok = _schwab_client().exchange_code(code)
+    except Exception as e:  # noqa: BLE001
+        print(f"[schwab] callback token exchange failed: {e}", flush=True)
+        return RedirectResponse("/?schwab=error", status_code=302)
+    _SCHWAB_SESSIONS[uid] = {
+        "access_token": tok.get("access_token"), "refresh_token": tok.get("refresh_token"),
+        "expires_at": time.time() + int(tok.get("expires_in", 1800)),
+        "connected_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    return RedirectResponse("/?schwab=connected", status_code=302)
+
+
+@app.post("/api/schwab/disconnect")
+def schwab_disconnect(request: Request):
+    uid, _ = _schwab_uid(request)
+    _SCHWAB_SESSIONS.pop(uid, None)
+    return {"connected": False}
+
+
+def _schwab_accounts_raw(uid):
+    token = _schwab_access(uid)
+    if not token:
+        return None, JSONResponse({"error": "Not connected to Schwab."}, 400)
+    try:
+        return _schwab_client().accounts(token, positions=True), None
+    except Exception as e:  # noqa: BLE001
+        return None, JSONResponse({"error": str(e)}, 502)
+
+
+@app.get("/api/schwab/accounts")
+def schwab_accounts(request: Request):
+    uid, _ = _schwab_uid(request)
+    raw, err = _schwab_accounts_raw(uid)
+    if err:
+        return err
+    out = []
+    for a in raw or []:
+        sa = a.get("securitiesAccount") or a
+        acct = str(sa.get("accountNumber") or "")
+        out.append({"accountIdKey": acct, "accountId": acct,
+                    "accountDesc": (sa.get("type") or "Schwab"), "accountType": sa.get("type") or "",
+                    "institutionType": "BROKERAGE", "accountStatus": "ACTIVE"})
+    return {"accounts": out}
+
+
+def _extract_schwab_holdings(sec_account: dict) -> tuple:
+    positions = sec_account.get("positions") or []
+    holdings, tv, tg = [], 0.0, 0.0
+    for p in positions:
+        sym = ((p.get("instrument") or {}).get("symbol") or "").strip().upper()
+        if not sym:
+            continue
+        qty = _num(p.get("longQuantity")) - _num(p.get("shortQuantity"))
+        avg = _num(p.get("averagePrice"))
+        mv = _num(p.get("marketValue"))
+        gain = _num(p.get("longOpenProfitLoss"))
+        cost = round(avg * qty, 2) if (avg and qty) else round(mv - gain, 2)
+        holdings.append({"ticker": sym, "qty": qty, "cost_basis": round(cost, 2)})
+        tv += mv
+        tg += gain
+    return holdings, round(tv, 2), round(tg, 2)
+
+
+@app.get("/api/schwab/accounts/{account_number}/portfolio")
+def schwab_portfolio(account_number: str, request: Request):
+    uid, _ = _schwab_uid(request)
+    raw, err = _schwab_accounts_raw(uid)
+    if err:
+        return err
+    for a in raw or []:
+        sa = a.get("securitiesAccount") or a
+        if str(sa.get("accountNumber")) == account_number:
+            holdings, tv, tg = _extract_schwab_holdings(sa)
+            return {"holdings": holdings, "total_value": tv, "total_gain": tg}
+    return JSONResponse({"error": "account not found"}, 404)
+
+
+@app.post("/api/schwab/analyze")
+async def schwab_analyze(request: Request):
+    uid, user = _schwab_uid(request)
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        body = {}
+    account_number = (body.get("account_id_key") or body.get("account_number") or "").strip()
+    ending = (body.get("account_ending") or account_number[-4:]).strip()
+    raw, err = _schwab_accounts_raw(uid)
+    if err:
+        return err
+    target = None
+    for a in raw or []:
+        sa = a.get("securitiesAccount") or a
+        if not account_number or str(sa.get("accountNumber")) == account_number:
+            target = sa
+            break
+    if not target:
+        return JSONResponse({"error": "account not found"}, 404)
+    holdings, tv, tg = _extract_schwab_holdings(target)
+    if not holdings:
+        return JSONResponse({"error": "No positions found in this Schwab account."}, 400)
+    label = f"Schwab ••{ending}" if ending else "Schwab account"
+    sid = portfolio_store.create(user_id=(user or {}).get("id"), source="schwab", label=label,
+                                 account_ending=ending, holdings=holdings,
+                                 total_value=tv, total_gain=tg)
+    return {"snapshot_id": sid, "key": f"pf:{sid}", "label": label,
+            "positions": len(holdings), "total_value": tv, "total_gain": tg}
 
 
 @app.post("/api/users")
@@ -1588,13 +1768,13 @@ def _score_holdings(holdings: list) -> tuple:
     return rows, totals
 
 
-def _etrade_snapshots_unified() -> list:
-    """E*TRADE snapshots in the same shape as file snapshots, with a `key`/`source`."""
+def _stored_snapshots(source: str | None = None) -> list:
+    """Broker snapshots (E*TRADE / Schwab) from the DB, in the file-snapshot shape."""
     out = []
-    for s in portfolio_store.list_snapshots(source="etrade"):
+    for s in portfolio_store.list_snapshots(source=source):
         out.append({
-            "key": f"et:{s['id']}", "source": "etrade", "id": s["id"],
-            "date": (s.get("created_at") or "")[:10], "label": s.get("label") or "E*TRADE",
+            "key": f"pf:{s['id']}", "source": s["source"], "id": s["id"],
+            "date": (s.get("created_at") or "")[:10], "label": s.get("label") or s["source"],
             "account_ending": s.get("account_ending"),
             "total_value": s.get("total_value"), "created_at": s.get("created_at"),
         })
@@ -1605,35 +1785,45 @@ def _etrade_snapshots_unified() -> list:
 def api_portfolio_dates(source: str = Query(None)):
     excel = [{**s, "key": f"xl:{s['file']}", "source": "excel",
               "label": f"{s['date']} ({s['folder']})"} for s in _list_portfolio_snapshots()]
-    etrade_snaps = _etrade_snapshots_unified()
-    snaps = excel if source == "excel" else etrade_snaps if source == "etrade" else excel + etrade_snaps
-    return {"snapshots": snaps, "sources": ["excel", "etrade"]}
+    if source == "excel":
+        snaps = excel
+    elif source in ("etrade", "schwab"):
+        snaps = _stored_snapshots(source)
+    else:
+        snaps = excel + _stored_snapshots()
+    return {"snapshots": snaps, "sources": ["excel", "etrade", "schwab"]}
 
 
-def _etrade_portfolio_response(key: str):
-    """Load an E*TRADE snapshot's holdings and score them live via the shared engine."""
+def _is_stored_key(key: str) -> bool:
+    return bool(key) and (key.startswith("pf:") or key.startswith("et:") or key.startswith("sc:"))
+
+
+def _stored_portfolio_response(key: str):
+    """Load a broker snapshot's holdings and score them live via the shared engine."""
     try:
         sid = int(key.split(":", 1)[1])
     except (ValueError, IndexError):
         return JSONResponse({"error": "invalid snapshot key"}, status_code=400)
     snap = portfolio_store.get(sid)
     if not snap:
-        return JSONResponse({"error": "E*TRADE snapshot not found."}, status_code=404)
+        return JSONResponse({"error": "snapshot not found."}, status_code=404)
     rows, totals = _score_holdings(snap["holdings"])
     now = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
+    src = snap.get("source") or "broker"
+    nice = {"etrade": "E*TRADE", "schwab": "Schwab"}.get(src, src)
     return {
         "date": (snap.get("created_at") or "")[:10], "folder": snap.get("label"),
-        "file": key, "key": key, "source": "etrade", "label": snap.get("label"),
+        "file": key, "key": f"pf:{sid}", "source": src, "label": snap.get("label"),
         "account_ending": snap.get("account_ending"),
-        "as_of": f"E*TRADE holdings · live scored {now}", "refreshed": True,
+        "as_of": f"{nice} holdings · live scored {now}", "refreshed": True,
         "count": len(rows), "rows": rows, "totals": totals,
     }
 
 
 @app.get("/api/portfolio")
 def api_portfolio(date: str = Query(None), file: str = Query(None), key: str = Query(None)):
-    if key and key.startswith("et:"):
-        return _etrade_portfolio_response(key)
+    if _is_stored_key(key):
+        return _stored_portfolio_response(key)
     if key and key.startswith("xl:"):
         file = key[3:]
     snaps = _list_portfolio_snapshots()
@@ -1685,8 +1875,8 @@ def api_portfolio_refresh(date: str = Query(None), file: str = Query(None), key:
     live via the engine. Returns the same shape as /api/portfolio so the same
     renderer can display it.
     """
-    if key and key.startswith("et:"):        # E*TRADE snapshots are always scored live
-        return _etrade_portfolio_response(key)
+    if _is_stored_key(key):                   # broker snapshots are always scored live
+        return _stored_portfolio_response(key)
     if key and key.startswith("xl:"):
         file = key[3:]
     snaps = _list_portfolio_snapshots()

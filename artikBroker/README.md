@@ -104,6 +104,20 @@ Access tokens expire end-of-day ET and are held in memory, so you re-connect aft
 redeploy or a new day. Endpoints require a logged-in user; each user connects their own
 account. Request your **live** key at https://developer.etrade.com/getting-started.
 
+## Charles Schwab connection (OAuth 2.0)
+
+The **Schwab** menu mirrors E*TRADE but uses **OAuth 2.0** (redirect + callback) via the
+Schwab Trader API (`schwab.py`). Flow: Connect → redirect to Schwab → sign in + approve →
+Schwab redirects back to `/api/schwab/callback` → tokens stored server-side (access ~30 min,
+refresh ~7 days, auto-refreshed). Then accounts / holdings / **📊 Analyze Portfolio** (creates
+a `source="schwab"` snapshot scored through the same engine). Admin-only, same RBAC + snapshot
+store as E*TRADE (no tokens persisted).
+
+**Config** (secrets — env only; see `.env.example`): `SCHWAB_APP_KEY`, `SCHWAB_APP_SECRET`,
+`SCHWAB_REDIRECT_URI` (defaults to `ARTIK_BROKER_BASE_URL/api/schwab/callback`). Register that
+exact callback URL in your Schwab app at developer.schwab.com. Until the keys are set, the
+Schwab page shows "not configured".
+
 ## Notes / limits
 
 - ETFs/funds (ARKK, EWY, QQQ, …) return an "engine does not apply" row — the

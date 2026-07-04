@@ -854,6 +854,7 @@
       <div class="nav-sec">Markets</div>
       <button class="nav-item" id="tab-portfolio" onclick="showTab('portfolio')"><span class="ic">💼</span><span>Portfolio</span></button>
       <button class="nav-item" id="tab-etrade" onclick="showTab('etrade')"><span class="ic">🔗</span><span>E*TRADE</span></button>
+      <button class="nav-item" id="tab-schwab" onclick="showTab('schwab')"><span class="ic">🏦</span><span>Schwab</span></button>
       <button class="nav-item" id="tab-favorites" onclick="showTab('favorites')"><span class="ic">⭐</span><span>Favorites</span><span id="fav-nav-count" class="navcount"></span></button>
       <button class="nav-item" id="tab-sp500" onclick="showTab('sp500')"><span class="ic">🏛️</span><span>S&amp;P 500</span></button>
       <button class="nav-item" id="tab-dow" onclick="showTab('dow')"><span class="ic">🎩</span><span>Dow</span></button>
@@ -983,6 +984,7 @@
       <select id="pf-source" onchange="pfSourceChanged(this.value)">
         <option value="excel">Uploaded Excel</option>
         <option value="etrade">E*TRADE</option>
+        <option value="schwab">Charles Schwab</option>
       </select>
       <span class="up-label">📅 Snapshot:</span>
       <select id="pf-date" onchange="loadPortfolio(this.value)"></select>
@@ -1009,6 +1011,17 @@
       <button class="ghost hidden" id="et-disconnect" onclick="etradeDisconnect()">⛔ Disconnect</button>
     </div>
     <div id="et-out"><div class="spin">Loading…</div></div>
+  </section>
+
+  <!-- CHARLES SCHWAB BROKERAGE CONNECTION -->
+  <section id="view-schwab" class="hidden">
+    <div class="pf-bar">
+      <span class="up-label">🏦 Charles Schwab</span>
+      <span class="pf-meta" id="sw-status">Checking connection…</span>
+      <button class="ghost" style="margin-left:auto" id="sw-refresh" onclick="schwabLoad()">🔄 Refresh</button>
+      <button class="ghost hidden" id="sw-disconnect" onclick="schwabDisconnect()">⛔ Disconnect</button>
+    </div>
+    <div id="sw-out"><div class="spin">Loading…</div></div>
   </section>
 
   <!-- FAVORITES / WATCHLIST -->
@@ -2564,12 +2577,12 @@ function downloadCSV(){
 // ── Tabs ────────────────────────────────────────────────────────────────────
 let _pfLoaded = false;
 const _idxLoaded = {};
-const _VIEWS = ['analyze','detail','portfolio','etrade','favorites','sp500','dow','history','agents','skills','users','settings'];
-const _TITLES = {analyze:'Analyze', detail:'Stock Detail', portfolio:'Portfolio', etrade:'E*TRADE', favorites:'Favorites',
+const _VIEWS = ['analyze','detail','portfolio','etrade','schwab','favorites','sp500','dow','history','agents','skills','users','settings'];
+const _TITLES = {analyze:'Analyze', detail:'Stock Detail', portfolio:'Portfolio', etrade:'E*TRADE', schwab:'Charles Schwab', favorites:'Favorites',
                  sp500:'S&P 500', dow:'Dow Jones', history:'History', agents:'Agents', skills:'Skills Management', users:'User Management', settings:'Settings'};
 function showTab(name, navId){
   // Admin-only views: block non-admins (belt & suspenders; backend also returns 403).
-  if(window._me && !window._isAdmin && (name==='etrade'||name==='portfolio'||name==='users')){
+  if(window._me && !window._isAdmin && (name==='etrade'||name==='schwab'||name==='portfolio'||name==='users')){
     name='analyze'; navId='nav-dashboard';
   }
   _VIEWS.forEach(v => { const el=$('#view-'+v); if(el) el.classList.toggle('hidden', v!==name); });
@@ -2590,6 +2603,7 @@ function showTab(name, navId){
   if(name==='users'){ loadUsers(); }
   if(name==='skills'){ loadSkills(); }
   if(name==='etrade'){ etradeLoad(); }
+  if(name==='schwab'){ schwabLoad(); }
 }
 function goResearch(){ setMainMode('research'); showTab('analyze','nav-research'); const s=$('#syms'); if(s) s.focus(); }
 
@@ -2814,10 +2828,10 @@ function toggleGen(pfx, i){
 let _pfPendingKey=null, _pfPendingSource=null;
 function pfEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function pfLabel(s){
-  if(s.source==='etrade'){
+  if(s.source && s.source!=='excel'){
     const dt=(s.created_at||s.date||'').slice(0,16).replace('T',' ');
     const val=s.total_value!=null?(' · $'+Math.round(s.total_value).toLocaleString()):'';
-    return (s.label||'E*TRADE')+' · '+dt+val;
+    return (s.label||s.source)+' · '+dt+val;
   }
   return s.label || (s.date+' ('+s.folder+')');
 }
@@ -3563,9 +3577,18 @@ async function initMe(){
   // Admin-only sidebar items (Users, E*TRADE, Portfolio). Backend also enforces 403.
   const isAdmin = (window._me && window._me.role==='admin') || window._devOpen;
   window._isAdmin = isAdmin;
-  ['tab-users','tab-etrade','tab-portfolio'].forEach(id=>{
+  ['tab-users','tab-etrade','tab-schwab','tab-portfolio'].forEach(id=>{
     const el=$('#'+id); if(el) el.classList.toggle('hidden', !isAdmin);
   });
+  // After the Schwab OAuth redirect, open the Schwab tab and clean the URL.
+  try {
+    const st=new URLSearchParams(location.search).get('schwab');
+    if(st){
+      history.replaceState(null,'',location.pathname);
+      if(isAdmin && st==='connected'){ showTab('schwab'); }
+      else if(st==='error'||st==='invalid'){ if(isAdmin){ showTab('schwab'); } alert('Schwab connection failed — please try Connect again.'); }
+    }
+  } catch(_){}
 }
 function renderUserBadge(){
   const el=$('#user-badge'); if(!el) return;
@@ -3783,6 +3806,124 @@ async function etradeDetail(key, kind){
   }
   box.innerHTML = summary + `<details style="margin-top:8px"><summary class="pf-meta">Raw JSON</summary>
     <pre style="white-space:pre-wrap;font-size:11px;max-height:280px;overflow:auto">${etEsc(JSON.stringify(d,null,2))}</pre></details>`;
+}
+
+// ── Charles Schwab brokerage connection (OAuth 2.0, redirect-based) ────────────
+let _swAccounts=[];
+async function schwabLoad(){
+  const out=$('#sw-out'), st=$('#sw-status'), dc=$('#sw-disconnect');
+  if(out) out.innerHTML='<div class="spin">Loading…</div>';
+  let s;
+  try { s=await (await fetch('/api/schwab/status')).json(); }
+  catch(e){ if(out) out.innerHTML='<div class="err">Failed to load status: '+etEsc(e)+'</div>'; return; }
+  if(dc) dc.classList.toggle('hidden', !s.connected);
+  if(st) st.textContent = s.connected ? 'Connected' : (s.configured ? 'Not connected' : 'Not configured');
+  if(!s.configured){
+    out.innerHTML = `<div class="card"><p>🏦 Charles Schwab is <b>not configured on the server</b>.</p>
+      <p class="pf-meta">Set <code>SCHWAB_APP_KEY</code> / <code>SCHWAB_APP_SECRET</code> / <code>SCHWAB_REDIRECT_URI</code>
+      as environment variables, then reconnect. Register this exact callback URL in your Schwab app:<br>
+      <code>${etEsc(s.redirect_uri||'https://&lt;host&gt;/api/schwab/callback')}</code></p></div>`;
+    return;
+  }
+  if(s.connected){ schwabAccounts(); return; }
+  out.innerHTML = `<div class="card" style="max-width:640px">
+    <h3 style="margin:0 0 8px">Connect your Charles Schwab account</h3>
+    <p class="pf-meta">You'll be sent to Schwab to sign in and approve access, then brought back here automatically (no code to copy).</p>
+    <button class="ex-btn" id="sw-connect-btn" onclick="schwabConnect()">🏦 Connect to Schwab</button></div>`;
+}
+
+async function schwabConnect(){
+  const btn=$('#sw-connect-btn'); if(btn){ btn.disabled=true; btn.textContent='Redirecting…'; }
+  try {
+    const r=await fetch('/api/schwab/connect',{method:'POST'});
+    const d=await r.json();
+    if(!r.ok || !d.authorize_url){ throw new Error(d.error||'connect failed'); }
+    window.location.href = d.authorize_url;      // full-page redirect to Schwab
+  } catch(e){
+    if(btn){ btn.disabled=false; btn.textContent='🏦 Connect to Schwab'; }
+    alert('Schwab connect failed: '+e.message);
+  }
+}
+
+async function schwabDisconnect(){
+  if(!confirm('Disconnect this Schwab session?')) return;
+  await fetch('/api/schwab/disconnect',{method:'POST'});
+  schwabLoad();
+}
+
+async function schwabAccounts(){
+  const out=$('#sw-out'); if(out) out.innerHTML='<div class="spin">Loading accounts…</div>';
+  let d;
+  try { d=await (await fetch('/api/schwab/accounts')).json(); }
+  catch(e){ out.innerHTML='<div class="err">'+etEsc(e)+'</div>'; return; }
+  if(d.error){ out.innerHTML='<div class="err">'+etEsc(d.error)+'</div>'; return; }
+  _swAccounts=d.accounts||[];
+  if(!_swAccounts.length){ out.innerHTML='<div class="card">No accounts returned.</div>'; return; }
+  const saved=localStorage.getItem('sw_acct_sel');
+  const valid = saved && (saved==='__all' || _swAccounts.some(a=>a.accountIdKey===saved));
+  const def = valid ? saved : _swAccounts[0].accountIdKey;
+  const opts=_swAccounts.map(a=>{
+    const last4=String(a.accountId||'').slice(-4);
+    return `<option value="${etEsc(a.accountIdKey)}">Account ending ${etEsc(last4)}${a.accountDesc?(' — '+etEsc(a.accountDesc)):''}</option>`;
+  }).join('') + (_swAccounts.length>1?`<option value="__all">All accounts</option>`:'');
+  out.innerHTML = `<div class="pf-bar" style="margin-bottom:10px">
+      <span class="up-label">Account</span>
+      <select id="sw-acct-sel" style="min-width:220px" onchange="schwabSelectAccount(this.value)">${opts}</select>
+    </div><div id="sw-accts"></div>`;
+  const sel=$('#sw-acct-sel'); if(sel) sel.value=def;
+  schwabSelectAccount(def);
+}
+
+function schwabSelectAccount(sel){
+  localStorage.setItem('sw_acct_sel', sel);
+  const box=$('#sw-accts'); if(!box) return;
+  const list = sel==='__all' ? _swAccounts : _swAccounts.filter(a=>a.accountIdKey===sel);
+  box.innerHTML = list.map(a=>{
+    const key=etEsc(a.accountIdKey||'');
+    return `<div class="card" style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+        <div>
+          <div style="font-weight:600">${etEsc(a.accountDesc||a.accountId||'Account')}</div>
+          <div class="pf-meta">${etEsc(a.accountId||'')} · ${etEsc(a.accountType||'')}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="ghost" onclick="schwabDetail('${key}')">🔄 Refresh holdings</button>
+          <button class="ex-btn" onclick="schwabAnalyze('${key}','${etEsc(String(a.accountId||'').slice(-4))}')">📊 Analyze Portfolio</button>
+        </div>
+      </div>
+      <div style="margin-top:8px;font-weight:600" class="up-label">📈 Your holdings</div>
+      <div id="sw-detail-${key}"><div class="spin">Loading holdings…</div></div>
+    </div>`;
+  }).join('');
+  list.forEach(a=>{ const k=a.accountIdKey||''; if(k) schwabDetail(k); });
+}
+
+async function schwabDetail(key){
+  const box=$('#sw-detail-'+key); if(!box) return;
+  box.innerHTML='<div class="spin">Loading holdings…</div>';
+  let d;
+  try { d=await (await fetch('/api/schwab/accounts/'+encodeURIComponent(key)+'/portfolio')).json(); }
+  catch(e){ box.innerHTML='<div class="err">'+etEsc(e)+'</div>'; return; }
+  if(d.error){ box.innerHTML='<div class="err">'+etEsc(d.error)+'</div>'; return; }
+  const money=v=>v==null?'—':(typeof v==='number'?v.toLocaleString(undefined,{style:'currency',currency:'USD'}):etEsc(v));
+  const h=d.holdings||[];
+  box.innerHTML = (h.length ? `<table class="mini" style="margin-top:8px;width:100%">
+    <tr><th>Symbol</th><th>Qty</th><th>Cost basis</th></tr>`+
+    h.map(x=>`<tr><td><b>${etEsc(x.ticker)}</b></td><td>${etEsc(x.qty)}</td><td>${money(x.cost_basis)}</td></tr>`).join('')+
+    `<tr style="border-top:1px solid var(--line);font-weight:600"><td>Total value</td><td></td><td>${money(d.total_value)}</td></tr></table>`
+    : '<div class="pf-meta" style="margin-top:8px">No open positions in this account.</div>')
+    + '<div class="pf-meta" style="margin-top:6px">Click <b>Analyze Portfolio</b> to score these live on the Portfolio page.</div>';
+}
+
+async function schwabAnalyze(key, ending){
+  try {
+    const r=await fetch('/api/schwab/analyze',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({account_id_key:key, account_ending:ending})});
+    const d=await r.json();
+    if(!r.ok || !d.snapshot_id){ throw new Error(d.error||'Analyze failed'); }
+    _pfPendingSource='schwab'; _pfPendingKey=d.key; _pfLoaded=true;
+    showTab('portfolio'); loadPortfolioDates();
+  } catch(e){ alert('Analyze Portfolio failed: '+e.message); }
 }
 
 // ── Admin: User Management page ───────────────────────────────────────────────
