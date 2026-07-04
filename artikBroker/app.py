@@ -1027,13 +1027,169 @@ def _status(score: float) -> str:
     return "BUY" if score >= 75 else "HOLD" if score >= 50 else "SELL"
 
 
-def _fallback_row(t: str, reason: str) -> dict:
-    """Graceful error row; if yfinance had no data, try Alpha Vantage for a price."""
+def _num_av(v):
+    try:
+        if v in (None, "", "None", "-", "—"):
+            return None
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _score01(v, good, bad):
+    """Map a metric to 0..1 (good→1, bad→0), clamped. Direction inferred from good/bad."""
+    if v is None:
+        return None
+    if good == bad:
+        return 0.5
+    return max(0.0, min(1.0, (v - bad) / (good - bad)))
+
+
+def _avg01(scores):
+    xs = [s for s in scores if s is not None]
+    return sum(xs) / len(xs) if xs else None
+
+
+def _av_fundamental_row(t: str) -> dict | None:
+    """When Yahoo is rate-limited, score from Alpha Vantage OVERVIEW fundamentals.
+    Absolute-threshold scoring (not peer-relative), clearly labeled as a fallback."""
+    try:
+        ov = av.overview(t)
+    except Exception:  # noqa: BLE001
+        return None
+    if not isinstance(ov, dict) or not ov.get("Symbol"):
+        return None
+    g = lambda k: _num_av(ov.get(k))  # noqa: E731
+    price = None
+    try:
+        gq = (av.global_quote(t) or {}).get("Global Quote") or {}
+        price = _num_av(gq.get("05. price"))
+    except Exception:  # noqa: BLE001
+        pass
+    rsi = None
+    try:
+        ta = (av.rsi(t) or {}).get("Technical Analysis: RSI") or {}
+        if ta:
+            rsi = _num_av(next(iter(ta.values())).get("RSI"))
+    except Exception:  # noqa: BLE001
+        pass
+
+    val = _avg01([_score01(g("PERatio"), 12, 45), _score01(g("PEGRatio"), 1.0, 3.5),
+                  _score01(g("PriceToBookRatio"), 1.5, 12), _score01(g("EVToEBITDA"), 8, 32),
+                  _score01(g("PriceToSalesRatioTTM"), 1.5, 18)])
+    qual = _avg01([_score01(g("ProfitMargin"), 0.22, 0.0), _score01(g("OperatingMarginTTM"), 0.22, 0.0),
+                   _score01(g("ReturnOnEquityTTM"), 0.25, 0.0), _score01(g("ReturnOnAssetsTTM"), 0.12, 0.0)])
+    grow = _avg01([_score01(g("QuarterlyEarningsGrowthYOY"), 0.25, -0.10),
+                   _score01(g("QuarterlyRevenueGrowthYOY"), 0.20, -0.05)])
+    fin = _avg01([_score01(g("ProfitMargin"), 0.15, -0.05), _score01(g("ReturnOnEquityTTM"), 0.20, -0.05)])
+    rsi_s = max(0.0, min(1.0, 1 - abs(rsi - 55) / 45)) if rsi is not None else None
+    pos_s = None
+    hi, lo = g("52WeekHigh"), g("52WeekLow")
+    if price and hi and lo and hi > lo:
+        pos_s = _score01((price - lo) / (hi - lo), 0.65, 0.10)
+    tech = _avg01([rsi_s, pos_s])
+    risk = _score01(g("Beta"), 0.8, 2.2)
+
+    fracs = {"value": val, "quality": qual, "growth": grow, "fin_str": fin, "technical": tech, "risk": risk}
+    cats, total = [], 0.0
+    for k, lbl in [("value", "Value"), ("quality", "Quality"), ("growth", "Growth"),
+                   ("fin_str", "Financial Strength"), ("technical", "Technical"), ("risk", "Risk (positive)")]:
+        frac = 0.5 if fracs[k] is None else fracs[k]
+        pts = round(frac * CATEGORY_MAX[k], 1)
+        total += pts
+        cats.append({"name": k, "label": lbl, "score": pts, "max": CATEGORY_MAX[k]})
+    final = round(total, 1)
+
+    strengths, risks = [], []
+    if (g("ProfitMargin") or 0) >= 0.20:
+        strengths.append(f"High profit margin ({g('ProfitMargin') * 100:.0f}%)")
+    if (g("ReturnOnEquityTTM") or 0) >= 0.20:
+        strengths.append(f"Strong ROE ({g('ReturnOnEquityTTM') * 100:.0f}%)")
+    if (g("QuarterlyEarningsGrowthYOY") or 0) >= 0.20:
+        strengths.append("Strong earnings growth (YoY)")
+    if g("PERatio") and g("PERatio") < 15:
+        strengths.append(f"Attractive valuation (P/E {g('PERatio'):.0f})")
+    if g("PERatio") and g("PERatio") > 40:
+        risks.append(f"Rich valuation (P/E {g('PERatio'):.0f})")
+    if (g("ProfitMargin") or 0) < 0:
+        risks.append("Currently unprofitable")
+    if g("Beta") and g("Beta") > 1.5:
+        risks.append(f"High volatility (beta {g('Beta'):.1f})")
+
+    note = "Scored from Alpha Vantage fundamentals (Yahoo rate-limited)"
+    return {
+        "ticker": t, "company": ov.get("Name"), "sector": ov.get("Sector") or None,
+        "price": round(price, 2) if price else None,
+        "score": final, "rating": _status(final), "status": _status(final),
+        "rsi": round(rsi, 1) if rsi is not None else None,
+        "data_source": "alpha_vantage", "note": note,
+        "breakdown": {"categories": cats, "base": final, "penalties": 0, "multiplier": 1.0,
+                      "archetype": "—", "multiplier_reason": note, "base_metrics_used": [],
+                      "base_metrics_skipped": [], "peer_normalized": False,
+                      "peer_explanation": [note], "final": final},
+        "strengths": strengths, "risks": risks,
+        "technicals": {"rsi": round(rsi, 1) if rsi is not None else None},
+    }
+
+
+def _llm_fundamental_row(t: str) -> dict | None:
+    """Last-resort fallback: ask Claude/GPT for a qualitative analysis when Yahoo AND
+    Alpha Vantage are unavailable. Estimated (may be less current) and clearly labeled."""
+    akey, okey = _anthropic_key(), _openai_key()
+    if not (akey or okey):
+        return None
+    sysmsg = ("You are an equity analyst. For the given US stock ticker return ONLY a JSON object "
+              "with keys: company (str), sector (str), score (int 0-100; 75+ = BUY, 50-74 = HOLD, "
+              "<50 = SELL), rating (BUY|HOLD|SELL), strengths (array of 3 short strings), "
+              "risks (array of 3 short strings), summary (one sentence). Base it on the company's "
+              "known fundamentals, growth, and risks. JSON only, no prose.")
+    data = None
+    try:
+        if akey:
+            import anthropic
+            m = anthropic.Anthropic(api_key=akey).messages.create(
+                model="claude-opus-4-8", max_tokens=700, system=sysmsg,
+                messages=[{"role": "user", "content": f"Ticker: {t}"}])
+            txt = "".join(b.text for b in m.content if getattr(b, "type", "") == "text")
+        else:
+            from openai import OpenAI
+            r = OpenAI(api_key=okey).chat.completions.create(
+                model="gpt-5-mini", max_completion_tokens=700, reasoning_effort="minimal",
+                messages=[{"role": "system", "content": sysmsg}, {"role": "user", "content": f"Ticker: {t}"}])
+            txt = r.choices[0].message.content or ""
+        data = json.loads(txt[txt.find("{"):txt.rfind("}") + 1])
+    except Exception:  # noqa: BLE001
+        return None
+    if not data or data.get("score") is None:
+        return None
+    final = round(float(data.get("score") or 0), 1)
+    note = "AI-estimated analysis (Yahoo & Alpha Vantage unavailable)"
+    return {
+        "ticker": t, "company": data.get("company"), "sector": data.get("sector"),
+        "price": None, "score": final, "rating": data.get("rating") or _status(final),
+        "status": _status(final), "rsi": None, "data_source": "ai_estimate", "note": note,
+        "breakdown": {"categories": [], "archetype": "—", "final": final,
+                      "base": final, "penalties": 0, "multiplier": 1.0,
+                      "multiplier_reason": note,
+                      "peer_explanation": [data.get("summary") or "", note]},
+        "strengths": data.get("strengths") or [], "risks": data.get("risks") or [],
+        "technicals": {},
+    }
+
+
+def _fallback_row(t: str, reason: str, allow_llm: bool = True) -> dict:
+    """Yahoo failed → try Alpha Vantage fundamentals, then an LLM, then price-only."""
+    row = _av_fundamental_row(t)
+    if row:
+        return row
+    if allow_llm:
+        row = _llm_fundamental_row(t)
+        if row:
+            return row
     out = {"ticker": t, "error": reason}
     try:
-        q = av.global_quote(t)
-        gq = q.get("Global Quote") if isinstance(q, dict) else None
-        px = gq.get("05. price") if isinstance(gq, dict) else None
+        gq = (av.global_quote(t) or {}).get("Global Quote") or {}
+        px = gq.get("05. price")
         if px:
             out["price"] = round(float(px), 2)
             out["error"] = reason + " — price via Alpha Vantage fallback"
@@ -1042,8 +1198,12 @@ def _fallback_row(t: str, reason: str) -> dict:
     return out
 
 
-def analyze_one(ticker: str) -> dict:
-    """Run the engine for one ticker and shape it for the UI."""
+def analyze_one(ticker: str, allow_llm: bool = True) -> dict:
+    """Run the engine for one ticker and shape it for the UI.
+
+    When Yahoo rate-limits, falls back to Alpha Vantage fundamentals (and, for single
+    tickers, an LLM). `allow_llm=False` is used for bulk index scoring to avoid dozens
+    of LLM calls."""
     t = ticker.strip().upper()
     if not t:
         return None
@@ -1061,12 +1221,12 @@ def analyze_one(ticker: str) -> dict:
             if "RateLimit" in name and attempt < 2:
                 time.sleep(1.5 * (attempt + 1))
                 continue
-            return _fallback_row(t, f"could not analyze ({name})")
+            return _fallback_row(t, f"could not analyze ({name})", allow_llm=allow_llm)
 
     s = r.get("scores") or {}
     final = s.get("final")
     if final is None:
-        return _fallback_row(t, "no data returned")
+        return _fallback_row(t, "no data returned", allow_llm=allow_llm)
 
     tech = r.get("technicals") or {}
     rsi = tech.get("rsi")
@@ -1989,7 +2149,8 @@ def api_index(name: str, refresh: bool = False):
             return json.loads(cache_path.read_text())
         except Exception:
             pass
-    results = [analyze_one(t) for t in INDEX_TICKERS[name]]
+    # Bulk: AV fundamentals fallback is fine, but skip the per-ticker LLM (too slow/costly).
+    results = [analyze_one(t, allow_llm=False) for t in INDEX_TICKERS[name]]
     results = [r for r in results if r]
     results.sort(key=lambda r: (r.get("score") is None, -(r.get("score") or 0)))
     payload = {"index": name, "label": INDEX_LABEL[name], "as_of": today,

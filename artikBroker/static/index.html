@@ -2208,9 +2208,13 @@ function detail(r){
   const strengths = (r.strengths.length? r.strengths : ['—']).map(s=>`<li class="s">${s}</li>`).join('');
   const risks = (r.risks.length? r.risks : ['—']).map(s=>`<li class="r">${s}</li>`).join('');
   const t = r.technicals, tp = r.trade_plan;
+  const srcBadge = r.data_source==='alpha_vantage'
+    ? '<span class="badge" style="background:rgba(245,158,11,.18);color:#fbbf24;margin-left:8px">≈ Alpha Vantage</span>'
+    : (r.data_source==='ai_estimate' ? '<span class="badge" style="background:rgba(139,92,246,.18);color:#c4b5fd;margin-left:8px">≈ AI estimate</span>' : '');
   return `<div class="detail-inner">
     <div>
-      <h4>How the ${r.status} was computed</h4>
+      <h4>How the ${r.status} was computed ${srcBadge}</h4>
+      ${r.note?`<div style="font-size:11.5px;color:#fbbf24;margin-bottom:8px">${escapeHtml(r.note)}</div>`:''}
       <div class="formula">
         final = ( base − penalties ) × multiplier<br>
         = ( <b>${b.base}</b> − <b>${b.penalties}</b> ) × <b>${b.multiplier}×</b>
