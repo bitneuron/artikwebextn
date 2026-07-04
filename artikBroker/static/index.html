@@ -2061,8 +2061,9 @@ function listCards(items, cls){
   return `<div class="cardlist">${items.map(s=>`<div class="litem ${cls}">${cls==='good'?'✅':'⚠️'} <span>${escapeHtml(s)}</span></div>`).join('')}</div>`;
 }
 // ── Deep Analysis (Yahoo + Alpha Vantage + FMP → AI) ──────────────────────────
-async function deepAnalyze(ticker){
-  const out=$('#deep-out'); if(!out || !ticker) return;
+async function deepAnalyze(ticker, outEl){
+  const out = outEl || $('#deep-out'); if(!out || !ticker) return;
+  out.innerHTML = '<div class="spin">Pulling Yahoo Finance + Alpha Vantage + Financial Modeling Prep, then AI… (~20-40s)</div>';
   let d;
   try { d=await (await fetch('/api/stocks/analyze/'+encodeURIComponent(ticker))).json(); }
   catch(e){ out.innerHTML='<div class="err">Deep analysis failed: '+escapeHtml(String(e))+'</div>'; return; }
@@ -3062,8 +3063,12 @@ async function explainPf(ticker, btn){
     const data = await res.json();
     const r = (data.results||[])[0];
     if(!r || r.error){ cell.innerHTML = '<div class="err" style="padding:12px">'+(r&&r.error||'no data')+'</div>'; return; }
-    cell.innerHTML = detail(r);
+    cell.innerHTML = detail(r)
+      + '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">'
+      + '<div class="up-label" style="margin-bottom:8px">🔬 Deep Analysis — Yahoo · Alpha Vantage · Financial Modeling Prep · AI</div>'
+      + '<div class="pf-deep"></div></div>';
     detailRow.dataset.loaded = '1';
+    deepAnalyze(ticker, cell.querySelector('.pf-deep'));   // multi-provider section, below the engine breakdown
   } catch(e){
     cell.innerHTML = '<div class="err" style="padding:12px">Failed: '+e+'</div>';
   }
