@@ -43,6 +43,7 @@ import agent_runner  # noqa: E402  (non-blocking agent execution)
 import etrade  # noqa: E402  (E*TRADE OAuth 1.0a client)
 import schwab  # noqa: E402  (Charles Schwab OAuth 2.0 client)
 import portfolio_store  # noqa: E402  (persistent broker portfolio snapshots)
+import models as _models  # noqa: E402  (LLM model chains + version fallback)
 import news_runs  # noqa: E402  (run history + results reader)
 import news_data  # noqa: E402  (deletes a config's run history/logs + exclusive-ticker articles)
 import nl_tickers  # noqa: E402  (plain-English statement → tickers, for agent config)
@@ -1145,17 +1146,19 @@ def _llm_fundamental_row(t: str) -> dict | None:
               "known fundamentals, growth, and risks. JSON only, no prose.")
     data = None
     try:
-        if akey:
+        if akey:  # FAST chain (this can run on many tickers) with version fallback
             import anthropic
-            m = anthropic.Anthropic(api_key=akey).messages.create(
-                model="claude-opus-4-8", max_tokens=700, system=sysmsg,
-                messages=[{"role": "user", "content": f"Ticker: {t}"}])
-            txt = "".join(b.text for b in m.content if getattr(b, "type", "") == "text")
+            client = anthropic.Anthropic(api_key=akey)
+            msg = _models.with_fallback(_models.CLAUDE_FAST, lambda mdl: client.messages.create(
+                model=mdl, max_tokens=700, system=sysmsg,
+                messages=[{"role": "user", "content": f"Ticker: {t}"}]))
+            txt = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
         else:
             from openai import OpenAI
-            r = OpenAI(api_key=okey).chat.completions.create(
-                model="gpt-5-mini", max_completion_tokens=700, reasoning_effort="minimal",
-                messages=[{"role": "system", "content": sysmsg}, {"role": "user", "content": f"Ticker: {t}"}])
+            client = OpenAI(api_key=okey)
+            r = _models.with_fallback(_models.GPT_FAST, lambda mdl: client.chat.completions.create(
+                model=mdl, max_completion_tokens=700, reasoning_effort="minimal",
+                messages=[{"role": "system", "content": sysmsg}, {"role": "user", "content": f"Ticker: {t}"}]))
             txt = r.choices[0].message.content or ""
         data = json.loads(txt[txt.find("{"):txt.rfind("}") + 1])
     except Exception:  # noqa: BLE001
@@ -1421,14 +1424,14 @@ def _err_detail(e) -> str:
 def _parse_anthropic(query: str, key: str) -> dict | None:
     import anthropic
     client = anthropic.Anthropic(api_key=key)
-    msg = client.messages.create(
-        model="claude-opus-4-8",
+    msg = _models.with_fallback(_models.CLAUDE, lambda mdl: client.messages.create(
+        model=mdl,
         max_tokens=2000,
         system=_SEARCH_SYSTEM,
         tools=[_SEARCH_TOOL],
         tool_choice={"type": "tool", "name": "return_search_plan"},
         messages=[{"role": "user", "content": query}],
-    )
+    ))
     return next((b.input for b in msg.content if b.type == "tool_use"), None)
 
 
@@ -1436,8 +1439,8 @@ def _parse_openai(query: str, key: str) -> dict | None:
     """OpenAI GPT fallback — same structured plan via function calling (GPT-5 API)."""
     from openai import OpenAI
     client = OpenAI(api_key=key)
-    resp = client.chat.completions.create(
-        model="gpt-5-mini",
+    resp = _models.with_fallback(_models.GPT, lambda mdl: client.chat.completions.create(
+        model=mdl,
         messages=[
             {"role": "system", "content": _SEARCH_SYSTEM},
             {"role": "user", "content": query},
@@ -1450,7 +1453,7 @@ def _parse_openai(query: str, key: str) -> dict | None:
         tool_choice={"type": "function", "function": {"name": _SEARCH_TOOL["name"]}},
         max_completion_tokens=2000,
         reasoning_effort="minimal",
-    )
+    ))
     calls = resp.choices[0].message.tool_calls
     return json.loads(calls[0].function.arguments) if calls else None
 
@@ -1598,26 +1601,26 @@ def _copilot_context_block(context_type: str, context: dict) -> str:
 def _copilot_anthropic(messages, sys_text, key):
     import anthropic
     client = anthropic.Anthropic(api_key=key)
-    msg = client.messages.create(
-        model="claude-opus-4-8", max_tokens=1500, system=sys_text,
+    msg = _models.with_fallback(_models.CLAUDE, lambda mdl: client.messages.create(
+        model=mdl, max_tokens=1500, system=sys_text,
         tools=[{"name": _COPILOT_TOOL_NAME, "description": _COPILOT_TOOL_DESC,
                 "input_schema": _COPILOT_TOOL_SCHEMA}],
         tool_choice={"type": "tool", "name": _COPILOT_TOOL_NAME},
-        messages=messages)
+        messages=messages))
     return next((b.input for b in msg.content if getattr(b, "type", "") == "tool_use"), None)
 
 
 def _copilot_openai(messages, sys_text, key):
     from openai import OpenAI
     client = OpenAI(api_key=key)
-    resp = client.chat.completions.create(
-        model="gpt-5-mini",
+    resp = _models.with_fallback(_models.GPT, lambda mdl: client.chat.completions.create(
+        model=mdl,
         messages=[{"role": "system", "content": sys_text}] + messages,
         tools=[{"type": "function", "function": {
             "name": _COPILOT_TOOL_NAME, "description": _COPILOT_TOOL_DESC,
             "parameters": _COPILOT_TOOL_SCHEMA}}],
         tool_choice={"type": "function", "function": {"name": _COPILOT_TOOL_NAME}},
-        max_completion_tokens=1500, reasoning_effort="minimal")
+        max_completion_tokens=1500, reasoning_effort="minimal"))
     calls = resp.choices[0].message.tool_calls
     return json.loads(calls[0].function.arguments) if calls else None
 
@@ -2493,23 +2496,23 @@ _SUMMARY_SYSTEM = (
 def _summarize_anthropic(prompt: str, key: str) -> str | None:
     import anthropic
     client = anthropic.Anthropic(api_key=key)
-    msg = client.messages.create(
-        model="claude-opus-4-8", max_tokens=350,
+    msg = _models.with_fallback(_models.CLAUDE_FAST, lambda mdl: client.messages.create(
+        model=mdl, max_tokens=350,
         system=_SUMMARY_SYSTEM,
         messages=[{"role": "user", "content": prompt}],
-    )
+    ))
     return "".join(b.text for b in msg.content if getattr(b, "type", "") == "text").strip() or None
 
 
 def _summarize_openai(prompt: str, key: str) -> str | None:
     from openai import OpenAI
     client = OpenAI(api_key=key)
-    resp = client.chat.completions.create(
-        model="gpt-5-mini",
+    resp = _models.with_fallback(_models.GPT_FAST, lambda mdl: client.chat.completions.create(
+        model=mdl,
         messages=[{"role": "system", "content": _SUMMARY_SYSTEM},
                   {"role": "user", "content": prompt}],
         max_completion_tokens=400, reasoning_effort="minimal",
-    )
+    ))
     return (resp.choices[0].message.content or "").strip() or None
 
 
