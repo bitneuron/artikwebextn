@@ -2171,8 +2171,11 @@ def api_index(name: str, refresh: bool = False):
             return json.loads(cache_path.read_text())
         except Exception:
             pass
-    # Bulk: AV fundamentals fallback is fine, but skip the per-ticker LLM (too slow/costly).
-    results = [analyze_one(t, allow_llm=False) for t in INDEX_TICKERS[name]]
+    # Bulk: score concurrently (network-bound) — AV fundamentals fallback is fine, but skip
+    # the per-ticker LLM (too slow/costly). Bounded workers keep yfinance rate-limits gentle.
+    tickers = INDEX_TICKERS[name]
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        results = list(ex.map(lambda t: analyze_one(t, allow_llm=False), tickers))
     results = [r for r in results if r]
     results.sort(key=lambda r: (r.get("score") is None, -(r.get("score") or 0)))
     payload = {"index": name, "label": INDEX_LABEL[name], "as_of": today,

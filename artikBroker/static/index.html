@@ -2923,17 +2923,23 @@ async function deleteSelectedHistory(){
 // ── Index tabs (S&P 500 / DOW) — scored live, cached daily by the backend ─────
 async function loadIndex(name, refresh){
   const out = $('#'+name+'-out');
-  out.innerHTML = '<div class="spin">Scoring '+(name==='dow'?'Dow 30':'S&P 500 top 40')+
-    ' with the new engine… (first run builds peer caches — up to a couple minutes)</div>';
+  const label = name==='dow'?'Dow 30':'S&P 500 top 40';
+  const t0 = Date.now();
+  out.innerHTML = '<div class="spin">Scoring '+label+' with the live engine… <b id="'+name+'-elapsed">0s</b>'
+    + (refresh?' <span class="muted">(re-scoring live — Yahoo can be slow; ~15-40s)</span>':'')+'</div>';
+  const timer = setInterval(()=>{ const el=$('#'+name+'-elapsed'); if(el) el.textContent=Math.round((Date.now()-t0)/1000)+'s'; }, 1000);
+  const ctrl = new AbortController();
+  const to = setTimeout(()=>ctrl.abort(), 175000);
   try {
-    const res = await fetch('/api/index/'+name+(refresh?'?refresh=true':''));
+    const res = await fetch('/api/index/'+name+(refresh?'?refresh=true':''), {signal:ctrl.signal});
     const data = await res.json();
     if(data.error){ out.innerHTML = '<div class="err">'+data.error+'</div>'; return; }
     $('#'+name+'-meta').textContent = `${data.count} names · as of ${data.as_of}`;
     renderIndex(data.results, name+'-out', name);
   } catch(e){
-    out.innerHTML = '<div class="err">Failed: '+e+'</div>';
-  }
+    const msg = (e && e.name==='AbortError') ? 'Timed out — Yahoo may be rate-limiting right now.' : ('Failed: '+escapeHtml(String(e)));
+    out.innerHTML = '<div class="err">'+msg+' <button class="ghost" style="margin-left:8px" onclick="loadIndex(\''+name+'\',true)">↻ Retry</button></div>';
+  } finally { clearInterval(timer); clearTimeout(to); }
 }
 
 window._idx = window._idx || {};
