@@ -49,6 +49,45 @@ DATA_DIR = Path(os.environ.get(
 CONFIG_DIR = HERE / "config"
 CONFIG_PATH = CONFIG_DIR / "agent_schedules.json"
 
+# Durable persistence: the agent config is stored in the SAME SQLite DB as users
+# (USERS_DB_PATH), which Litestream replicates to S3 — so the News Collector's enabled
+# state, tracked tickers and schedule SURVIVE App Runner redeploys. The JSON file is kept
+# only as a local cache / dev fallback (it lives on the ephemeral /app/config).
+import sqlite3  # noqa: E402
+_DB_PATH = Path(os.environ.get("USERS_DB_PATH", str(CONFIG_DIR / "users.db")))
+_KV_KEY = "agent_schedules"
+
+
+def _db_conn():
+    _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    c = sqlite3.connect(str(_DB_PATH), timeout=10, check_same_thread=False)
+    c.execute("PRAGMA journal_mode=WAL")
+    c.execute("PRAGMA busy_timeout=5000")
+    c.execute("CREATE TABLE IF NOT EXISTS app_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+    return c
+
+
+def _db_get():
+    """Parsed agent config from the durable DB, or None if never written / unavailable."""
+    try:
+        with _db_conn() as c:
+            row = c.execute("SELECT value FROM app_kv WHERE key=?", (_KV_KEY,)).fetchone()
+        return json.loads(row[0]) if row else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _db_set(data: dict) -> bool:
+    try:
+        with _db_conn() as c:
+            c.execute("INSERT INTO app_kv (key, value) VALUES (?,?) "
+                      "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                      (_KV_KEY, json.dumps(data)))
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
 DEFAULT_TZ = os.environ.get("TZ") or "America/Los_Angeles"
 
 _lock = threading.RLock()
@@ -134,19 +173,31 @@ REGISTRY = {
 # ---------------------------------------------------------------------------
 
 def _read_all() -> dict:
-    if not CONFIG_PATH.exists():
-        return {}
-    try:
-        return json.loads(CONFIG_PATH.read_text(encoding="utf-8")) or {}
-    except (json.JSONDecodeError, OSError):
-        return {}
+    # Durable DB first (survives redeploys). Fall back to the legacy JSON file and
+    # migrate it into the DB, so existing configs are picked up transparently.
+    db = _db_get()
+    if db is not None:
+        return db
+    if CONFIG_PATH.exists():
+        try:
+            data = json.loads(CONFIG_PATH.read_text(encoding="utf-8")) or {}
+        except (json.JSONDecodeError, OSError):
+            data = {}
+        if data:
+            _db_set(data)   # migrate legacy file → durable DB (one-time)
+        return data
+    return {}
 
 
 def _write_all(data: dict) -> None:
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = CONFIG_PATH.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
-    tmp.replace(CONFIG_PATH)
+    _db_set(data)   # durable: Litestream replicates the users DB to S3
+    try:            # local cache / dev fallback (ephemeral on AWS)
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = CONFIG_PATH.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        tmp.replace(CONFIG_PATH)
+    except OSError:
+        pass
 
 
 def _now_iso() -> str:
