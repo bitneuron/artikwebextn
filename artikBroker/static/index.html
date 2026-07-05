@@ -2046,6 +2046,7 @@ function detTab(name){
   document.querySelectorAll('#view-detail .dtab').forEach(b=>b.classList.toggle('active', b.dataset.t===name));
   $('#det-body').innerHTML = detContent(window._detR, name);
   if(name==='news' || name==='signals') loadDetailNews(window._detR, name);
+  if(name==='signals') loadIntelligence((window._detR||{}).ticker);
   if(name==='deep') deepAnalyze((window._detR||{}).ticker);
 }
 function kpiCards(cats){
@@ -2080,8 +2081,18 @@ function renderDeep(d){
   const sc=(l,v)=>`<div class="kpi"><div class="lbl">${l}</div><div style="font-size:20px;font-weight:700;color:${col(v)}">${v??'—'}</div></div>`;
   const status=`<div class="pf-bar" style="gap:8px;flex-wrap:wrap">
     ${badge('Yahoo Finance',ps.yahooFinance)} ${badge('Alpha Vantage',ps.alphaVantage)}
-    ${badge('Financial Modeling Prep',ps.financialModelingPrep)} ${badge('AI (Claude/GPT)',ps.ai)}
+    ${badge('Financial Modeling Prep',ps.financialModelingPrep)} ${badge('Finnhub Intelligence',ps.finnhubIntelligence)} ${badge('AI (Claude/GPT)',ps.ai)}
     <span class="pf-meta" style="margin-left:auto">Data confidence: <b>${(n.dataQuality||{}).confidence??'—'}%</b></span></div>`;
+  let intelLine='';
+  if(d.artik_score_with_intelligence!=null){
+    const ic=v=>v==null?'var(--txt)':(v>=60?'#34d399':v>=40?'#fbbf24':'#f87171');
+    intelLine=`<div class="panel-card" style="margin-top:12px"><h3>🧠 Artik Score + Intelligence</h3>
+      <div class="pf-meta">Engine score <b>${d.engine_score??'—'}</b> ×80% + Intelligence <b style="color:${ic(d.intelligence_score)}">${d.intelligence_score??'—'}</b> ×20% =
+      <b style="font-size:16px;color:${(d.artik_score_with_intelligence>=75?'#34d399':d.artik_score_with_intelligence>=50?'#fbbf24':'#f87171')}">${d.artik_score_with_intelligence}</b></div>
+      <div class="muted" style="font-size:11.5px;margin-top:4px">Weights — Technical 30% · Fundamental 35% · Intelligence 20% · Risk 15%. The existing engine score is preserved unchanged; this is an additional intelligence-adjusted view. See the <b>Signals</b> tab for the full Intelligence Dashboard.</div></div>`;
+  } else if(d.intelligence_error){
+    intelLine=`<div class="pf-meta" style="margin-top:10px">🧠 Intelligence unavailable: ${escapeHtml(d.intelligence_error)} — existing analysis unaffected.</div>`;
+  }
   let aiHtml='';
   if(ai){
     aiHtml=`<div class="panel-card" style="margin-top:12px"><h3>🤖 AI analysis — <span style="color:${col(ai.artik_score)}">${escapeHtml(ai.rating||'')}</span></h3>
@@ -2106,7 +2117,7 @@ function renderDeep(d){
     <table class="mini" style="width:100%">${rtRows.map(([l,v])=>`<tr><td>${l}</td><td style="text-align:right">${v}</td></tr>`).join('')}</table></div>`;
   const val=n.valuation||{}, gr=n.growth||{};
   const extra=`<div class="pf-meta" style="margin-top:10px">Market cap ${money(val.marketCap)} · EV ${money(val.enterpriseValue)} · EV/EBITDA ${num(val.evToEbitda)} · Rev YoY ${gr.revenueYoY==null?'—':gr.revenueYoY+'%'} · EPS YoY ${gr.epsYoY==null?'—':gr.epsYoY+'%'}</div>`;
-  return status + aiHtml + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${statements}${ratios}</div>` + extra;
+  return status + aiHtml + intelLine + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${statements}${ratios}</div>` + extra;
 }
 
 function detContent(r, name){
@@ -2147,8 +2158,12 @@ function detContent(r, name){
     return `<div class="panel-card"><h3>Fundamentals</h3>${used}
       <span class="av-slot"><button class="ex-btn" onclick="loadEnrich('${r.ticker}', this)">📊 Load Alpha Vantage — Bollinger Bands + fundamentals</button></span></div>`;
   }
-  if(name==='news' || name==='signals'){
+  if(name==='news'){
     return `<div class="panel-card news-card"><h3>📰 News Intelligence</h3><div id="det-news"><div class="spin">Loading news signals…</div></div></div>`;
+  }
+  if(name==='signals'){
+    return `<div id="intel-dash"><div class="spin">Loading Intelligence Dashboard (Finnhub)…</div></div>
+      <div class="panel-card news-card" style="margin-top:12px"><h3>📰 News Intelligence (Collector)</h3><div id="det-news"><div class="spin">Loading news signals…</div></div></div>`;
   }
   if(name==='peers'){
     const pe = (b.peer_explanation&&b.peer_explanation.length)
@@ -2192,6 +2207,86 @@ async function loadDetailNews(r, mode){
     ${latest?`<div style="margin-bottom:12px;font-size:13.5px"><span class="muted">Latest:</span> ${escapeHtml(latest.headline||'')}</div>`:''}
     <div class="cardlist">${list||'<div class="muted">—</div>'}</div>
     <p class="muted" style="font-size:12px;margin-top:12px">Overlay only — the base Artik Score (${r.score}) is never modified.</p>`;
+}
+
+// ── Intelligence Dashboard (Finnhub) ─────────────────────────────────────────
+async function loadIntelligence(ticker){
+  const box=document.getElementById('intel-dash'); if(!box||!ticker) return;
+  let d;
+  try { d=await (await fetch('/api/intelligence/'+encodeURIComponent(ticker))).json(); }
+  catch(e){ box.innerHTML='<div class="panel-card"><div class="muted">🧠 Intelligence temporarily unavailable. Existing analysis is unaffected.</div></div>'; return; }
+  box.innerHTML=renderIntel(d);
+}
+function intelColor(sig){ return sig==='Bullish'?'#34d399':sig==='Bearish'?'#f87171':'#fbbf24'; }
+function intelBadge(sig){ return `<span class="badge" style="background:${intelColor(sig)}22;color:${intelColor(sig)}">${sig||'—'}</span>`; }
+function toggleIntel(id){ const el=document.getElementById(id); if(el) el.style.display=el.style.display==='none'?'':'none'; }
+function _fmtd(n){ return n==null?'0':(n>0?'+'+n:''+n); }
+function intelSpark(trend){
+  const pts=(trend||[]).filter(p=>p.composite_score!=null);
+  if(pts.length<2) return '<span class="muted" style="font-size:11.5px">Collecting daily snapshots — 7/30/90-day trend builds over time.</span>';
+  const w=180,h=34;
+  const xs=pts.map((p,i)=>i/(pts.length-1)*w);
+  const ys=pts.map(p=>h-(p.composite_score/100)*h);
+  const path=xs.map((x,i)=>`${i?'L':'M'}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ');
+  const last=pts[pts.length-1];
+  return `<svg width="${w}" height="${h}" style="vertical-align:middle"><path d="${path}" fill="none" stroke="${intelColor(last.composite_label)}" stroke-width="2"/></svg> <span class="muted" style="font-size:11.5px">${pts.length}-day composite trend</span>`;
+}
+function intelCard(id,title,sig,summaryHtml,detailHtml){
+  return `<div class="panel-card" style="cursor:pointer" onclick="toggleIntel('${id}')">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h3 style="margin:0;font-size:15px">${title}</h3>
+      <div>${sig?intelBadge(sig.signal):''}${sig&&sig.score!=null?` <span style="color:${intelColor(sig.signal)};font-weight:700">${sig.score}</span>`:''}</div>
+    </div>
+    <div style="margin-top:8px;font-size:13px">${summaryHtml}</div>
+    <div id="${id}" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">${detailHtml}</div>
+    <div class="muted" style="font-size:11px;margin-top:6px">Click for detail ▾</div>
+  </div>`;
+}
+function renderIntel(d){
+  if(!d || d.configured===false){
+    return `<div class="panel-card"><h3>🧠 Intelligence</h3><div class="muted">Intelligence is temporarily unavailable — Finnhub is not configured. All existing Artik analysis is unaffected.</div></div>`;
+  }
+  const s=d.signals||{}, ai=d.ai||{}, ok=d.provider_status||{};
+  if(!s.composite){
+    return `<div class="panel-card"><h3>🧠 Intelligence</h3><div class="muted">Intelligence temporarily unavailable${d.error?': '+escapeHtml(d.error):''}. Existing analysis is unaffected.</div></div>`;
+  }
+  const c=s.composite;
+  const b=(l,v)=>`<span class="badge" style="background:${v?'rgba(52,211,153,.15)':'rgba(248,113,113,.15)'};color:${v?'#34d399':'#f87171'}">${l}: ${v?'✓':'✕'}</span>`;
+  const status=`<div class="pf-bar" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">${b('Finnhub Intelligence',ok.finnhub)} ${b('AI',ok.ai)}<span class="pf-meta" style="margin-left:auto">Source: Finnhub · ${escapeHtml(d.timestamp||'')}</span></div>`;
+  const exec = ai.executive_summary ? `<div class="panel-card" style="border-left:3px solid ${intelColor(ai.overall||c.signal)}"><h3>🧠 Intelligence Executive Summary</h3><p style="font-size:14px">${escapeHtml(ai.executive_summary)}</p><div class="pf-meta">Overall: <b style="color:${intelColor(ai.overall||c.signal)}">${escapeHtml(ai.overall||c.signal)}</b> · Confidence: <b>${escapeHtml(String(ai.confidence||'—'))}</b></div></div>` : '';
+  const composite=`<div class="panel-card" style="border:1px solid ${intelColor(c.signal)}66;margin-top:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h3 style="margin:0">🎯 Composite Intelligence Signal</h3>
+      <div style="font-size:24px;font-weight:800;color:${intelColor(c.signal)}">${c.signal} · ${c.score}</div>
+    </div>
+    <div class="pf-meta" style="margin-top:6px">Confidence ${c.confidence}% · Coverage ${c.coverage}% · ${escapeHtml(c.timestamp||'')}</div>
+    <div style="margin-top:8px">${intelSpark(d.trend)}</div>
+    <div class="muted" style="font-size:11.5px;margin-top:8px">Feeds the new <b>20%</b> Intelligence weight — Technical 30% · Fundamental 35% · Intelligence 20% · Risk 15%. Existing engine scores are unchanged.</div>
+  </div>`;
+  const n=s.news||{}, an=s.analyst||{}, ins=s.insider||{}, inst=s.institutional||{}, sec=s.sec||{}, ea=s.earnings||{};
+  const impact=w=>`<div class="muted" style="font-size:11.5px;margin-top:6px">Why it matters: ${w}<br>Impact: feeds the Intelligence score (20% of the Artik Score with Intelligence).</div>`;
+  const src=sig=>`<div class="pf-meta">Source: <b>Finnhub</b> · Confidence ${sig&&sig.confidence!=null?sig.confidence+'%':'—'} · ${escapeHtml(d.timestamp||'')}</div>`;
+  const cards=[
+    intelCard('ic-news','📰 News Intelligence',n,
+      `Positive <b class="pos">${n.positive??'—'}</b> · Negative <b class="neg">${n.negative??'—'}</b> · Neutral <b>${n.neutral??'—'}</b>`,
+      src(n)+`<div style="margin-top:6px">${(n.topHeadlines||[]).slice(0,4).map(h=>`<div class="litem"><span class="muted">${escapeHtml(h.source||'')}</span> ${escapeHtml((h.headline||'').slice(0,110))} ${h.url?`<a href="${h.url}" target="_blank" rel="noopener">↗</a>`:''}</div>`).join('')||'<span class="muted">No recent headlines.</span>'}</div>`+impact('News sentiment signals near-term catalysts and momentum.')),
+    intelCard('ic-analyst','📈 Analyst Signals',an,
+      an.available?`Strong Buy <b>${an.strongBuy}</b> · Buy <b>${an.buy}</b> · Hold <b>${an.hold}</b> · Sell <b>${an.sell}</b> · Strong Sell <b>${an.strongSell}</b>`:'<span class="muted">No analyst coverage.</span>',
+      src(an)+(an.available&&an.momChanges?`<div class="pf-meta" style="margin-top:6px">Month-over-month — SB ${_fmtd(an.momChanges.strongBuy)} · B ${_fmtd(an.momChanges.buy)} · H ${_fmtd(an.momChanges.hold)} · S ${_fmtd(an.momChanges.sell)} · SS ${_fmtd(an.momChanges.strongSell)}</div>`:'')+impact('Rising analyst ratings often precede price appreciation.')),
+    intelCard('ic-insider','👤 Insider Activity',ins,
+      ins.available?`CEO buys <b>${ins.ceoPurchases}</b> · Director buys <b>${ins.directorPurchases}</b> · Net <b class="${ins.net>=0?'pos':'neg'}">${ins.net>=0?'+':''}${(ins.net||0).toLocaleString()}</b> sh`:'<span class="muted">No recent insider activity.</span>',
+      src(ins)+(ins.available?`<div class="pf-meta" style="margin-top:6px">Buys ${ins.buys} (${(ins.totalBuying||0).toLocaleString()} sh) · Sells ${ins.sells} (${(ins.totalSelling||0).toLocaleString()} sh) · MSPR ${ins.mspr??'—'}</div>`:'')+impact('Insiders buying with their own money is a strong conviction signal.')),
+    intelCard('ic-inst','🏛 Institutional Ownership',inst,
+      inst.available?`Trend: <b style="color:${intelColor(inst.signal)}">${inst.trend}</b> · ↑${inst.increasing} funds · ↓${inst.decreasing} funds`:'<span class="muted">No institutional data.</span>',
+      src(inst)+(inst.available?`<div style="margin-top:6px">${(inst.topChanges||[]).map(o=>`<div class="litem">${escapeHtml(o.name||'')}: <span class="${o.change>=0?'pos':'neg'}">${o.change>=0?'+':''}${(o.change||0).toLocaleString()}</span> sh</div>`).join('')}</div>`:'')+impact('Fund accumulation reflects smart-money conviction.')),
+    intelCard('ic-sec','📄 SEC Filing Intelligence',sec,
+      sec.available?`Latest: ${['10-K','10-Q','8-K','proxy'].filter(k=>sec.latest&&sec.latest[k]).join(' · ')||'—'}`:'<span class="muted">No filings.</span>',
+      src(sec)+(ai.sec_summary?`<p style="font-size:13px;margin:6px 0">${escapeHtml(ai.sec_summary)}</p>`:'')+`<div style="margin-top:6px">${(sec.recent||[]).filter(Boolean).map(f=>`<div class="litem">${escapeHtml(f.form||'')} · ${escapeHtml(f.filedDate||'')} ${f.url?`<a href="${f.url}" target="_blank" rel="noopener">↗</a>`:''}</div>`).join('')||''}</div>`+impact('Filings reveal guidance, buybacks, and risk changes early.')),
+    intelCard('ic-earn','🗓 Earnings Signals',ea,
+      ea.available?`Next: <b>${escapeHtml(ea.nextDate||'—')}</b> · Beats <b class="pos">${ea.beats}</b> · Misses <b class="neg">${ea.misses}</b> · Avg surprise <b>${ea.avgSurprisePct!=null?ea.avgSurprisePct+'%':'—'}</b>`:'<span class="muted">No earnings history.</span>',
+      src(ea)+(ea.available?`<div style="margin-top:6px">${(ea.recent||[]).map(x=>`<div class="litem">${escapeHtml(x.period||'')}: actual ${x.actual??'—'} vs est ${x.estimate??'—'} (${x.surprisePct!=null?(x.surprisePct>=0?'+':'')+x.surprisePct+'%':'—'})</div>`).join('')}</div>`:'')+impact('Consistent beats and rising estimates support upside.')),
+  ].join('');
+  return `<div class="panel-card"><h3 style="margin-top:0">🧠 Intelligence Dashboard</h3>${status}</div>${exec}${composite}<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">${cards}</div>`;
 }
 function sortMain(col){
   const st = window._mainSort || (window._mainSort={col:'score',dir:-1});

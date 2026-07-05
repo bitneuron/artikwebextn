@@ -43,6 +43,9 @@ import agent_runner  # noqa: E402  (non-blocking agent execution)
 import etrade  # noqa: E402  (E*TRADE OAuth 1.0a client)
 import schwab  # noqa: E402  (Charles Schwab OAuth 2.0 client)
 import fmp  # noqa: E402  (Financial Modeling Prep — third data provider)
+import finnhub  # noqa: E402  (Finnhub — intelligence provider only)
+import intelligence  # noqa: E402  (intelligence signal computation)
+import intelligence_store  # noqa: E402  (persistent intelligence snapshots for trends)
 import portfolio_store  # noqa: E402  (persistent broker portfolio snapshots)
 import models as _models  # noqa: E402  (LLM model chains + version fallback)
 import news_runs  # noqa: E402  (run history + results reader)
@@ -2363,6 +2366,10 @@ def api_stocks_analyze(ticker: str):
     y, a, f = _provider_yahoo(t), _provider_alpha(t), _provider_fmp(t)
     normalized = _normalize_context(y, a, f)
 
+    # Intelligence (Finnhub) — ADDITIVE context only; degrades gracefully if unavailable.
+    fh = _provider_finnhub(t)
+    intel_signals = fh.get("signals")
+
     # Full context (raw + normalized) goes to the LLM server-side; NEVER the API key.
     context = {
         "ticker": t,
@@ -2376,18 +2383,127 @@ def api_stocks_analyze(ticker: str):
         },
         "normalized": normalized,
     }
+    # Appended Intelligence section only — the existing prompt/flow is unchanged.
+    if intel_signals:
+        context["intelligence"] = {"status": "success" if fh["ok"] else "failure",
+                                   "timestamp": fh["ts"], "signals": intel_signals}
     ai, ai_err = _ai_deep_analysis(context)
 
-    # Response to the browser: status + normalized + AI (no raw key anywhere).
+    # Intelligence-adjusted Artik Score = existing engine score ×0.80 + Intelligence ×0.20.
+    # The existing engine score is NEVER modified; this is a NEW, separate field.
+    engine_score = (y.get("data") or {}).get("score")
+    comp = (intel_signals or {}).get("composite") or {}
+    intel_score = comp.get("score")
+    artik_with_intel = None
+    if isinstance(engine_score, (int, float)) and isinstance(intel_score, (int, float)):
+        artik_with_intel = round(engine_score * 0.80 + intel_score * 0.20, 1)
+
+    # Response to the browser: status + normalized + AI + intelligence (no raw key anywhere).
     return {
         "ticker": t,
         "provider_status": {"yahooFinance": y["ok"], "alphaVantage": a["ok"],
-                            "financialModelingPrep": f["ok"], "ai": bool(ai)},
+                            "financialModelingPrep": f["ok"],
+                            "finnhubIntelligence": fh["ok"], "ai": bool(ai)},
         "providers_meta": {k: {"status": v["status"], "timestamp": v["timestamp"], "error": v.get("error")}
                            for k, v in context["providers"].items()},
         "normalized": normalized,
+        "intelligence": intel_signals, "intelligence_error": fh.get("error"),
+        "engine_score": engine_score, "intelligence_score": intel_score,
+        "artik_score_with_intelligence": artik_with_intel,
+        "score_weights": {"technical": 30, "fundamental": 35, "intelligence": 20, "risk": 15},
         "ai": ai, "ai_error": ai_err,
     }
+
+
+# ── Intelligence (Finnhub) — ADDITIVE. Never touches the existing Artik Engine. ──
+def _provider_finnhub(ticker: str) -> dict:
+    ts = _iso_now()
+    cl = finnhub.FinnhubClient()
+    if not cl.configured:
+        return {"ok": False, "ts": ts, "signals": None, "error": "FINNHUB_API_KEY not configured"}
+    try:
+        b = cl.bundle(ticker)
+        return {"ok": bool(b.get("ok")), "ts": ts, "signals": intelligence.build_intelligence(b),
+                "errors": b.get("errors", {}), "error": None if b.get("ok") else "Finnhub returned no data"}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "ts": ts, "signals": None, "error": finnhub._scrub(str(e), cl.key)}
+
+
+_INTEL_SYSTEM = (
+    "You are an equity intelligence analyst. Given a ticker and its computed intelligence signals "
+    "(news, analyst recommendation trends, insider activity, institutional ownership, SEC filings, "
+    "earnings), return ONLY JSON with keys: executive_summary (2-3 concise sentences, e.g. 'Insider "
+    "buying remains strong while analyst upgrades increased this month. Recent earnings exceeded "
+    "expectations and institutional ownership continues to rise. Overall Intelligence remains Bullish "
+    "with High confidence.'), sec_summary (2-3 sentences on the latest filings' likely revenue/margin/"
+    "guidance/buyback/risk themes; say 'limited filing detail available' if unknown), overall "
+    "(Bullish|Neutral|Bearish), confidence (Low|Medium|High). JSON only, no prose.")
+
+
+def _ai_intel_summary(ticker: str, signals: dict):
+    akey, okey = _anthropic_key(), _openai_key()
+    if not (akey or okey) or not signals:
+        return None
+    trimmed = {k: {kk: vv for kk, vv in (signals.get(k) or {}).items()
+                   if kk not in ("topHeadlines", "recent", "topChanges", "momChanges", "latest")}
+               for k in ("news", "analyst", "insider", "institutional", "sec", "earnings", "composite")}
+    prompt = f"Ticker: {ticker}\nSignals: {json.dumps(trimmed)[:8000]}"
+    try:
+        if akey:
+            import anthropic
+            client = anthropic.Anthropic(api_key=akey)
+            msg = _models.with_fallback(_models.CLAUDE_FAST, lambda mdl: client.messages.create(
+                model=mdl, max_tokens=500, system=_INTEL_SYSTEM,
+                messages=[{"role": "user", "content": prompt}]))
+            txt = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
+        else:
+            from openai import OpenAI
+            client = OpenAI(api_key=okey)
+            r = _models.with_fallback(_models.GPT_FAST, lambda mdl: client.chat.completions.create(
+                model=mdl, max_completion_tokens=500, reasoning_effort="minimal",
+                messages=[{"role": "system", "content": _INTEL_SYSTEM}, {"role": "user", "content": prompt}]))
+            txt = r.choices[0].message.content or ""
+        return json.loads(txt[txt.find("{"):txt.rfind("}") + 1])
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _intelligence_payload(ticker: str, persist: bool = True) -> dict:
+    f = _provider_finnhub(ticker)
+    signals = f.get("signals")
+    ai = _ai_intel_summary(ticker, signals) if signals else None
+    if signals and persist:
+        try:
+            intelligence_store.save(ticker, signals)
+        except Exception:  # noqa: BLE001
+            pass
+    try:
+        tr = intelligence_store.trend(ticker, 90)
+    except Exception:  # noqa: BLE001
+        tr = []
+    return {"ticker": ticker, "configured": finnhub.FinnhubClient().configured,
+            "provider_status": {"finnhub": f["ok"], "ai": bool(ai)},
+            "timestamp": f["ts"], "error": f.get("error"),
+            "signals": signals, "ai": ai, "trend": tr}
+
+
+@app.get("/api/intelligence/{ticker}")
+def api_intelligence(ticker: str):
+    t = (ticker or "").strip().upper()
+    if not t or not re.match(r"^[A-Z][A-Z0-9.\-]{0,9}$", t):
+        return JSONResponse({"error": "invalid ticker"}, status_code=400)
+    return _intelligence_payload(t)
+
+
+@app.get("/api/intelligence/{ticker}/trend")
+def api_intelligence_trend(ticker: str, days: int = 90):
+    t = (ticker or "").strip().upper()
+    if not re.match(r"^[A-Z][A-Z0-9.\-]{0,9}$", t or ""):
+        return JSONResponse({"error": "invalid ticker"}, status_code=400)
+    try:
+        return {"ticker": t, "days": days, "trend": intelligence_store.trend(t, days)}
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 def _portfolio_enabled() -> bool:
