@@ -2075,6 +2075,9 @@ function detailFor(r){
       </div>
     </div>
     ${_positionCard(r)}
+    <div style="margin:0 0 14px">
+      <button onclick="analyzeWithCopilot()" style="display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border:none;border-radius:10px;background:linear-gradient(90deg,var(--acc),var(--acc2));color:#fff;font-weight:700;font-size:14px;cursor:pointer;box-shadow:0 2px 14px rgba(59,130,246,.35)">🤖 Analyze with Artik Copilot</button>
+    </div>
     <div class="dtabs">${TABS.map(([t,l])=>`<button class="dtab ${t==='overview'?'active':''}" data-t="${t}" onclick="detTab('${t}')">${l}</button>`).join('')}</div>
     <div id="det-body"></div>`;
   showTab('detail','tab-analyze');
@@ -2109,6 +2112,7 @@ async function deepAnalyze(ticker, outEl){
   try { d=await (await fetch('/api/stocks/analyze/'+encodeURIComponent(ticker))).json(); }
   catch(e){ out.innerHTML='<div class="err">Deep analysis failed: '+escapeHtml(String(e))+'</div>'; return; }
   if(d.error){ out.innerHTML='<div class="err">'+escapeHtml(d.error)+'</div>'; return; }
+  window._deepCache = {ticker, data:d, ts:Date.now()};   // reused by the Copilot (no refetch)
   out.innerHTML = renderDeep(d);
 }
 function renderDeep(d){
@@ -2174,7 +2178,7 @@ function detContent(r, name){
     return `
       <div class="panel-card"><h3>🤖 AI Summary</h3>
         <div class="ai-summary">${summary}</div>
-        <button class="ex-btn" style="margin-top:12px" onclick="askCopilotStock('${r.ticker}')">💬 Ask Artik Broker AI for deeper analysis</button>
+        <button class="ex-btn" style="margin-top:12px" onclick="analyzeWithCopilot()">💬 Ask Artik Broker AI for deeper analysis</button>
       </div>
       <div class="panel-card"><h3>Score Breakdown</h3>${kpiCards(b.categories)}
         <div class="formula" style="margin-top:14px">final = ( base − penalties ) × multiplier = ( <b>${b.base}</b> − <b>${b.penalties}</b> ) × <b>${b.multiplier}×</b> = <b>${b.final}</b> → <b>${r.rating}</b></div>
@@ -2255,6 +2259,7 @@ async function loadIntelligence(ticker){
   let d;
   try { d=await (await fetch('/api/intelligence/'+encodeURIComponent(ticker))).json(); }
   catch(e){ box.innerHTML='<div class="panel-card"><div class="muted">🧠 Intelligence temporarily unavailable. Existing analysis is unaffected.</div></div>'; return; }
+  window._intelCache = {ticker, data:d, ts:Date.now()};   // reused by the Copilot (no refetch)
   box.innerHTML=renderIntel(d);
 }
 function intelColor(sig){ return sig==='Bullish'?'#34d399':sig==='Bearish'?'#f87171':'#fbbf24'; }
@@ -2509,6 +2514,36 @@ async function askCopilotStock(ticker){
     delete ctx._enriching;
     window._cop.ctx = ctx;
   } catch(e){ if(window._cop.ctx) delete window._cop.ctx._enriching; }
+  renderCopilot();
+}
+// Prominent "Analyze with Artik Copilot" button on the unified Stock Analysis page.
+// Reuses the analysis ALREADY loaded on the page (engine row + any Deep Analysis / Signals
+// tabs the user opened); fetches only the pieces not yet loaded. No engine refetch.
+async function analyzeWithCopilot(){
+  const r = window._detR; if(!r || !r.ticker){ return; }
+  const ticker = r.ticker;
+  $('#copilot').classList.remove('hidden');
+  $('#app').classList.add('copopen');
+  const ctx = {...r};
+  if(window._detSource==='portfolio'){ const h=_pfHoldingFor(ticker); if(h) ctx.portfolio = h; }
+  window._cop = { ctxType:'stock', ctx, uiMode:'auto', msgs:[], busy:false, provider:null };
+  renderCopilot();
+  $('#copilot').scrollIntoView({behavior:'smooth', block:'nearest'});
+  const T = encodeURIComponent(ticker);
+  const jget = async u => { try { return await (await fetch(u)).json(); } catch(e){ return null; } };
+  // Reuse cached tab data (same ticker); fetch only what the page hasn't loaded yet.
+  let intel = (window._intelCache && window._intelCache.ticker===ticker) ? window._intelCache.data : null;
+  let deep  = (window._deepCache  && window._deepCache.ticker===ticker)  ? window._deepCache.data  : null;
+  const jobs=[];
+  if(!intel) jobs.push(jget('/api/intelligence/'+T).then(d=>{ intel=d; if(d) window._intelCache={ticker,data:d,ts:Date.now()}; }));
+  if(!deep)  jobs.push(jget('/api/stocks/analyze/'+T+'?skip_ai=true').then(d=>{ deep=d; if(d) window._deepCache={ticker,data:d,ts:Date.now()}; }));
+  if(jobs.length){ ctx._enriching=true; renderCopilot(); await Promise.all(jobs); }
+  if(intel && intel.signals) ctx.intelligence = {signals:intel.signals, ai:intel.ai, provider_status:intel.provider_status, timestamp:intel.timestamp};
+  if(deep && !deep.error) ctx.deep = {normalized:deep.normalized, provider_status:deep.provider_status,
+    engine_score:deep.engine_score, intelligence_score:deep.intelligence_score,
+    artik_score_with_intelligence:deep.artik_score_with_intelligence, score_weights:deep.score_weights};
+  delete ctx._enriching;
+  window._cop.ctx = ctx;
   renderCopilot();
 }
 function copilotSetMode(m){ window._cop.uiMode = m; }
