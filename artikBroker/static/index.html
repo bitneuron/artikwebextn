@@ -1386,7 +1386,7 @@ document.addEventListener('contextmenu', e=>{
   e.preventDefault();
   showFavMenu(e.clientX, e.clientY, el.getAttribute('data-fav-ticker'));
 });
-function ctxViewDetails(tk){ hideFavMenu(); openStockDetail(tk); }
+function ctxViewDetails(tk){ hideFavMenu(); openStock(tk, null); }
 function ctxAnalyze(tk){ hideFavMenu(); showTab('analyze','tab-analyze'); fill(tk); }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1792,7 +1792,7 @@ function aVal(r,k){ if(k==='archetype') return (r.breakdown&&r.breakdown.archety
   if(k==='news') return r.news_overlay?r.news_overlay.aggregate_score_delta:null; return r[k]; }
 function aSort(col){ const st=window._aSort; if(st.col===col) st.dir*=-1;
   else { st.col=col; st.dir = {price:1,score:1,rsi:1,news:1}[col]?-1:1; } renderAnalyzeResults(); }
-function aToggle(i){ const d=$('#ald'+i); if(d) d.style.display = d.style.display==='none' ? '' : 'none'; }
+// (aToggle removed — inline Explain retired; rows open the canonical view via openStock.)
 function analyzeListTable(view){
   const st = window._aSort, num={price:1,score:1,rsi:1,news:1};
   const sorted = [...view].sort((a,b)=>{
@@ -1819,9 +1819,8 @@ function analyzeListTable(view){
       <td class="num">${r.rsi!=null?r.rsi:'—'}</td>
       <td>${statusCell(r)}</td>
       <td class="num">${news}</td>
-      <td style="white-space:nowrap"><button class="ex-btn" onclick="aToggle(${i})">Explain ▾</button> <button class="ex-btn" onclick="showDetail(${i})">Details</button></td>
-    </tr>
-    <tr class="detail" id="ald${i}" style="display:none"><td colspan="11">${detail(r)}</td></tr>`;
+      <td style="white-space:nowrap"><button class="ex-btn" onclick="openStock('${r.ticker}','search')">Explain →</button></td>
+    </tr>`;
   }).join('');
   return `<table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`;
 }
@@ -1839,7 +1838,7 @@ function stockCard(r,i){
   const risk = (r.risks&&r.risks[0]) ? `<div class="cl bad">⚠ <span>${escapeHtml(r.risks[0])}</span></div>` : '';
   const why = r.why ? `<div class="co" style="margin-top:6px;white-space:normal">${escapeHtml(r.why)}</div>` : '';
   return `<div class="scard">
-    <div class="row1" onclick="showDetail(${i})" style="cursor:pointer">
+    <div class="row1" onclick="openStock('${r.ticker}','search')" style="cursor:pointer">
       <div style="min-width:0">
         <div class="tk" data-fav-ticker="${r.ticker}">${r.ticker}${favStar(r.ticker,'search_results')}${overlayChip(r)}</div>
         <div class="co">${escapeHtml(r.company||'')}</div>
@@ -1855,22 +1854,12 @@ function stockCard(r,i){
       ${r.news_overlay?`<div><div class="k">News</div><div class="v ${r.news_overlay.aggregate_score_delta>=0?'pos':'neg'}">${r.news_overlay.aggregate_score_delta>=0?'+':''}${r.news_overlay.aggregate_score_delta}</div></div>`:''}
     </div>
     ${strength}${risk}
-    <div class="card-explain" id="cx${i}" style="display:none">${miniExplain(r)}</div>
     <div class="cardbtns">
-      <button class="cta-sm" onclick="cardExplain(${i},this)">Explain</button>
-      <button class="cta-sm primary" onclick="showDetail(${i})">Details →</button>
+      <button class="cta-sm primary" onclick="openStock('${r.ticker}','search')">Analyze →</button>
     </div>
   </div>`;
 }
-function miniExplain(r){
-  const b = r.breakdown||{};
-  const cats = (b.categories||[]).map(c=>{ const pct=Math.max(0,Math.min(100,(c.score/c.max)*100));
-    return `<div class="catrow"><span class="nm">${c.label}</span><span class="track"><span class="fill" style="width:${pct}%"></span></span><span class="pts">${c.score}/${c.max}</span></div>`;
-  }).join('');
-  return `<div class="formula" style="margin-bottom:8px">( ${b.base} − ${b.penalties} ) × ${b.multiplier}× = <b>${b.final}</b> → ${r.rating}</div>${cats}`;
-}
-function cardExplain(i,btn){ const card=btn&&btn.closest('.scard'); const d=card?card.querySelector('.card-explain'):$('#cx'+i);
-  if(!d) return; const open=d.style.display==='none'; d.style.display=open?'':'none'; btn.textContent=open?'Hide':'Explain'; }
+// (miniExplain + cardExplain removed — inline card Explain retired; cards open the canonical view.)
 function errorCard(r){
   return `<div class="scard" style="cursor:default"><div class="row1"><div class="tk" data-fav-ticker="${r.ticker}">${r.ticker}${favStar(r.ticker,'ui')}</div></div>
     <div class="err" style="margin-top:12px">${escapeHtml(r.error||'error')}</div></div>`;
@@ -1885,7 +1874,7 @@ function renderFavToggle(){ const v=getFavView(), el=$('#fav-toggle'); if(!el) r
 let _favSort={col:'score',dir:-1};   // default: Score descending
 function favSort(col){ if(_favSort.col===col) _favSort.dir*=-1;
   else { _favSort.col=col; _favSort.dir={price:1,score:1,rsi:1,news:1}[col]?-1:1; } drawFavorites(); }
-function favToggle(i){ const d=$('#favd'+i); if(d) d.style.display=d.style.display==='none'?'':'none'; }
+// (favToggle removed — Favorites Explain opens the canonical view via openStock.)
 
 async function loadFavorites(force){
   window._activeTab='favorites';
@@ -1966,9 +1955,8 @@ function favListTable(view){
       <td>${statusCell(r)}</td>
       <td class="num">${news}</td>
       <td class="gcell">${groupBadges(r.ticker)}</td>
-      <td style="white-space:nowrap"><button class="ex-btn" onclick="favToggle(${i})">Explain ▾</button> <button class="ex-btn" onclick="showDetail(${i})">Details</button> <button class="ex-btn" onclick="assignGroupModal('${r.ticker}')" title="Add to / manage groups">🏷</button> <button class="ex-btn" onclick="removeFav('${r.ticker}')" title="Remove from Favorites">✕</button></td>
-    </tr>
-    <tr class="detail" id="favd${i}" style="display:none"><td colspan="13">${detail(r)}</td></tr>`;
+      <td style="white-space:nowrap"><button class="ex-btn" onclick="openStock('${r.ticker}','favorites')">Explain →</button> <button class="ex-btn" onclick="assignGroupModal('${r.ticker}')" title="Add to / manage groups">🏷</button> <button class="ex-btn" onclick="removeFav('${r.ticker}')" title="Remove from Favorites">✕</button></td>
+    </tr>`;
   }).join('');
   return `<table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`;
 }
@@ -1994,9 +1982,9 @@ function favEmptyState(){
 }
 
 // ── Stock Detail page (tabs · KPI score cards · chart · news) ──────────────────
-function showDetail(i){
+function showDetail(i){   // legacy alias → canonical opener
   const r = (window._rows||[])[i]; if(!r || r.error) return;
-  detailFor(r);
+  openStock(r, null);
 }
 // Direct research-page link: fetch one ticker live and open its detail.
 async function openStockDetail(ticker){
@@ -2009,6 +1997,57 @@ async function openStockDetail(ticker){
     window._rows = [r];
     detailFor(r);
   } catch(e){ $('#view-detail').innerHTML = '<div class="err">Failed: '+e+'</div>'; }
+}
+// ── Canonical Stock Analysis opener — the ONE entry point used everywhere ──────
+// Portfolio · S&P 500 · Dow · Favorites · Search all call this. Reuses an already
+// loaded full row when available (no duplicate API call); otherwise fetches once.
+function _findRow(ticker){
+  ticker=(ticker||'').toUpperCase();
+  const pools=[window._rows||[]];
+  if(window._idx) for(const k in window._idx){ const rr=(window._idx[k]||{}).rows; if(rr) pools.push(rr); }
+  for(const p of pools){ const r=p.find(x=>x && (x.ticker||'').toUpperCase()===ticker && x.breakdown && x.score!=null); if(r) return r; }
+  return null;
+}
+function openStock(ticker, source){
+  window._detSource = source || null;
+  const isObj = ticker && typeof ticker==='object';
+  const t = isObj ? ticker.ticker : ticker;
+  const r = (isObj && ticker.breakdown) ? ticker : _findRow(t);
+  if(r){ window._rows=[r]; detailFor(r); }
+  else { openStockDetail(t); }
+}
+// Pinned position card shown in the canonical view when opened from a holding.
+function _positionCard(r){
+  const src = window._detSource;
+  if(src==='portfolio'){
+    const h = _pfHoldingFor(r.ticker);
+    if(h){
+      const qty=num(h.qty), cost=num(h.cost_basis), price=num(h.price)??r.price, value=num(h.value), pl=num(h.pl);
+      const plpct=(h.pl_pct!=null?h.pl_pct:null), avg=(qty&&cost!=null)?cost/qty:null;
+      let wt=null; const tot=(window._pfRows||[]).reduce((a,x)=>a+(num(x.value)||0),0);
+      if(tot && value!=null) wt=value/tot*100;
+      const cell=(l,v)=>`<div><div style="font-size:11px;color:var(--mut)">${l}</div><div style="font-size:15px;font-weight:700;margin-top:2px">${v}</div></div>`;
+      return `<div style="margin:14px 0;padding:14px 16px;background:linear-gradient(180deg,rgba(59,130,246,.09),transparent);border:1px solid var(--line);border-radius:12px">
+        <div style="font-size:11px;font-weight:800;letter-spacing:.6px;color:var(--acc);margin-bottom:10px">💼 YOUR POSITION</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(108px,1fr));gap:14px">
+          ${cell('Shares', qty!=null?qty.toLocaleString():'—')}
+          ${cell('Average Cost', avg!=null?'$'+avg.toLocaleString(undefined,{maximumFractionDigits:2}):'—')}
+          ${cell('Current Price', price!=null?'$'+Number(price).toLocaleString():'—')}
+          ${cell('Market Value', value!=null?'$'+value.toLocaleString(undefined,{maximumFractionDigits:0}):'—')}
+          ${cell('Unrealized Gain', pl!=null?`<span class="${pl>=0?'pos':'neg'}">${pl>=0?'+':'−'}$${Math.abs(pl).toLocaleString(undefined,{maximumFractionDigits:0})}${plpct!=null?` (${pl>=0?'+':''}${plpct}%)`:''}</span>`:'—')}
+          ${cell('Portfolio Weight', wt!=null?wt.toFixed(1)+'%':'—')}
+        </div></div>`;
+    }
+  }
+  if(src && src!=='portfolio'){
+    return `<div style="margin:14px 0;padding:10px 14px;background:var(--bg);border:1px solid var(--line);border-radius:12px;display:flex;align-items:center;gap:10px">
+      <span style="font-size:11px;font-weight:800;letter-spacing:.6px;color:var(--mut)">NO POSITION</span>
+      <span style="display:flex;gap:8px;margin-left:auto">
+        <button class="ex-btn" onclick="addFav('${r.ticker}','stock_detail');this.textContent='★ In Watchlist';this.disabled=true">☆ Add to Watchlist</button>
+        <button class="ex-btn" onclick="detTab('trade')">Create Trade Plan</button>
+      </span></div>`;
+  }
+  return '';
 }
 function detailFor(r){
   window._detR = r; window._detTab = 'overview';
@@ -2035,6 +2074,7 @@ function detailFor(r){
         ${r.price!=null?`<div class="muted" style="margin-top:8px;font-size:13px">$${r.price.toLocaleString()}</div>`:''}
       </div>
     </div>
+    ${_positionCard(r)}
     <div class="dtabs">${TABS.map(([t,l])=>`<button class="dtab ${t==='overview'?'active':''}" data-t="${t}" onclick="detTab('${t}')">${l}</button>`).join('')}</div>
     <div id="det-body"></div>`;
   showTab('detail','tab-analyze');
@@ -2323,7 +2363,7 @@ function renderPortfolio(data){
     + '</tr></thead><tbody>';
   rows.forEach((r,i) => {
     const ex = r.error ? `<span class="err">${r.error}</span>`
-                       : `<button class="ex-btn" onclick="toggle(${i})">Explain ▾</button>`;
+                       : `<button class="ex-btn" onclick="openStock('${r.ticker}','portfolio')">Explain →</button>`;
     html += `<tr class="row">
       <td>${i+1}</td>
       <td class="tick">${r.ticker}</td>
@@ -2337,73 +2377,15 @@ function renderPortfolio(data){
       <td class="num">${plCell(r.pl, r.pl_pct)}</td>
       <td>${ex}</td>
     </tr>`;
-    if(!r.error)
-      html += `<tr class="detail" id="d${i}" style="display:none"><td colspan="11">${detail(r)}</td></tr>`;
   });
   html += '</tbody></table>';
   $('#out').innerHTML = html;
   window._rows = rows; window._mode = 'portfolio';
 }
 
-function detail(r){
-  const b = r.breakdown;
-  const cats = b.categories.map(c => {
-    const pct = Math.max(0, Math.min(100, (c.score/c.max)*100));
-    return `<div class="catrow"><span class="nm">${c.label}</span>
-      <span class="track"><span class="fill" style="width:${pct}%"></span></span>
-      <span class="pts">${c.score} / ${c.max}</span></div>`;
-  }).join('');
-  const strengths = (r.strengths.length? r.strengths : ['—']).map(s=>`<li class="s">${s}</li>`).join('');
-  const risks = (r.risks.length? r.risks : ['—']).map(s=>`<li class="r">${s}</li>`).join('');
-  const t = r.technicals, tp = r.trade_plan;
-  const srcBadge = r.data_source==='alpha_vantage'
-    ? '<span class="badge" style="background:rgba(245,158,11,.18);color:#fbbf24;margin-left:8px">≈ Alpha Vantage</span>'
-    : (r.data_source==='ai_estimate' ? '<span class="badge" style="background:rgba(139,92,246,.18);color:#c4b5fd;margin-left:8px">≈ AI estimate</span>' : '');
-  return `<div class="detail-inner">
-    <div>
-      <h4>How the ${r.status} was computed ${srcBadge}</h4>
-      ${r.note?`<div style="font-size:11.5px;color:#fbbf24;margin-bottom:8px">${escapeHtml(r.note)}</div>`:''}
-      <div class="formula">
-        final = ( base − penalties ) × multiplier<br>
-        = ( <b>${b.base}</b> − <b>${b.penalties}</b> ) × <b>${b.multiplier}×</b>
-        = <b>${b.final}</b> → <b>${r.rating}</b>
-        ${b.archetype ? `<br><span style="color:var(--acc)">${b.archetype}</span> multiplier — ${b.multiplier_reason||''}` : ''}
-      </div>
-      ${(b.base_metrics_used&&b.base_metrics_used.length) ? `<div style="font-size:12px;color:var(--mut);margin-bottom:10px">
-        <b style="color:var(--buy)">Sector basis used:</b> ${b.base_metrics_used.join(', ')}
-        ${(b.base_metrics_skipped&&b.base_metrics_skipped.length)?`<br><b style="color:#fca5a5">skipped:</b> ${b.base_metrics_skipped.join(', ')}`:''}
-      </div>`:''}
-      ${(b.peer_explanation&&b.peer_explanation.length) ? `<div style="font-size:12px;color:var(--mut);margin-bottom:10px">
-        <b style="color:var(--acc)">Peer-relative (S&P 500 sector):</b><br>${b.peer_explanation.join('<br>')}
-      </div>`:(b.peer_normalized===false?`<div style="font-size:11.5px;color:var(--mut)">Peer data unavailable — using sector thresholds.</div>`:'')}
-      ${cats}
-    </div>
-    <div>
-      <h4>Strengths</h4><ul>${strengths}</ul>
-      <h4>Risks / flags</h4><ul>${risks}</ul>
-      <h4>Technicals</h4>
-      <div class="kv">
-        <span class="k">RSI</span><span>${t.rsi??'—'}</span>
-        <span class="k">MACD</span><span>${t.macd_state??'—'}</span>
-        <span class="k">RS rank</span><span>${t.rs_rank??'—'}</span>
-        <span class="k">% off 52w high</span><span>${t.off_52w_hi_pct!=null?t.off_52w_hi_pct+'%':'—'}</span>
-        <span class="k">MA 20/50/200</span><span>${t.ma20??'—'} / ${t.ma50??'—'} / ${t.ma200??'—'}</span>
-      </div>
-      <h4 style="margin-top:14px">Trade plan</h4>
-      <div class="kv">
-        <span class="k">Entry</span><span>${tp.entry??'—'}</span>
-        <span class="k">Stop</span><span>${tp.stop??'—'}</span>
-        <span class="k">Targets</span><span>${tp.target1??'—'}${tp.target2&&tp.target2!=='—'?' · '+tp.target2:''}</span>
-        <span class="k">Size</span><span>${tp.position_size??'—'}</span>
-      </div>
-    </div>
-    ${newsOverlayBlock(r)}
-    <div style="grid-column:1/-1;border-top:1px solid var(--line);margin-top:8px;padding-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-      <button class="ex-btn" onclick="askCopilotStock('${r.ticker}')">💬 Ask Copilot about ${r.ticker}</button>
-      <span class="av-slot"><button class="ex-btn" onclick="loadEnrich('${r.ticker}', this)">📊 Alpha Vantage — Bollinger Bands + fundamentals</button></span>
-    </div>
-  </div>`;
-}
+// (detail() removed — the flat inline Explain renderer is retired. The canonical tabbed
+//  Stock Analysis view (detailFor/detContent) is the single implementation. Its Overview,
+//  Technicals, Peers and Trade Plan tabs render the same content this used to.)
 
 // Base / News Overlay / Adjusted — shown separately; the engine score is never changed.
 function newsOverlayBlock(r){
@@ -2454,10 +2436,7 @@ async function loadEnrich(ticker, btn){
   }
 }
 
-function toggle(i){
-  const d = $('#d'+i);
-  d.style.display = d.style.display==='none' ? '' : 'none';
-}
+// (toggle removed — legacy portfolio Explain opens the canonical view via openStock.)
 
 // ── Artik Broker AI (chat) ────────────────────────────────────────────────────
 // ctxType = stock|search (what data is attached); uiMode = auto + 5 analysis modes.
@@ -2606,7 +2585,7 @@ function copContextCard(c){
       ${ctx.strengths&&ctx.strengths[0]?`<div class="cs-row good">✓ ${escapeHtml(ctx.strengths[0])}</div>`:''}
       ${ctx.risks&&ctx.risks[0]?`<div class="cs-row bad">⚠ ${escapeHtml(ctx.risks[0])}</div>`:''}
       ${copSourceBadges(c)}
-      <button class="ex-btn" style="margin-top:10px" onclick="detailFor(window._cop.ctx)">Open full research →</button>
+      <button class="ex-btn" style="margin-top:10px" onclick="window._detSource=null;detailFor(window._cop.ctx)">Open full research →</button>
     </div>`;
   }
   if(ctx && ctx.count){
@@ -2936,7 +2915,7 @@ function sortIdx(pfx, col){
 }
 function indexDetail(pfx, tk){
   const r = (window._idx[pfx].rows||[]).find(x=>x.ticker===tk);
-  if(r && !r.error){ window._rows=[r]; detailFor(r); }
+  if(r && !r.error) openStock(r, pfx);
 }
 function indexSummary(rows, pfx){
   const ok = rows.filter(r => !r.error && r.score!=null);
@@ -2990,17 +2969,13 @@ function drawIndex(pfx){
         <td class="num"><b>${r.score}</b>${overlayChip(r)}</td>
         <td class="num">${r.rsi!=null?r.rsi:'—'}</td>
         <td>${statusCell(r)}</td>
-        <td><button class="ex-btn" onclick="toggleGen('${pfx}',${i})">Explain ▾</button></td>
-      </tr>
-      <tr class="detail" id="${pfx}-d${i}" style="display:none"><td colspan="9">${detail(r)}</td></tr>`;
+        <td><button class="ex-btn" onclick="openStock('${r.ticker}','${pfx}')">Explain →</button></td>
+      </tr>`;
     },
   });
 }
 
-function toggleGen(pfx, i){
-  const d = $('#'+pfx+'-d'+i);
-  d.style.display = d.style.display==='none' ? '' : 'none';
-}
+// (toggleGen removed — S&P/Dow Explain opens the canonical view via openStock.)
 
 // ── Portfolio (saved snapshots by date) ──────────────────────────────────────
 let _pfPendingKey=null, _pfPendingSource=null;
@@ -3166,34 +3141,12 @@ function applyPfView(){
       <td class="num">${r.rsi||'—'}</td>
       <td>${statusBadge(r.status)}</td>
       <td class="num">${plSaved(r.pl, r.pl_pct)}</td>
-      <td><button class="ex-btn" onclick="explainPf('${r.ticker}', this)">Explain ▾</button></td>
-    </tr>
-    <tr class="detail" style="display:none"><td colspan="12"><div class="spin" style="padding:12px">…</div></td></tr>`,
+      <td><button class="ex-btn" onclick="openStock('${r.ticker}','portfolio')">Explain →</button></td>
+    </tr>`,
   });
 }
 
-async function explainPf(ticker, btn){
-  const detailRow = btn.closest('tr').nextElementSibling;
-  if(detailRow.style.display !== 'none'){ detailRow.style.display='none'; btn.textContent='Explain ▾'; return; }
-  detailRow.style.display=''; btn.textContent='Explain ▴';
-  const cell = detailRow.querySelector('td');
-  if(detailRow.dataset.loaded){ return; }
-  cell.innerHTML = '<div class="spin" style="padding:12px">Running live analysis for '+ticker+'…</div>';
-  try {
-    const res = await fetch('/api/analyze?symbols='+encodeURIComponent(ticker));
-    const data = await res.json();
-    const r = (data.results||[])[0];
-    if(!r || r.error){ cell.innerHTML = '<div class="err" style="padding:12px">'+(r&&r.error||'no data')+'</div>'; return; }
-    cell.innerHTML = detail(r)
-      + '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">'
-      + '<div class="up-label" style="margin-bottom:8px">🔬 Deep Analysis — Yahoo · Alpha Vantage · Financial Modeling Prep · AI</div>'
-      + '<div class="pf-deep"></div></div>';
-    detailRow.dataset.loaded = '1';
-    deepAnalyze(ticker, cell.querySelector('.pf-deep'));   // multi-provider section, below the engine breakdown
-  } catch(e){
-    cell.innerHTML = '<div class="err" style="padding:12px">Failed: '+e+'</div>';
-  }
-}
+// (explainPf removed — Portfolio "Explain" now opens the canonical Stock Analysis view via openStock.)
 
 // Enter (without shift) submits
 $('#syms').addEventListener('keydown', e => {
@@ -4454,7 +4407,7 @@ if(location.hash.startsWith('#q=')){
   if(q){ const s=$('#syms'); if(s){ s.value=q; run(); } }
 } else if(location.hash.startsWith('#stock=')){
   const tk = decodeURIComponent(location.hash.slice(7)).toUpperCase();
-  if(tk) openStockDetail(tk);
+  if(tk) openStock(tk, null);
 } else if(location.hash.startsWith('#view=')){
   const v = location.hash.slice(6);
   if(_VIEWS.includes(v) && v!=='detail') showTab(v);
