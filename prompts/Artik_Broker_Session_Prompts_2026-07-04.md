@@ -61,5 +61,36 @@ Result: `askCopilotStock` attaches engine detail + intelligence (analyst + compo
 institutional/SEC/earnings + AI summary) + deep multi-provider data + the portfolio holding;
 `?skip_ai=true` builds the context fast.
 
-### 10. This request
+### 10. Update memory + save prompts
 > update the memory and also include all the prompts submitted
+
+### 11. Unify Explain & Details → commit `f88c3da` (deployed)
+Full spec: [Artik_Broker_Unified_Stock_View_Prompt.md](Artik_Broker_Unified_Stock_View_Prompt.md).
+One canonical Stock Analysis view everywhere; old inline Explain renderer removed; Explain is the
+single entry; Portfolio "YOUR POSITION" card.
+
+### 12. Analyze with Artik Copilot button → commit `4b1babf` (deployed)
+Prominent 🤖 button on the unified page header + Overview; preloads the page's loaded context
+(engine + intelligence + deep + portfolio), reuses tab caches (no refetch). Table rows never open
+Copilot directly. (Included in the Unified Stock View prompt file.)
+
+### 13. S&P 500 / Dow refresh fix → commit `2e7ac89` (deployed)
+> refresh button in DOW or SP500 doesn't work _(image: "Scoring Dow 30…")_
+
+Root cause: sequential scoring (~50s, looked frozen). Parallelized (ThreadPoolExecutor 6 workers) →
+~12-16s; live elapsed counter + timeout + Retry button.
+
+### 14. News Collector durability → commit `eecb380` (deployed)
+> MAKE SURE NEWS COLLECTOR agent is not disabled or deleted, after deployed _(image: collector Running)_
+
+Agent config was ephemeral (`/app/config/agent_schedules.json`) → redeploys reset it to default
+(disabled). Fix: persist config in the Litestream-backed users DB (`app_kv`). PROVEN durable across
+2 real redeploys.
+
+### 15. Context-aware page search & Copilot → commit `54e6510` (deployed)
+Full spec: [Artik_Broker_Context_Aware_Page_Search_Prompt.md](Artik_Broker_Context_Aware_Page_Search_Prompt.md).
+ArtikPageSearch bar + Analyze-with-Copilot on Portfolio/S&P500/Dow/Favorites; buildPageAnalysisContext();
+`POST /api/copilot/analyze-page`.
+
+### 16. This request
+> now upload the memory and also add the prompts to prompts folder
