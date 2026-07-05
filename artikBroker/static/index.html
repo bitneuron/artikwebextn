@@ -2493,17 +2493,43 @@ function openCopilotSearch(mode){
   $('#copilot').classList.remove('hidden');
   renderCopilot();
 }
+function _pfHoldingFor(ticker){
+  const rows = window._pfRows || [];
+  return rows.find(r => (r.ticker||'').toUpperCase() === (ticker||'').toUpperCase()) || null;
+}
 async function askCopilotStock(ticker){
   $('#copilot').classList.remove('hidden');
   $('#app').classList.add('copopen');   // slide the rail in on tablet/mobile
   window._cop = { ctxType:'stock', ctx:{ticker, loading:true}, uiMode:'auto', msgs:[], busy:false, provider:null };
   renderCopilot();
   $('#copilot').scrollIntoView({behavior:'smooth', block:'nearest'});
+  const T = encodeURIComponent(ticker);
+  const jget = async u => { try { return await (await fetch(u)).json(); } catch(e){ return null; } };
+  // 1) Engine detail first (fast) + the portfolio holding → Copilot usable immediately.
   try {
-    const d = await (await fetch('/api/analyze?symbols='+encodeURIComponent(ticker))).json();
-    const r = (d.results||[])[0];
-    window._cop.ctx = (r && !r.error) ? r : {ticker};
+    const d = await jget('/api/analyze?symbols='+T);
+    const r = ((d&&d.results)||[])[0];
+    const ctx = (r && !r.error) ? {...r} : {ticker};
+    const h = _pfHoldingFor(ticker); if(h) ctx.portfolio = h;
+    ctx._enriching = true;
+    window._cop.ctx = ctx;
   } catch(e){ window._cop.ctx = {ticker}; }
+  renderCopilot();
+  // 2) Enrich with intelligence (analyst + composite + insider/…) and the multi-provider
+  //    deep data (FMP statements/ratios/valuation + intelligence-adjusted score) — no LLM.
+  try {
+    const [intel, deep] = await Promise.all([
+      jget('/api/intelligence/'+T),
+      jget('/api/stocks/analyze/'+T+'?skip_ai=true'),
+    ]);
+    const ctx = window._cop.ctx || {ticker};
+    if(intel && intel.signals) ctx.intelligence = {signals:intel.signals, ai:intel.ai, provider_status:intel.provider_status, timestamp:intel.timestamp};
+    if(deep && !deep.error) ctx.deep = {normalized:deep.normalized, provider_status:deep.provider_status,
+      engine_score:deep.engine_score, intelligence_score:deep.intelligence_score,
+      artik_score_with_intelligence:deep.artik_score_with_intelligence, score_weights:deep.score_weights};
+    delete ctx._enriching;
+    window._cop.ctx = ctx;
+  } catch(e){ if(window._cop.ctx) delete window._cop.ctx._enriching; }
   renderCopilot();
 }
 function copilotSetMode(m){ window._cop.uiMode = m; }

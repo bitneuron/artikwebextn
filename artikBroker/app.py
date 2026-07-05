@@ -1557,6 +1557,21 @@ HOW TO ANSWER: concise; clear sections, bullets, small tables, real numbers. Cit
 (score, category scores out of max, multiplier, archetype, RSI, percentiles) when present. Label what-if
 analysis as hypothetical and never change actual scores. End with 2-3 suggested follow-ups when useful.
 
+STOCK CONTEXT MAY INCLUDE (use whatever is present, never invent the rest):
+- Artik Engine detail: score, status (BUY/HOLD/SELL), archetype, category scores, technicals, fundamentals,
+  strengths/risks, trade plan, peer explanation.
+- `deep`: multi-provider data (Yahoo/Alpha Vantage/FMP) — financial statements, ratios, valuation, growth,
+  plus `artik_score_with_intelligence` (engine×0.80 + intelligence×0.20; the plain engine score is unchanged).
+- `intelligence` (Finnhub, additive — does NOT change the Artik BUY/HOLD/SELL): a Composite Intelligence
+  Signal (Bullish/Neutral/Bearish + score + confidence) and per-category signals — News, Analyst
+  recommendation trends (Strong Buy/Buy/Hold/Sell/Strong Sell + month-over-month change), Insider activity,
+  Institutional ownership, SEC filings, Earnings — each with a score, confidence and an AI executive summary.
+- `portfolio`: the user's holding of this stock when present — shares, cost basis, market value, gain/loss,
+  weight, source (E*TRADE/Schwab/Excel). Answer portfolio questions from this.
+When asked about analyst ratings or the composite/intelligence signal, read them from `intelligence`. Be clear
+that analyst Strong Buy/Buy/Hold/Sell counts are Wall-Street analysts (from Finnhub), distinct from the Artik
+BUY/HOLD/SELL status.
+
 SOURCE PRIORITY: current Artik Engine output > general knowledge. Use general knowledge ONLY to explain
 concepts or company facts in research mode — never to fabricate Artik scores/metrics. If Artik data needed
 to answer is not in the context, say: "I do not see that information in the current Artik Engine output."
@@ -1595,7 +1610,7 @@ def _copilot_context_block(context_type: str, context: dict) -> str:
     if not context:
         return "No stock/search context is attached — answer generally (research/discovery/screening), and never invent Artik scores."
     try:
-        blob = json.dumps(context, default=str)[:14000]
+        blob = json.dumps(context, default=str)[:22000]
     except Exception:  # noqa: BLE001
         blob = "{}"
     return (f"{label} — Artik Engine output (source of truth; do not invent anything beyond it):\n"
@@ -2355,10 +2370,12 @@ def _ai_deep_analysis(context: dict):
 
 
 @app.get("/api/stocks/analyze/{ticker}")
-def api_stocks_analyze(ticker: str):
+def api_stocks_analyze(ticker: str, skip_ai: bool = False):
     """Multi-provider deep analysis: Yahoo → Alpha Vantage → FMP → Claude/GPT.
     Resilient: any provider can fail and the rest still flow to the LLM. The FMP API
-    key is read from the environment and never returned to the client."""
+    key is read from the environment and never returned to the client.
+    skip_ai=true returns the merged/normalized data + intelligence WITHOUT the deep-analysis
+    LLM call (used to build the Copilot context quickly)."""
     t = (ticker or "").strip().upper()
     if not t or not re.match(r"^[A-Z][A-Z0-9.\-]{0,9}$", t):
         return JSONResponse({"error": "invalid ticker"}, status_code=400)
@@ -2387,7 +2404,7 @@ def api_stocks_analyze(ticker: str):
     if intel_signals:
         context["intelligence"] = {"status": "success" if fh["ok"] else "failure",
                                    "timestamp": fh["ts"], "signals": intel_signals}
-    ai, ai_err = _ai_deep_analysis(context)
+    ai, ai_err = (None, None) if skip_ai else _ai_deep_analysis(context)
 
     # Intelligence-adjusted Artik Score = existing engine score ×0.80 + Intelligence ×0.20.
     # The existing engine score is NEVER modified; this is a NEW, separate field.
