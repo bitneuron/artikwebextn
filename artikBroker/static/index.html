@@ -342,6 +342,12 @@
   .app.collapsed { grid-template-columns:66px minmax(0,1fr) 360px; }
   .app.nocop { grid-template-columns:236px minmax(0,1fr); }
   .app.collapsed.nocop { grid-template-columns:66px minmax(0,1fr); }
+  /* Maximized Copilot — fills the whole window except the left menu. */
+  .app.copmax { grid-template-columns:236px 0 minmax(0,1fr); }
+  .app.collapsed.copmax { grid-template-columns:66px 0 minmax(0,1fr); }
+  .app.copmax .workspace { display:none; }
+  .app.copmax .copilot-col { border-left:0; }
+  .app.copmax .cop-report, .app.copmax .cop-body { max-width:1100px; margin-left:auto; margin-right:auto; }
 
   /* sidebar */
   .sidebar { background:linear-gradient(180deg,#0b1119,#080c14); border-right:1px solid var(--line);
@@ -1180,8 +1186,19 @@ function openTools(open){ const t=$('#search-tools'), b=$('#tools-body'), h=t&&t
 function toggleTools(){ openTools(!$('#search-tools').classList.contains('open')); }
 // Collapse/expand the right Artik Copilot panel (mirrors the left-nav collapse).
 function toggleCopilot(){
+  $('#app').classList.remove('copmax');   // collapsing exits maximize
   const on = $('#app').classList.toggle('copcollapsed');
   try { localStorage.setItem('artik_broker_cop_collapsed', on?'1':'0'); } catch(e){}
+}
+// Maximize the Copilot to fill the window (except the left menu) / restore to the rail.
+function _isCopMax(){ const a=document.getElementById('app'); return !!(a && a.classList.contains('copmax')); }
+function toggleCopMax(){
+  const a=document.getElementById('app'); if(!a) return;
+  a.classList.remove('copcollapsed');           // ensure the panel is open
+  a.classList.remove('nocop'); a.classList.add('copopen');
+  const on=a.classList.toggle('copmax');
+  const btn=document.getElementById('cop-max-btn');
+  if(btn){ btn.textContent=on?'⤡':'⤢'; btn.title=on?'Restore panel':'Maximize panel'; }
 }
 // Collapse/expand the LEFT navigation menu (icon-only rail when collapsed).
 function toggleNav(){
@@ -2779,6 +2796,7 @@ function renderCopilot(){
   $('#copilot').innerHTML = `
     <div class="cop-head"><div class="cop-brand">🤖 <b>Artik Copilot</b></div>
       <button class="ex-btn" style="margin-left:auto" onclick="copilotReset()" title="New conversation">↺ New</button>
+      <button class="cop-collapse" id="cop-max-btn" onclick="toggleCopMax()" title="${_isCopMax()?'Restore panel':'Maximize panel'}">${_isCopMax()?'⤡':'⤢'}</button>
       <button class="cop-collapse" onclick="toggleCopilot()" title="Collapse panel">›</button>
     </div>
     ${meta}
@@ -2885,6 +2903,7 @@ function showTab(name, navId){
   // Keep window._rows pointing at the active result set so index-based
   // showDetail/Explain handlers resolve the right row (analyze vs favorites).
   if(name!=='detail') window._activeTab = name;
+  $('#app').classList.remove('copmax');   // navigating exits a maximized Copilot
   mountPageSearches();   // idempotent — embeds ArtikPageSearch on Portfolio/Fav/S&P/Dow
   if(name==='analyze' && window._analyzeRows) window._rows = window._analyzeRows;
   if(name==='favorites' && window._favRows) window._rows = window._favRows;
