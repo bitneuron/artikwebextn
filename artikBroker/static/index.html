@@ -215,6 +215,18 @@
          padding:12px 16px; font-size:14px; font-weight:600; cursor:pointer; border-radius:0; }
   .tab.active { color:var(--txt); border-bottom-color:var(--acc); }
   .pf-bar { display:flex; align-items:center; gap:12px; margin-bottom:16px; flex-wrap:wrap; }
+  /* Context-aware page search (Portfolio · S&P · Dow · Favorites) */
+  .page-search { margin:0 0 16px; padding:12px 14px; border:1px solid var(--line); border-radius:12px;
+    background:linear-gradient(180deg,rgba(59,130,246,.06),transparent); }
+  .page-search .ps-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .page-search .ps-input { flex:1; min-width:220px; background:var(--bg); border:1px solid var(--line);
+    color:var(--txt); border-radius:9px; padding:9px 12px; font-size:13.5px; }
+  .page-search .ps-row .cta-sm { flex:0 0 auto; }
+  .page-search .ps-chips { display:flex; gap:7px; flex-wrap:wrap; margin-top:10px; }
+  .page-search .ps-chips .chip { background:var(--bg); border:1px solid var(--line); color:var(--txt);
+    border-radius:999px; padding:5px 11px; font-size:12px; cursor:pointer; white-space:nowrap; }
+  .page-search .ps-chips .chip:hover { border-color:var(--acc); color:var(--acc); }
+  @media (max-width:640px){ .page-search .ps-input { min-width:0; width:100%; } .page-search .ps-row .cta-sm { flex:1; } }
   select { background:var(--panel); color:var(--txt); border:1px solid var(--line);
            border-radius:8px; padding:8px 12px; font-size:14px; }
   .pf-meta { color:var(--mut); font-size:12.5px; }
@@ -998,6 +1010,7 @@
       <button id="pf-refresh" class="ex-btn" onclick="refreshPortfolio()" title="Re-score holdings against live market data">🔄 Refresh</button>
       <span id="pf-meta" class="pf-meta"></span>
     </div>
+    <div id="ps-portfolio"></div>
     <div id="pf-totals"></div>
     <div id="pf-out"><div class="spin">Loading saved portfolios…</div></div>
   </section>
@@ -1034,6 +1047,7 @@
       <div class="vtoggle" id="fav-toggle" style="margin-left:auto"></div>
       <button class="ghost" onclick="loadFavorites(true)">🔄 Refresh</button>
     </div>
+    <div id="ps-favorites"></div>
     <div id="fav-groupbar" class="fav-groupbar"></div>
     <div id="fav-out"><div class="spin">Loading…</div></div>
   </section>
@@ -1045,6 +1059,7 @@
       <button class="ghost" onclick="loadIndex('sp500', true)">↻ Refresh</button>
       <span id="sp500-meta" class="pf-meta"></span>
     </div>
+    <div id="ps-sp500"></div>
     <div id="sp500-out"><div class="spin">Loading…</div></div>
   </section>
 
@@ -1055,6 +1070,7 @@
       <button class="ghost" onclick="loadIndex('dow', true)">↻ Refresh</button>
       <span id="dow-meta" class="pf-meta"></span>
     </div>
+    <div id="ps-dow"></div>
     <div id="dow-out"><div class="spin">Loading…</div></div>
   </section>
 
@@ -2546,6 +2562,86 @@ async function analyzeWithCopilot(){
   window._cop.ctx = ctx;
   renderCopilot();
 }
+// ══ Context-aware page search & Copilot (Portfolio · Dow · S&P · Favorites) ══════
+const _PAGE_SEARCH = {
+  portfolio: { ph:'Ask about this portfolio…  e.g. "Which holdings should I trim?"',
+    chips:['Summarize Portfolio','Top Opportunities','Biggest Risks','Sell Candidates','Buy Candidates','Diversification Review','Sector Exposure','Winners vs Losers','Compare Holdings'] },
+  favorites: { ph:'Ask about your favorites…  e.g. "Rank my favorites."',
+    chips:['Review Favorites','Which should I buy now?','Rank my Favorites','Hidden Gems','Compare Favorites'] },
+  sp500: { ph:'Ask about the S&P 500…  e.g. "Which are undervalued?"',
+    chips:["Today's Winners",'Best Long-Term Investments','Undervalued Stocks','Overvalued Stocks','Highest Quality Companies','Growth Leaders','AI Stocks','Dividend Leaders','Compare Companies'] },
+  dow: { ph:'Ask about the Dow 30…  e.g. "Which Dow stocks are attractive?"',
+    chips:["Today's Winners",'Best Long-Term Investments','Undervalued Stocks','Overvalued Stocks','Highest Quality Companies','Growth Leaders','AI Stocks','Dividend Leaders','Compare Companies'] },
+};
+function ArtikPageSearch(pageType){
+  const cfg=_PAGE_SEARCH[pageType]||_PAGE_SEARCH.sp500;
+  const chips=cfg.chips.map(c=>`<button class="chip" onclick="askCopilotPage('${pageType}', ${JSON.stringify(c).replace(/"/g,'&quot;')})">${escapeHtml(c)}</button>`).join('');
+  return `<div class="page-search">
+    <div class="ps-row">
+      <input id="ps-input-${pageType}" class="ps-input" placeholder="${escapeHtml(cfg.ph)}"
+        onkeydown="if(event.key==='Enter'){askCopilotPage('${pageType}', this.value); this.value='';}">
+      <button class="cta-sm" onclick="var i=$('#ps-input-${pageType}');askCopilotPage('${pageType}', i.value);i.value='';">🔍 Ask</button>
+      <button class="cta-sm primary" onclick="askCopilotPage('${pageType}','')">🤖 Analyze with Artik Copilot</button>
+    </div>
+    <div class="ps-chips">${chips}</div>
+  </div>`;
+}
+function mountPageSearch(pageType){
+  const el=$('#ps-'+pageType); if(el && !el.dataset.mounted){ el.innerHTML=ArtikPageSearch(pageType); el.dataset.mounted='1'; }
+}
+function mountPageSearches(){ ['portfolio','favorites','sp500','dow'].forEach(mountPageSearch); }
+
+// Build the FULL normalized page context (business data only — NO tokens/secrets/PII).
+function buildPageAnalysisContext(pageType){
+  const rowsOf={ portfolio:()=>window._pfRows||[], favorites:()=>window._favRows||[],
+    sp500:()=>((window._idx||{}).sp500||{}).rows||[], dow:()=>((window._idx||{}).dow||{}).rows||[] };
+  const rows=((rowsOf[pageType]||rowsOf.sp500)()||[]).filter(r=>r&&!r.error);
+  const favSet=new Set((typeof favTickers==='function'?favTickers():[]).map(t=>(t||'').toUpperCase()));
+  const stock=r=>{
+    const T=(r.ticker||'').toUpperCase();
+    const s={ ticker:r.ticker, company_name:r.company||r.company_name, sector:r.sector,
+      archetype:(r.breakdown&&r.breakdown.archetype)||r.archetype, artik_score:r.score,
+      recommendation:r.status, current_price:r.price, rsi:r.rsi, favorite:favSet.has(T) };
+    if(pageType==='portfolio'){ s.quantity=r.qty; s.total_cost=r.cost_basis; s.market_value=r.value;
+      s.unrealized_gain_loss=r.pl; s.unrealized_gain_loss_percent=r.pl_pct;
+      if(r.qty&&r.cost_basis!=null) s.average_cost=+(r.cost_basis/r.qty).toFixed(2); }
+    if(r.strengths&&r.strengths.length) s.top_strength=r.strengths[0];
+    if(r.risks&&r.risks.length) s.top_risk=r.risks[0];
+    // reuse any research the page already loaded (Deep Analysis / Signals) — no refetch
+    if((window._intelCache||{}).ticker===T && window._intelCache.data){ s.intelligence=window._intelCache.data.signals; s.intelligence_summary=window._intelCache.data.ai; }
+    if((window._deepCache||{}).ticker===T && window._deepCache.data && !window._deepCache.data.error){ s.deep=window._deepCache.data.normalized; }
+    return s;
+  };
+  const stocks=rows.map(stock);
+  const cnt=st=>rows.filter(r=>(r.status||'')===st).length;
+  const scored=rows.map(r=>r.score).filter(x=>x!=null);
+  const avg=scored.length?Math.round(scored.reduce((a,b)=>a+b,0)/scored.length):null;
+  const sec={}; rows.forEach(r=>{ const s=r.sector||'—'; sec[s]=(sec[s]||0)+1; });
+  const summary={ stock_count:rows.length, avg_artik_score:avg, buy:cnt('BUY'), hold:cnt('HOLD'), sell:cnt('SELL'), sector_allocation:sec };
+  if(pageType==='portfolio'){
+    let tv=0,tc=0,tp=0; rows.forEach(r=>{ tv+=num(r.value)||0; tc+=num(r.cost_basis)||0; tp+=num(r.pl)||0; });
+    summary.total_value=Math.round(tv); summary.total_cost=Math.round(tc); summary.total_gain_loss=Math.round(tp);
+    summary.total_gain_loss_pct=tc?+(tp/tc*100).toFixed(1):null; summary.health_score=avg;
+    const sw={}; rows.forEach(r=>{ const s=r.sector||'—'; sw[s]=(sw[s]||0)+(num(r.value)||0); });
+    summary.sector_weight_pct={}; for(const k in sw) summary.sector_weight_pct[k]=tv?+(sw[k]/tv*100).toFixed(1):0;
+  }
+  const ui={ page_type:pageType, timestamp:new Date().toISOString(), visible_stocks:stocks.length };
+  if(pageType==='portfolio'){ ui.filters={search:($('#pf-search')||{}).value||'', status:($('#pf-status')||{}).value||''};
+    ui.source=($('#pf-source')||{}).value; ui.snapshot=($('#pf-date')||{}).value; }
+  return { page_type:pageType, page_summary:summary, stocks, user_context:ui };
+}
+async function askCopilotPage(pageType, query){
+  const ctx=buildPageAnalysisContext(pageType);
+  if(!ctx.stocks.length){ alert('This page has no scored stocks loaded yet — let it finish loading, then try again.'); return; }
+  $('#copilot').classList.remove('hidden'); $('#app').classList.add('copopen');
+  window._cop={ ctxType:'page', ctx, uiMode:'auto', msgs:[], busy:false, provider:null };
+  renderCopilot();
+  $('#copilot').scrollIntoView({behavior:'smooth', block:'nearest'});
+  const q=(query&&query.trim()) ? query.trim()
+    : ('Give me a full analysis of this '+({portfolio:'portfolio',favorites:'favorites list',sp500:'S&P 500 page',dow:'Dow 30 page'}[pageType]||'page')
+       +': executive summary, key insights, risks, opportunities, recommendations (buy/hold/sell/reduce/increase/monitor), notable company analysis and comparisons, and suggested next questions.');
+  copilotAsk(q);
+}
 function copilotSetMode(m){ window._cop.uiMode = m; }
 function copilotReset(){
   window._cop = { ctxType:'search',
@@ -2622,6 +2718,10 @@ function copContextCard(c){
       ${copSourceBadges(c)}
       <button class="ex-btn" style="margin-top:10px" onclick="window._detSource=null;detailFor(window._cop.ctx)">Open full research →</button>
     </div>`;
+  }
+  if(c.ctxType==='page' && ctx && ctx.page_summary){
+    const s=ctx.page_summary, nm={portfolio:'Portfolio',favorites:'Favorites',sp500:'S&P 500',dow:'Dow 30'}[ctx.page_type]||'this page';
+    return `<div class="cop-stock"><div class="cs-co" style="white-space:normal;font-size:12.5px">Analyzing <b style="color:var(--txt)">${nm}</b> — <b>${s.stock_count}</b> stocks · avg score <b>${s.avg_artik_score??'—'}</b> · ${s.buy||0} BUY / ${s.hold||0} HOLD / ${s.sell||0} SELL${ctx.page_type==='portfolio'&&s.total_value!=null?` · value $${(s.total_value).toLocaleString()}`:''}</div>${copSourceBadges(c)}</div>`;
   }
   if(ctx && ctx.count){
     return `<div class="cop-stock"><div class="cs-co" style="white-space:normal;font-size:12.5px">Analyzing <b style="color:var(--txt)">${ctx.count}</b> result${ctx.count===1?'':'s'}${ctx.summary?` · ${escapeHtml(ctx.summary)}`:''}</div>${copSourceBadges(c)}</div>`;
@@ -2785,6 +2885,7 @@ function showTab(name, navId){
   // Keep window._rows pointing at the active result set so index-based
   // showDetail/Explain handlers resolve the right row (analyze vs favorites).
   if(name!=='detail') window._activeTab = name;
+  mountPageSearches();   // idempotent — embeds ArtikPageSearch on Portfolio/Fav/S&P/Dow
   if(name==='analyze' && window._analyzeRows) window._rows = window._analyzeRows;
   if(name==='favorites' && window._favRows) window._rows = window._favRows;
   if(name==='portfolio' && !_pfLoaded){ _pfLoaded = true; loadPortfolioDates(); }

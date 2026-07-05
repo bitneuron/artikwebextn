@@ -1572,6 +1572,19 @@ When asked about analyst ratings or the composite/intelligence signal, read them
 that analyst Strong Buy/Buy/Hold/Sell counts are Wall-Street analysts (from Finnhub), distinct from the Artik
 BUY/HOLD/SELL status.
 
+PAGE CONTEXT (contextType="page"): the context is a whole page — Portfolio, Dow, S&P 500, or Favorites —
+with `page_summary` (counts, averages, sector allocation; for Portfolio also value/cost/gain and sector
+weights), a `stocks` array (every visible stock with ticker, sector, archetype, Artik score, recommendation,
+RSI, price, portfolio position when present, and any already-loaded intelligence/deep research), and
+`user_context` (filters/sort/snapshot). Answer questions about the WHOLE page using only these figures.
+For a broad "analyze this page" request, structure the answer with these markdown sections (omit any that
+don't apply): **Executive Summary**, **Key Insights**, **Risks** (concentration, weak companies, weak
+technicals, sector exposure, valuation), **Opportunities** (Strong-Buy ideas, undervalued, quality
+compounders, momentum), **Recommendations** (Buy / Hold / Sell / Reduce / Increase / Monitor — reference
+specific tickers), **Company Analysis** (bull/bear/risks/catalysts for the notable names), **Comparison**
+(compare relevant names or vs the benchmark), **Suggested Next Questions** (3-5 follow-ups). Reference real
+tickers and Artik scores from the context; never invent numbers not present.
+
 SOURCE PRIORITY: current Artik Engine output > general knowledge. Use general knowledge ONLY to explain
 concepts or company facts in research mode — never to fabricate Artik scores/metrics. If Artik data needed
 to answer is not in the context, say: "I do not see that information in the current Artik Engine output."
@@ -1605,7 +1618,8 @@ _COPILOT_TOOL_DESC = ("Return the Artik Broker AI response together with routing
 
 
 def _copilot_context_block(context_type: str, context: dict) -> str:
-    label = {"stock": "CURRENT STOCK DETAIL", "search": "CURRENT SEARCH RESULTS"}.get(
+    label = {"stock": "CURRENT STOCK DETAIL", "search": "CURRENT SEARCH RESULTS",
+             "page": "CURRENT PAGE (all visible stocks + page summary + any loaded research)"}.get(
         context_type, "CONTEXT")
     if not context:
         return "No stock/search context is attached — answer generally (research/discovery/screening), and never invent Artik scores."
@@ -1664,7 +1678,7 @@ async def api_copilot(request: Request):
     if sel_mode not in _COPILOT_MODES + ["auto"]:
         sel_mode = "auto"
     ctx_type = body.get("contextType") or ("stock" if body.get("mode") == "stock" else "")
-    if ctx_type not in ("stock", "search"):
+    if ctx_type not in ("stock", "search", "page"):
         ctx_type = "stock" if (body.get("context") or {}).get("ticker") else ("search" if body.get("context") else "")
 
     mode_line = (f"The user explicitly selected mode = {sel_mode.upper()}. Use it; do not ask for clarification."
@@ -1700,6 +1714,44 @@ async def api_copilot(request: Request):
         "clarification_options": (out.get("clarification_options") or []) if needs else [],
         "reply": out.get("answer") or "",
     }
+
+
+@app.post("/api/copilot/analyze-page")
+async def api_copilot_analyze_page(request: Request):
+    """Single-shot page analysis: takes a whole-page context (Portfolio/Dow/S&P/Favorites)
+    with every visible stock + summary + any loaded research, and returns a structured
+    analysis. The client sends ONLY normalized business data — never tokens/secrets/PII."""
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"error": "invalid JSON body"}, status_code=400)
+    context = body.get("context") or {}
+    query = (body.get("user_query") or "").strip() or (
+        "Give me a full analysis of this page: executive summary, key insights, risks, "
+        "opportunities, recommendations (buy/hold/sell/reduce/increase/monitor), notable "
+        "company analysis and comparisons, and suggested next questions.")
+    conv = [{"role": "user", "content": query}]
+    sys_text = (_COPILOT_SYSTEM + "\n\nMode = AUTO for a whole-page analysis.\n\n"
+                + _copilot_context_block("page", context))
+    akey, okey = _anthropic_key(), _openai_key()
+    if not akey and not okey:
+        return JSONResponse({"error": "Copilot unavailable: no ANTHROPIC_API_KEY or OPENAI_API_KEY configured."},
+                            status_code=503)
+    out, provider, last_err = None, None, None
+    if akey:
+        try:
+            out, provider = _copilot_anthropic(conv, sys_text, akey), "claude"
+        except Exception as e:  # noqa: BLE001
+            last_err = _err_detail(e)
+    if out is None and okey:
+        try:
+            out, provider = _copilot_openai(conv, sys_text, okey), "gpt"
+        except Exception as e:  # noqa: BLE001
+            last_err = _err_detail(e)
+    if not out:
+        return JSONResponse({"error": f"Copilot failed: {last_err or 'no provider available'}"}, status_code=502)
+    return {"provider": provider, "page_type": context.get("page_type"),
+            "mode": out.get("mode") or "analysis", "reply": out.get("answer") or ""}
 
 
 # ──────────────────────────────────────────────────────────────────────────────
