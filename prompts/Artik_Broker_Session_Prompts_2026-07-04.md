@@ -92,5 +92,22 @@ Full spec: [Artik_Broker_Context_Aware_Page_Search_Prompt.md](Artik_Broker_Conte
 ArtikPageSearch bar + Analyze-with-Copilot on Portfolio/S&P500/Dow/Favorites; buildPageAnalysisContext();
 `POST /api/copilot/analyze-page`.
 
-### 16. This request
+### 16. Upload memory + prompts
 > now upload the memory and also add the prompts to prompts folder
+
+### 17. Copilot maximize button → commits `d99f098`, `15723d5` (deployed)
+> have a button to maximum artik copilot window… when maximize, it takes the entire window except
+> left menu _(+ follow-up: "after i click maximize panel, i get a blank screen" → fixed the grid)_
+
+⤢/⤡ maximize toggle; Copilot fills the window except the left menu (2-col grid).
+
+### 18. Interactive Brokers (IBKR) → commit `c5d55d5` (deployed)
+Full spec: [Artik_Broker_IBKR_Brokerage_Prompt.md](Artik_Broker_IBKR_Brokerage_Prompt.md).
+🧭 IBKR nav + connect/view/Analyze + Trade panel (buy/sell stocks·ETF·crypto), Client Portal Web API.
+
+### 19. IBKR OAuth 1.0a path → commit `d1e7700` (deployed)
+> do no 2  → IBKR hosted Web API OAuth 1.0a (no gateway): DH → Live Session Token → HMAC-signed calls.
+(Included in the IBKR prompt file.)
+
+### 20. This request
+> yes  → save the IBKR work to memory + the prompts folder
