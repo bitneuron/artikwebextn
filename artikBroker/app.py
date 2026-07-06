@@ -797,18 +797,27 @@ def ibkr_status(request: Request):
         st = cl.auth_status()
         authed = bool(st.get("authenticated"))
         return {"configured": True, "authenticated": authed, "connected": authed,
-                "competing": st.get("competing"), "env": cl.env, "gateway_url": cl.gateway_url}
+                "competing": st.get("competing"), "env": cl.env, "gateway_url": cl.gateway_url,
+                "oauth": cl.oauth_mode}
     except Exception as e:  # noqa: BLE001
         return {"configured": True, "authenticated": False, "connected": False,
-                "env": cl.env, "gateway_url": cl.gateway_url, "error": str(e)}
+                "env": cl.env, "gateway_url": cl.gateway_url, "oauth": cl.oauth_mode, "error": str(e)}
 
 
 @app.post("/api/ibkr/connect")
 def ibkr_connect():
     cl = _ibkr()
     if not cl.configured:
-        return JSONResponse({"error": "IBKR_BASE_URL not configured"}, status_code=400)
-    # The Client Portal Gateway authenticates via IBKR SSO in the browser.
+        return JSONResponse({"error": "IBKR not configured"}, status_code=400)
+    if cl.oauth_mode:
+        # Hosted Web API (OAuth 1.0a): no browser login — open the brokerage session directly.
+        try:
+            res = cl.oauth.ssodh_init()
+            return {"oauth": True, "connected": bool(res.get("authenticated") or res.get("connected")),
+                    "result": res, "message": "OAuth session initialized."}
+        except Exception as e:  # noqa: BLE001
+            return JSONResponse({"error": str(e)}, status_code=502)
+    # Client Portal Gateway authenticates via IBKR SSO in the browser.
     return {"gateway_url": cl.gateway_url or cl.base.replace("/v1/api", "/"),
             "message": "Log into the IBKR Client Portal Gateway, then return and Refresh."}
 

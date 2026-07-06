@@ -4257,18 +4257,28 @@ async function ibkrLoad(){
     return;
   }
   if(s.authenticated){ ibkrAccounts(); return; }
-  out.innerHTML = `<div class="card" style="max-width:680px">
-    <h3 style="margin:0 0 8px">Connect Interactive Brokers</h3>
-    <p class="pf-meta">Log into the IBKR <b>Client Portal Gateway</b> (IBKR SSO) in a new tab, then return and Refresh. The gateway keeps the authenticated session — this app never stores your IBKR credentials.</p>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-      <button class="ex-btn" onclick="ibkrConnect()">🧭 Open IBKR login</button>
-      <button class="ghost" onclick="ibkrLoad()">🔄 I've logged in — Refresh</button>
-    </div>
-    ${s.error?`<p class="pf-meta" style="margin-top:8px;color:#fca5a5">${etEsc(s.error)}</p>`:''}</div>`;
+  out.innerHTML = s.oauth
+    ? `<div class="card" style="max-width:680px">
+        <h3 style="margin:0 0 8px">Connect Interactive Brokers (OAuth)</h3>
+        <p class="pf-meta">Using the IBKR <b>hosted Web API (OAuth 1.0a)</b> — no browser login. Click to open the brokerage session with your registered keys.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <button class="ex-btn" onclick="ibkrConnect()">🔐 Initialize IBKR session</button>
+          <button class="ghost" onclick="ibkrLoad()">🔄 Refresh</button>
+        </div>
+        ${s.error?`<p class="pf-meta" style="margin-top:8px;color:#fca5a5">${etEsc(s.error)}</p>`:''}</div>`
+    : `<div class="card" style="max-width:680px">
+        <h3 style="margin:0 0 8px">Connect Interactive Brokers</h3>
+        <p class="pf-meta">Log into the IBKR <b>Client Portal Gateway</b> (IBKR SSO) in a new tab, then return and Refresh. The gateway keeps the authenticated session — this app never stores your IBKR credentials.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <button class="ex-btn" onclick="ibkrConnect()">🧭 Open IBKR login</button>
+          <button class="ghost" onclick="ibkrLoad()">🔄 I've logged in — Refresh</button>
+        </div>
+        ${s.error?`<p class="pf-meta" style="margin-top:8px;color:#fca5a5">${etEsc(s.error)}</p>`:''}</div>`;
 }
 async function ibkrConnect(){
   try {
     const d=await (await fetch('/api/ibkr/connect',{method:'POST'})).json();
+    if(d.oauth){ setTimeout(ibkrLoad, 1200); return; }   // OAuth: session opened server-side
     if(d.gateway_url) window.open(d.gateway_url,'_blank','noopener');
     else alert(d.error||'No gateway URL configured (set IBKR_GATEWAY_URL).');
   } catch(e){ alert('IBKR connect failed: '+e); }

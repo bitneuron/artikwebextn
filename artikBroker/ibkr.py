@@ -53,10 +53,22 @@ class IBKRClient:
             verify_ssl = _env("IBKR_VERIFY_SSL", default="false").lower() == "true"
         self.verify = verify_ssl
         self.timeout = timeout
+        # Optional OAuth 1.0a (hosted Web API) — used when no gateway base is set.
+        try:
+            import ibkr_oauth
+            self.oauth = ibkr_oauth.IBKROAuth()
+        except Exception:  # noqa: BLE001
+            self.oauth = None
+        if not self.base and self.oauth and self.oauth.configured:
+            self.base = self.oauth.base
+
+    @property
+    def oauth_mode(self) -> bool:
+        return bool(self.oauth and self.oauth.configured)
 
     @property
     def configured(self) -> bool:
-        return bool(self.base)
+        return bool(self.base) or self.oauth_mode
 
     def _req(self, method: str, path: str, params: dict | None = None, json_body=None):
         if not self.base:
@@ -64,9 +76,17 @@ class IBKRClient:
         if requests is None:
             raise IBKRError("the 'requests' library is not available")
         url = f"{self.base}{path}"
+        headers = {"User-Agent": "artikBroker"}
+        verify = self.verify
+        if self.oauth_mode:                       # hosted Web API — sign + real TLS
+            try:
+                headers["Authorization"] = self.oauth.auth_header(method, url, params)
+            except Exception as e:  # noqa: BLE001
+                raise IBKRError(f"IBKR OAuth signing failed: {e}")
+            verify = True
         try:
             r = requests.request(method, url, params=params, json=json_body,
-                                  timeout=self.timeout, verify=self.verify)
+                                  headers=headers, timeout=self.timeout, verify=verify)
         except Exception as e:  # noqa: BLE001
             raise IBKRError(f"IBKR {path} error: {e}")
         if r.status_code == 401:

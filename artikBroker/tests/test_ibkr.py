@@ -29,7 +29,7 @@ def test_not_configured():
 def test_configured_and_auth_status(monkeypatch):
     seen = {}
 
-    def request(method, url, params=None, json=None, timeout=None, verify=None):
+    def request(method, url, params=None, json=None, headers=None, timeout=None, verify=None):
         seen.update(method=method, url=url, verify=verify)
         return _Resp(200, {"authenticated": True, "competing": False})
     monkeypatch.setattr(ibkr, "requests", types.SimpleNamespace(request=request))
@@ -42,7 +42,7 @@ def test_configured_and_auth_status(monkeypatch):
 
 
 def test_accounts_and_positions(monkeypatch):
-    def request(method, url, params=None, json=None, timeout=None, verify=None):
+    def request(method, url, params=None, json=None, headers=None, timeout=None, verify=None):
         if url.endswith("/portfolio/accounts"):
             return _Resp(200, [{"accountId": "U123", "desc": "Individual"}])
         if "/positions/" in url:
@@ -58,7 +58,7 @@ def test_accounts_and_positions(monkeypatch):
 def test_conid_lookup_and_order(monkeypatch):
     calls = []
 
-    def request(method, url, params=None, json=None, timeout=None, verify=None):
+    def request(method, url, params=None, json=None, headers=None, timeout=None, verify=None):
         calls.append((method, url, json))
         if url.endswith("/iserver/secdef/search"):
             return _Resp(200, [{"conid": "265598", "symbol": "AAPL"}])
