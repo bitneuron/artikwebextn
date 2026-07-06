@@ -2753,7 +2753,7 @@ function copContextCard(c){
     </div>`;
   }
   if(c.ctxType==='page' && ctx && ctx.page_summary){
-    const s=ctx.page_summary, nm={portfolio:'Portfolio',favorites:'Favorites',sp500:'S&P 500',dow:'Dow 30'}[ctx.page_type]||'this page';
+    const s=ctx.page_summary, nm={portfolio:'Portfolio',favorites:'Favorites',sp500:'S&P 500',dow:'Dow 30',ibkr_portfolio:'IBKR account'}[ctx.page_type]||'this page';
     return `<div class="cop-stock"><div class="cs-co" style="white-space:normal;font-size:12.5px">Analyzing <b style="color:var(--txt)">${nm}</b> — <b>${s.stock_count}</b> stocks · avg score <b>${s.avg_artik_score??'—'}</b> · ${s.buy||0} BUY / ${s.hold||0} HOLD / ${s.sell||0} SELL${ctx.page_type==='portfolio'&&s.total_value!=null?` · value $${(s.total_value).toLocaleString()}`:''}</div>${copSourceBadges(c)}</div>`;
   }
   if(ctx && ctx.count){
@@ -4301,6 +4301,7 @@ async function ibkrAccounts(){
   const sel=$('#ib-acct-sel'); if(sel) sel.value=def;
   ibkrSelectAccount(def);
 }
+window._ibHoldings = window._ibHoldings || {};
 function ibkrSelectAccount(acct){
   localStorage.setItem('ib_acct_sel', acct);
   const box=$('#ib-accts'); if(!box) return;
@@ -4310,13 +4311,25 @@ function ibkrSelectAccount(acct){
         <div><div style="font-weight:600">Account ${key}</div><div class="pf-meta">Interactive Brokers · ${etEsc((_ibAccounts.find(a=>a.accountId===acct)||{}).accountType||'')}</div></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="ghost" onclick="ibkrDetail('${key}')">🔄 Refresh holdings</button>
+          <button class="ghost" onclick="ibkrAskCopilot('${key}')">🤖 Ask Copilot</button>
           <button class="ex-btn" onclick="ibkrAnalyze('${key}')">📊 Analyze Portfolio</button>
         </div>
       </div>
-      <div style="margin-top:8px;font-weight:600" class="up-label">📈 Your holdings</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;flex-wrap:wrap;gap:8px">
+        <span style="font-weight:600" class="up-label">📈 Your holdings</span>
+        <input id="ib-hold-search-${key}" placeholder="Search ticker…" style="width:150px" oninput="ibkrFilterHoldings('${key}', this.value)">
+      </div>
       <div id="ib-detail-${key}"><div class="spin">Loading holdings…</div></div>
-    </div>${ibkrTradeCard(key)}`;
+    </div>${ibkrTradeCard(key)}
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span class="up-label" style="font-weight:600">📑 Orders</span>
+        <button class="ghost" onclick="ibkrLoadOrders('${key}')">🔄 Refresh orders</button>
+      </div>
+      <div id="ib-orders-${key}"><div class="spin">Loading orders…</div></div>
+    </div>`;
   ibkrDetail(acct);
+  ibkrLoadOrders(acct);
 }
 async function ibkrDetail(acct){
   const box=$('#ib-detail-'+etEsc(acct)); if(!box) return;
@@ -4325,13 +4338,22 @@ async function ibkrDetail(acct){
   try { d=await (await fetch('/api/ibkr/accounts/'+encodeURIComponent(acct)+'/portfolio')).json(); }
   catch(e){ box.innerHTML='<div class="err">'+etEsc(e)+'</div>'; return; }
   if(d.error){ box.innerHTML='<div class="err">'+etEsc(d.error)+'</div>'; return; }
-  const money=v=>v==null?'—':(typeof v==='number'?v.toLocaleString(undefined,{style:'currency',currency:'USD'}):etEsc(v));
-  const h=d.holdings||[];
-  box.innerHTML = (h.length ? `<table class="mini" style="margin-top:8px;width:100%"><tr><th>Symbol</th><th>Qty</th><th>Cost basis</th></tr>`+
-    h.map(x=>`<tr><td><b>${etEsc(x.ticker)}</b></td><td>${etEsc(x.qty)}</td><td>${money(x.cost_basis)}</td></tr>`).join('')+
-    `<tr style="border-top:1px solid var(--line);font-weight:600"><td>Total value</td><td></td><td>${money(d.total_value)}</td></tr></table>`
-    : '<div class="pf-meta" style="margin-top:8px">No open positions in this account.</div>');
+  window._ibHoldings[acct] = {holdings:d.holdings||[], total_value:d.total_value, total_gain:d.total_gain};
+  ibkrRenderHoldings(acct, ($('#ib-hold-search-'+etEsc(acct))||{}).value||'');
 }
+function ibkrRenderHoldings(acct, q){
+  const box=$('#ib-detail-'+etEsc(acct)); if(!box) return;
+  const money=v=>v==null?'—':(typeof v==='number'?v.toLocaleString(undefined,{style:'currency',currency:'USD'}):etEsc(v));
+  const data=window._ibHoldings[acct]||{holdings:[]};
+  let h=data.holdings||[];
+  q=(q||'').trim().toUpperCase(); if(q) h=h.filter(x=>(x.ticker||'').toUpperCase().includes(q));
+  box.innerHTML = (h.length ? `<table class="mini" style="margin-top:8px;width:100%"><tr><th>Symbol</th><th>Qty</th><th>Cost basis</th><th></th></tr>`+
+    h.map(x=>`<tr><td><b>${etEsc(x.ticker)}</b></td><td>${etEsc(x.qty)}</td><td>${money(x.cost_basis)}</td>
+      <td style="text-align:right"><button class="ex-btn" onclick="openStock('${etEsc(x.ticker)}','ibkr')">Explain →</button></td></tr>`).join('')+
+    `<tr style="border-top:1px solid var(--line);font-weight:600"><td>Total value</td><td></td><td>${money(data.total_value)}</td><td></td></tr></table>`
+    : `<div class="pf-meta" style="margin-top:8px">${(data.holdings||[]).length?'No holdings match “'+etEsc(q)+'”.':'No open positions in this account.'}</div>`);
+}
+function ibkrFilterHoldings(acct, q){ ibkrRenderHoldings(acct, q); }
 async function ibkrAnalyze(acct){
   try {
     const r=await fetch('/api/ibkr/analyze',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({account_id:acct})});
@@ -4400,6 +4422,7 @@ function ibkrRenderOrderResult(acct, result, out){
   out.innerHTML = placed
     ? `<span style="color:#34d399">✅ Order submitted — id ${etEsc(placed.order_id||placed.orderId||'')} · ${etEsc(placed.order_status||placed.orderStatus||'submitted')}</span>`
     : `<span>Response: ${etEsc(JSON.stringify(arr).slice(0,240))}</span>`;
+  if(placed){ setTimeout(()=>ibkrLoadOrders(acct), 900); setTimeout(()=>ibkrDetail(acct), 1500); }
 }
 async function ibkrConfirmOrder(replyId, acct){
   const out=$('#ib-tr-out'); if(out) out.innerHTML='<span class="spin">Confirming…</span>';
@@ -4408,6 +4431,50 @@ async function ibkrConfirmOrder(replyId, acct){
     if(d.error){ out.innerHTML='<span class="err">'+etEsc(d.error)+'</span>'; return; }
     ibkrRenderOrderResult(acct, d.result, out);
   } catch(e){ out.innerHTML='<span class="err">'+etEsc(e)+'</span>'; }
+}
+// Orders — open + completed, with cancel for open orders.
+async function ibkrLoadOrders(acct){
+  const box=$('#ib-orders-'+etEsc(acct)); if(!box) return;
+  box.innerHTML='<div class="spin">Loading orders…</div>';
+  let d;
+  try { d=await (await fetch('/api/ibkr/orders')).json(); }
+  catch(e){ box.innerHTML='<div class="err">'+etEsc(e)+'</div>'; return; }
+  if(d && d.error){ box.innerHTML='<div class="pf-meta">'+etEsc(d.error)+'</div>'; return; }
+  let orders=(d && (d.orders||d))||[]; if(!Array.isArray(orders)) orders=[];
+  orders=orders.filter(o=>o && (!o.acct || o.acct===acct));
+  const OPEN=new Set(['PreSubmitted','Submitted','PendingSubmit','PendingCancel','PreSubmit']);
+  const open=orders.filter(o=>OPEN.has(o.status)), done=orders.filter(o=>!OPEN.has(o.status));
+  const row=(o,cancel)=>`<tr>
+    <td><b>${etEsc(o.ticker||o.symbol||o.conidex||o.conid||'')}</b></td>
+    <td>${etEsc(o.side||'')}</td>
+    <td>${etEsc(o.totalSize||o.remainingQuantity||o.filledQuantity||'')}</td>
+    <td>${etEsc(o.orderType||'')}${o.price?(' @ '+etEsc(o.price)):(o.limitPrice?(' @ '+etEsc(o.limitPrice)):'')}</td>
+    <td><span class="badge">${etEsc(o.status||'')}</span></td>
+    <td style="text-align:right">${cancel&&o.orderId?`<button class="ex-btn" onclick="ibkrCancelOrder('${etEsc(acct)}','${etEsc(o.orderId)}')">✕ Cancel</button>`:etEsc(o.lastExecutionTime_r||o.orderDesc||'')}</td></tr>`;
+  const tbl=(title,list,cancel)=>`<div class="up-label" style="margin:8px 0 4px">${title} (${list.length})</div>`+
+    (list.length?`<table class="mini" style="width:100%"><tr><th>Symbol</th><th>Side</th><th>Qty</th><th>Type</th><th>Status</th><th></th></tr>${list.map(o=>row(o,cancel)).join('')}</table>`
+      :`<div class="pf-meta">None.</div>`);
+  box.innerHTML = tbl('🟢 Open orders', open, true) + tbl('✅ Completed / cancelled', done, false);
+}
+async function ibkrCancelOrder(acct, orderId){
+  if(!confirm('Cancel IBKR order '+orderId+'?')) return;
+  try { await fetch('/api/ibkr/accounts/'+encodeURIComponent(acct)+'/order/'+encodeURIComponent(orderId),{method:'DELETE'}); }
+  catch(e){ alert('Cancel failed: '+e); }
+  setTimeout(()=>ibkrLoadOrders(acct), 800);
+}
+// Ask Copilot about the IBKR account (holdings context).
+function ibkrAskCopilot(acct){
+  const data=window._ibHoldings[acct]||{holdings:[]}; const h=data.holdings||[];
+  const ctx={ page_type:'ibkr_portfolio',
+    page_summary:{ stock_count:h.length, total_value:data.total_value, account:acct, broker:'Interactive Brokers' },
+    stocks:h.map(x=>({ ticker:x.ticker, quantity:x.qty, total_cost:x.cost_basis })),
+    user_context:{ page_type:'ibkr_portfolio', account:acct, source:'ibkr', timestamp:new Date().toISOString() } };
+  $('#copilot').classList.remove('hidden'); $('#app').classList.add('copopen');
+  window._cop={ ctxType:'page', ctx, uiMode:'auto', msgs:[], busy:false, provider:null };
+  renderCopilot(); $('#copilot').scrollIntoView({behavior:'smooth', block:'nearest'});
+  copilotAsk(h.length
+    ? `Analyze my Interactive Brokers account ${acct} holdings: composition, concentration, biggest risks and opportunities, and what to consider. Suggest next questions.`
+    : `My Interactive Brokers account ${acct} has no open positions yet. Suggest how to get started and what to consider before buying.`);
 }
 
 // ── Admin: User Management page ───────────────────────────────────────────────
