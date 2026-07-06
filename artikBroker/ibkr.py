@@ -18,11 +18,18 @@ then everything degrades gracefully ("not configured").
 from __future__ import annotations
 
 import os
+import time
 
 try:  # requests is present in the Broker image; guarded so unit tests import without it
     import requests
 except Exception:  # noqa: BLE001
     requests = None  # type: ignore
+
+try:  # a Client Portal Gateway uses a self-signed cert (verify=False) — quiet the warning
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+except Exception:  # noqa: BLE001
+    pass
 
 
 def _env(*keys, default=""):
@@ -76,6 +83,9 @@ class IBKRClient:
         if requests is None:
             raise IBKRError("the 'requests' library is not available")
         url = f"{self.base}{path}"
+        # IBKR rejects a bodyless POST ("Bad Request") — always send at least {}.
+        if method.upper() == "POST" and json_body is None:
+            json_body = {}
         headers = {"User-Agent": "artikBroker"}
         verify = self.verify
         if self.oauth_mode:                       # hosted Web API — sign + real TLS
@@ -141,8 +151,11 @@ class IBKRClient:
         return None
 
     def snapshot(self, conids: list[str], fields=("31", "84", "86", "87", "7295")) -> list:
-        d = self._req("GET", "/iserver/marketdata/snapshot",
-                      params={"conids": ",".join(map(str, conids)), "fields": ",".join(fields)})
+        # IBKR "arms" the subscription on the first call and returns field data on the next.
+        params = {"conids": ",".join(map(str, conids)), "fields": ",".join(fields)}
+        self._req("GET", "/iserver/marketdata/snapshot", params=params)
+        time.sleep(0.6)
+        d = self._req("GET", "/iserver/marketdata/snapshot", params=params)
         return d if isinstance(d, list) else []
 
     # ── orders (buy / sell) ─────────────────────────────────────────────────────
