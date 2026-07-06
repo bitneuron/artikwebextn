@@ -876,6 +876,7 @@
       <button class="nav-item" id="tab-portfolio" onclick="showTab('portfolio')"><span class="ic">💼</span><span>Portfolio</span></button>
       <button class="nav-item" id="tab-etrade" onclick="showTab('etrade')"><span class="ic">🔗</span><span>E*TRADE</span></button>
       <button class="nav-item" id="tab-schwab" onclick="showTab('schwab')"><span class="ic">🏦</span><span>Schwab</span></button>
+      <button class="nav-item" id="tab-ibkr" onclick="showTab('ibkr')"><span class="ic">🧭</span><span>IBKR</span></button>
       <button class="nav-item" id="tab-favorites" onclick="showTab('favorites')"><span class="ic">⭐</span><span>Favorites</span><span id="fav-nav-count" class="navcount"></span></button>
       <button class="nav-item" id="tab-sp500" onclick="showTab('sp500')"><span class="ic">🏛️</span><span>S&amp;P 500</span></button>
       <button class="nav-item" id="tab-dow" onclick="showTab('dow')"><span class="ic">🎩</span><span>Dow</span></button>
@@ -1006,6 +1007,7 @@
         <option value="excel">Uploaded Excel</option>
         <option value="etrade">E*TRADE</option>
         <option value="schwab">Charles Schwab</option>
+        <option value="ibkr">Interactive Brokers</option>
       </select>
       <span class="up-label">📅 Snapshot:</span>
       <select id="pf-date" onchange="loadPortfolio(this.value)"></select>
@@ -1044,6 +1046,17 @@
       <button class="ghost hidden" id="sw-disconnect" onclick="schwabDisconnect()">⛔ Disconnect</button>
     </div>
     <div id="sw-out"><div class="spin">Loading…</div></div>
+  </section>
+
+  <!-- INTERACTIVE BROKERS (IBKR) -->
+  <section id="view-ibkr" class="hidden">
+    <div class="pf-bar">
+      <span class="up-label">🧭 Interactive Brokers</span>
+      <span class="pf-meta" id="ib-status">Checking connection…</span>
+      <button class="ghost" style="margin-left:auto" id="ib-refresh" onclick="ibkrLoad()">🔄 Refresh</button>
+      <button class="ghost hidden" id="ib-reauth" onclick="ibkrReauth()">🔐 Re-authenticate</button>
+    </div>
+    <div id="ib-out"><div class="spin">Loading…</div></div>
   </section>
 
   <!-- FAVORITES / WATCHLIST -->
@@ -2890,12 +2903,12 @@ function downloadCSV(){
 // ── Tabs ────────────────────────────────────────────────────────────────────
 let _pfLoaded = false;
 const _idxLoaded = {};
-const _VIEWS = ['analyze','detail','portfolio','etrade','schwab','favorites','sp500','dow','history','agents','skills','users','settings'];
-const _TITLES = {analyze:'Analyze', detail:'Stock Detail', portfolio:'Portfolio', etrade:'E*TRADE', schwab:'Charles Schwab', favorites:'Favorites',
+const _VIEWS = ['analyze','detail','portfolio','etrade','schwab','ibkr','favorites','sp500','dow','history','agents','skills','users','settings'];
+const _TITLES = {analyze:'Analyze', detail:'Stock Detail', portfolio:'Portfolio', etrade:'E*TRADE', schwab:'Charles Schwab', ibkr:'Interactive Brokers', favorites:'Favorites',
                  sp500:'S&P 500', dow:'Dow Jones', history:'History', agents:'Agents', skills:'Skills Management', users:'User Management', settings:'Settings'};
 function showTab(name, navId){
   // Admin-only views: block non-admins (belt & suspenders; backend also returns 403).
-  if(window._me && !window._isAdmin && (name==='etrade'||name==='schwab'||name==='portfolio'||name==='users')){
+  if(window._me && !window._isAdmin && (name==='etrade'||name==='schwab'||name==='ibkr'||name==='portfolio'||name==='users')){
     name='analyze'; navId='nav-dashboard';
   }
   _VIEWS.forEach(v => { const el=$('#view-'+v); if(el) el.classList.toggle('hidden', v!==name); });
@@ -2919,6 +2932,7 @@ function showTab(name, navId){
   if(name==='skills'){ loadSkills(); }
   if(name==='etrade'){ etradeLoad(); }
   if(name==='schwab'){ schwabLoad(); }
+  if(name==='ibkr'){ ibkrLoad(); }
 }
 function goResearch(){ setMainMode('research'); showTab('analyze','nav-research'); const s=$('#syms'); if(s) s.focus(); }
 
@@ -3876,7 +3890,7 @@ async function initMe(){
   // Admin-only sidebar items (Users, E*TRADE, Portfolio). Backend also enforces 403.
   const isAdmin = (window._me && window._me.role==='admin') || window._devOpen;
   window._isAdmin = isAdmin;
-  ['tab-users','tab-etrade','tab-schwab','tab-portfolio'].forEach(id=>{
+  ['tab-users','tab-etrade','tab-schwab','tab-ibkr','tab-portfolio'].forEach(id=>{
     const el=$('#'+id); if(el) el.classList.toggle('hidden', !isAdmin);
   });
   // After the Schwab OAuth redirect, open the Schwab tab and clean the URL.
@@ -4223,6 +4237,167 @@ async function schwabAnalyze(key, ending){
     _pfPendingSource='schwab'; _pfPendingKey=d.key; _pfLoaded=true;
     showTab('portfolio'); loadPortfolioDates();
   } catch(e){ alert('Analyze Portfolio failed: '+e.message); }
+}
+
+// ── Interactive Brokers (IBKR) — Client Portal Web API ────────────────────────
+let _ibAccounts=[];
+async function ibkrLoad(){
+  const out=$('#ib-out'), st=$('#ib-status'), rc=$('#ib-reauth');
+  if(out) out.innerHTML='<div class="spin">Loading…</div>';
+  let s;
+  try { s=await (await fetch('/api/ibkr/status')).json(); }
+  catch(e){ if(out) out.innerHTML='<div class="err">Failed to load status: '+etEsc(e)+'</div>'; return; }
+  if(rc) rc.classList.toggle('hidden', !s.configured);
+  if(st) st.textContent = s.authenticated ? 'Connected' : (s.configured ? 'Gateway not authenticated' : 'Not configured');
+  if(!s.configured){
+    out.innerHTML = `<div class="card"><p>🧭 Interactive Brokers is <b>not configured on the server</b>.</p>
+      <p class="pf-meta">IBKR uses the <b>Client Portal Gateway</b>. Run the gateway (or IBKR's hosted Web API),
+      then set <code>IBKR_BASE_URL</code> (REST base, e.g. <code>https://your-host:5000/v1/api</code>) and
+      <code>IBKR_GATEWAY_URL</code> (the browser login URL) as environment variables, then Refresh.</p></div>`;
+    return;
+  }
+  if(s.authenticated){ ibkrAccounts(); return; }
+  out.innerHTML = `<div class="card" style="max-width:680px">
+    <h3 style="margin:0 0 8px">Connect Interactive Brokers</h3>
+    <p class="pf-meta">Log into the IBKR <b>Client Portal Gateway</b> (IBKR SSO) in a new tab, then return and Refresh. The gateway keeps the authenticated session — this app never stores your IBKR credentials.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+      <button class="ex-btn" onclick="ibkrConnect()">🧭 Open IBKR login</button>
+      <button class="ghost" onclick="ibkrLoad()">🔄 I've logged in — Refresh</button>
+    </div>
+    ${s.error?`<p class="pf-meta" style="margin-top:8px;color:#fca5a5">${etEsc(s.error)}</p>`:''}</div>`;
+}
+async function ibkrConnect(){
+  try {
+    const d=await (await fetch('/api/ibkr/connect',{method:'POST'})).json();
+    if(d.gateway_url) window.open(d.gateway_url,'_blank','noopener');
+    else alert(d.error||'No gateway URL configured (set IBKR_GATEWAY_URL).');
+  } catch(e){ alert('IBKR connect failed: '+e); }
+}
+async function ibkrReauth(){ try { await fetch('/api/ibkr/reauth',{method:'POST'}); } catch(e){} setTimeout(ibkrLoad, 1500); }
+async function ibkrAccounts(){
+  const out=$('#ib-out'); if(out) out.innerHTML='<div class="spin">Loading accounts…</div>';
+  let d;
+  try { d=await (await fetch('/api/ibkr/accounts')).json(); }
+  catch(e){ out.innerHTML='<div class="err">'+etEsc(e)+'</div>'; return; }
+  if(d.error){ out.innerHTML='<div class="err">'+etEsc(d.error)+'</div>'; return; }
+  _ibAccounts=d.accounts||[];
+  if(!_ibAccounts.length){ out.innerHTML='<div class="card">No IBKR accounts returned.</div>'; return; }
+  const saved=localStorage.getItem('ib_acct_sel');
+  const valid = saved && _ibAccounts.some(a=>a.accountId===saved);
+  const def = valid ? saved : _ibAccounts[0].accountId;
+  const opts=_ibAccounts.map(a=>`<option value="${etEsc(a.accountId)}">Account ${etEsc(a.accountId)}${a.accountDesc&&a.accountDesc!=='IBKR'?(' — '+etEsc(a.accountDesc)):''}</option>`).join('');
+  out.innerHTML = `<div class="pf-bar" style="margin-bottom:10px"><span class="up-label">Account</span>
+      <select id="ib-acct-sel" style="min-width:220px" onchange="ibkrSelectAccount(this.value)">${opts}</select></div><div id="ib-accts"></div>`;
+  const sel=$('#ib-acct-sel'); if(sel) sel.value=def;
+  ibkrSelectAccount(def);
+}
+function ibkrSelectAccount(acct){
+  localStorage.setItem('ib_acct_sel', acct);
+  const box=$('#ib-accts'); if(!box) return;
+  const key=etEsc(acct);
+  box.innerHTML = `<div class="card" style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+        <div><div style="font-weight:600">Account ${key}</div><div class="pf-meta">Interactive Brokers · ${etEsc((_ibAccounts.find(a=>a.accountId===acct)||{}).accountType||'')}</div></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="ghost" onclick="ibkrDetail('${key}')">🔄 Refresh holdings</button>
+          <button class="ex-btn" onclick="ibkrAnalyze('${key}')">📊 Analyze Portfolio</button>
+        </div>
+      </div>
+      <div style="margin-top:8px;font-weight:600" class="up-label">📈 Your holdings</div>
+      <div id="ib-detail-${key}"><div class="spin">Loading holdings…</div></div>
+    </div>${ibkrTradeCard(key)}`;
+  ibkrDetail(acct);
+}
+async function ibkrDetail(acct){
+  const box=$('#ib-detail-'+etEsc(acct)); if(!box) return;
+  box.innerHTML='<div class="spin">Loading holdings…</div>';
+  let d;
+  try { d=await (await fetch('/api/ibkr/accounts/'+encodeURIComponent(acct)+'/portfolio')).json(); }
+  catch(e){ box.innerHTML='<div class="err">'+etEsc(e)+'</div>'; return; }
+  if(d.error){ box.innerHTML='<div class="err">'+etEsc(d.error)+'</div>'; return; }
+  const money=v=>v==null?'—':(typeof v==='number'?v.toLocaleString(undefined,{style:'currency',currency:'USD'}):etEsc(v));
+  const h=d.holdings||[];
+  box.innerHTML = (h.length ? `<table class="mini" style="margin-top:8px;width:100%"><tr><th>Symbol</th><th>Qty</th><th>Cost basis</th></tr>`+
+    h.map(x=>`<tr><td><b>${etEsc(x.ticker)}</b></td><td>${etEsc(x.qty)}</td><td>${money(x.cost_basis)}</td></tr>`).join('')+
+    `<tr style="border-top:1px solid var(--line);font-weight:600"><td>Total value</td><td></td><td>${money(d.total_value)}</td></tr></table>`
+    : '<div class="pf-meta" style="margin-top:8px">No open positions in this account.</div>');
+}
+async function ibkrAnalyze(acct){
+  try {
+    const r=await fetch('/api/ibkr/analyze',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({account_id:acct})});
+    const d=await r.json();
+    if(!r.ok || !d.snapshot_id){ throw new Error(d.error||'Analyze failed'); }
+    _pfPendingSource='ibkr'; _pfPendingKey=d.key; _pfLoaded=true;
+    showTab('portfolio'); loadPortfolioDates();
+  } catch(e){ alert('Analyze Portfolio failed: '+e.message); }
+}
+// Trade panel — buy/sell stocks · ETF · crypto
+function ibkrTradeCard(acct){
+  return `<div class="card">
+    <div class="up-label" style="font-weight:600;margin-bottom:8px">🛒 Trade — buy / sell (stocks · ETF · crypto)</div>
+    <div class="pf-bar" style="gap:8px">
+      <select id="ib-tr-side"><option value="BUY">Buy</option><option value="SELL">Sell</option></select>
+      <input id="ib-tr-sym" placeholder="Symbol e.g. AAPL / BTC" style="width:150px" oninput="this.value=this.value.toUpperCase()">
+      <select id="ib-tr-sec"><option value="STK">Stock / ETF</option><option value="CRYPTO">Crypto</option></select>
+      <input id="ib-tr-qty" type="number" min="0" step="any" placeholder="Qty" style="width:90px">
+      <select id="ib-tr-type" onchange="$('#ib-tr-px').style.display=this.value==='LMT'?'':'none'"><option value="MKT">Market</option><option value="LMT">Limit</option></select>
+      <input id="ib-tr-px" type="number" min="0" step="any" placeholder="Limit $" style="width:100px;display:none">
+      <select id="ib-tr-tif"><option value="DAY">DAY</option><option value="GTC">GTC</option></select>
+      <button class="ghost" onclick="ibkrQuote('${etEsc(acct)}')">💲 Quote</button>
+      <button class="ex-btn" onclick="ibkrPlaceOrder('${etEsc(acct)}')">Preview order →</button>
+    </div>
+    <div id="ib-tr-out" class="pf-meta" style="margin-top:8px"></div>
+    <div class="pf-meta" style="margin-top:4px;font-size:11px">Orders route to IBKR live via the Client Portal API. Review the confirmation before submitting.</div>
+  </div>`;
+}
+async function ibkrQuote(acct){
+  const sym=($('#ib-tr-sym')||{}).value, sec=($('#ib-tr-sec')||{}).value||'STK', out=$('#ib-tr-out');
+  if(!sym){ if(out) out.textContent='Enter a symbol.'; return; }
+  if(out) out.innerHTML='<span class="spin">Quoting…</span>';
+  try {
+    const d=await (await fetch('/api/ibkr/quote?symbol='+encodeURIComponent(sym)+'&sec_type='+sec)).json();
+    if(d.error){ out.innerHTML='<span class="err">'+etEsc(d.error)+'</span>'; return; }
+    out.innerHTML=`<b>${etEsc(d.symbol)}</b> — last ${etEsc(d.last??'—')} · bid ${etEsc(d.bid??'—')} · ask ${etEsc(d.ask??'—')} (conid ${etEsc(d.conid)})`;
+  } catch(e){ out.innerHTML='<span class="err">'+etEsc(e)+'</span>'; }
+}
+async function ibkrPlaceOrder(acct){
+  const side=($('#ib-tr-side')||{}).value, sym=($('#ib-tr-sym')||{}).value, sec=($('#ib-tr-sec')||{}).value,
+    qty=($('#ib-tr-qty')||{}).value, type=($('#ib-tr-type')||{}).value, tif=($('#ib-tr-tif')||{}).value, px=($('#ib-tr-px')||{}).value;
+  const out=$('#ib-tr-out');
+  if(!sym||!(parseFloat(qty)>0)){ if(out) out.textContent='Symbol and a positive quantity are required.'; return; }
+  if(!confirm(`Place ${side} ${qty} ${sym} (${sec}, ${type}${type==='LMT'?' @ '+px:''}) on IBKR account ${acct}?`)) return;
+  if(out) out.innerHTML='<span class="spin">Submitting to IBKR…</span>';
+  try {
+    const body={account_id:acct, symbol:sym, side, sec_type:sec, quantity:parseFloat(qty), order_type:type, tif};
+    if(type==='LMT') body.price=parseFloat(px);
+    const d=await (await fetch('/api/ibkr/order',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)})).json();
+    if(d.error){ out.innerHTML='<span class="err">'+etEsc(d.error)+'</span>'; return; }
+    ibkrRenderOrderResult(acct, d.result, out);
+  } catch(e){ out.innerHTML='<span class="err">'+etEsc(e)+'</span>'; }
+}
+function ibkrRenderOrderResult(acct, result, out){
+  const arr = Array.isArray(result)?result:[result];
+  const reply = arr.find(x=>x && x.id && (x.message||x.messageIds));
+  if(reply){
+    const msg=(reply.message&&reply.message.join?reply.message.join(' '):reply.message)||'Please confirm this order.';
+    out.innerHTML = `<div style="border:1px solid var(--line);border-radius:8px;padding:8px">
+      <div style="margin-bottom:6px">⚠ IBKR confirmation: ${etEsc(msg)}</div>
+      <button class="ex-btn" onclick="ibkrConfirmOrder('${etEsc(reply.id)}','${etEsc(acct)}')">✅ Confirm order</button>
+      <button class="ghost" onclick="$('#ib-tr-out').textContent='Order cancelled.'">Cancel</button></div>`;
+    return;
+  }
+  const placed = arr.find(x=>x && (x.order_id||x.orderId||x.order_status));
+  out.innerHTML = placed
+    ? `<span style="color:#34d399">✅ Order submitted — id ${etEsc(placed.order_id||placed.orderId||'')} · ${etEsc(placed.order_status||placed.orderStatus||'submitted')}</span>`
+    : `<span>Response: ${etEsc(JSON.stringify(arr).slice(0,240))}</span>`;
+}
+async function ibkrConfirmOrder(replyId, acct){
+  const out=$('#ib-tr-out'); if(out) out.innerHTML='<span class="spin">Confirming…</span>';
+  try {
+    const d=await (await fetch('/api/ibkr/order/reply',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({reply_id:replyId,confirmed:true})})).json();
+    if(d.error){ out.innerHTML='<span class="err">'+etEsc(d.error)+'</span>'; return; }
+    ibkrRenderOrderResult(acct, d.result, out);
+  } catch(e){ out.innerHTML='<span class="err">'+etEsc(e)+'</span>'; }
 }
 
 // ── Admin: User Management page ───────────────────────────────────────────────

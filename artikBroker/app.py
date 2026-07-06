@@ -44,6 +44,7 @@ import etrade  # noqa: E402  (E*TRADE OAuth 1.0a client)
 import schwab  # noqa: E402  (Charles Schwab OAuth 2.0 client)
 import fmp  # noqa: E402  (Financial Modeling Prep — third data provider)
 import finnhub  # noqa: E402  (Finnhub — intelligence provider only)
+import ibkr  # noqa: E402  (Interactive Brokers — Client Portal Web API)
 import intelligence  # noqa: E402  (intelligence signal computation)
 import intelligence_store  # noqa: E402  (persistent intelligence snapshots for trends)
 import portfolio_store  # noqa: E402  (persistent broker portfolio snapshots)
@@ -236,7 +237,7 @@ async def _auth_gate(request: Request, call_next):
     request.state.user = user
     # Role-based access: E*TRADE + Portfolio APIs are admin-only (server-side enforced,
     # not just hidden in the sidebar).
-    _ADMIN_ONLY = ("/api/etrade", "/api/schwab", "/api/portfolio", "/api/analyze_portfolio")
+    _ADMIN_ONLY = ("/api/etrade", "/api/schwab", "/api/ibkr", "/api/portfolio", "/api/analyze_portfolio")
     if user.get("role") != "admin" and any(path.startswith(p) for p in _ADMIN_ONLY):
         return JSONResponse({"error": "admin only"}, status_code=403)
     if user["must_reset_password"] and path not in (
@@ -776,6 +777,208 @@ async def schwab_analyze(request: Request):
                                  total_value=tv, total_gain=tg)
     return {"snapshot_id": sid, "key": f"pf:{sid}", "label": label,
             "positions": len(holdings), "total_value": tv, "total_gain": tg}
+
+
+# ── Interactive Brokers (IBKR) — Client Portal Web API ────────────────────────
+# Admin-only (RBAC gate). The gateway holds the authenticated session; we never store
+# IBKR credentials or tokens. Trading (buy/sell) is admin-only + explicit two-step confirm.
+def _ibkr() -> "ibkr.IBKRClient":
+    return ibkr.IBKRClient()
+
+
+@app.get("/api/ibkr/status")
+def ibkr_status(request: Request):
+    cl = _ibkr()
+    if not cl.configured:
+        return {"configured": False, "authenticated": False, "connected": False,
+                "env": cl.env, "gateway_url": cl.gateway_url,
+                "error": "IBKR_BASE_URL not configured — point it at your Client Portal Gateway."}
+    try:
+        st = cl.auth_status()
+        authed = bool(st.get("authenticated"))
+        return {"configured": True, "authenticated": authed, "connected": authed,
+                "competing": st.get("competing"), "env": cl.env, "gateway_url": cl.gateway_url}
+    except Exception as e:  # noqa: BLE001
+        return {"configured": True, "authenticated": False, "connected": False,
+                "env": cl.env, "gateway_url": cl.gateway_url, "error": str(e)}
+
+
+@app.post("/api/ibkr/connect")
+def ibkr_connect():
+    cl = _ibkr()
+    if not cl.configured:
+        return JSONResponse({"error": "IBKR_BASE_URL not configured"}, status_code=400)
+    # The Client Portal Gateway authenticates via IBKR SSO in the browser.
+    return {"gateway_url": cl.gateway_url or cl.base.replace("/v1/api", "/"),
+            "message": "Log into the IBKR Client Portal Gateway, then return and Refresh."}
+
+
+@app.post("/api/ibkr/reauth")
+def ibkr_reauth():
+    try:
+        return _ibkr().reauthenticate()
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/api/ibkr/accounts")
+def ibkr_accounts():
+    try:
+        raw = _ibkr().accounts()
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": str(e)}, status_code=502)
+    out = []
+    for a in raw or []:
+        acct = str(a.get("accountId") or a.get("id") or a) if isinstance(a, dict) else str(a)
+        desc = (a.get("desc") or a.get("accountTitle") or "IBKR") if isinstance(a, dict) else "IBKR"
+        out.append({"accountId": acct, "accountIdKey": acct, "accountDesc": desc,
+                    "accountType": (a.get("type") if isinstance(a, dict) else "") or "",
+                    "institutionType": "BROKERAGE", "accountStatus": "ACTIVE"})
+    return {"accounts": out}
+
+
+def _extract_ibkr_holdings(positions: list) -> tuple:
+    holdings, tv, tg = [], 0.0, 0.0
+    for p in positions or []:
+        sym = (p.get("ticker") or p.get("contractDesc") or "").strip().upper().split(" ")[0]
+        if not sym:
+            continue
+        qty = _num(p.get("position"))
+        if not qty:
+            continue
+        mv = _num(p.get("mktValue"))
+        avg = _num(p.get("avgCost")) or _num(p.get("avgPrice"))
+        gain = _num(p.get("unrealizedPnl"))
+        cost = round(avg * qty, 2) if (avg and qty) else round(mv - gain, 2)
+        holdings.append({"ticker": sym, "qty": qty, "cost_basis": round(cost, 2)})
+        tv += mv
+        tg += gain
+    return holdings, round(tv, 2), round(tg, 2)
+
+
+@app.get("/api/ibkr/accounts/{account_id}/portfolio")
+def ibkr_portfolio(account_id: str):
+    try:
+        rows, page = [], 0
+        while True:
+            chunk = _ibkr().positions(account_id, page)
+            rows += chunk
+            if len(chunk) < 30:      # IBKR pages positions 30 at a time
+                break
+            page += 1
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": str(e)}, status_code=502)
+    holdings, tv, tg = _extract_ibkr_holdings(rows)
+    return {"holdings": holdings, "total_value": tv, "total_gain": tg}
+
+
+@app.post("/api/ibkr/analyze")
+async def ibkr_analyze(request: Request):
+    user = _user(request) or _current_user(request)
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        body = {}
+    acct = (body.get("account_id_key") or body.get("account_id") or "").strip()
+    if not acct:
+        return JSONResponse({"error": "account_id is required"}, status_code=400)
+    try:
+        rows, page = [], 0
+        while True:
+            chunk = _ibkr().positions(acct, page)
+            rows += chunk
+            if len(chunk) < 30:
+                break
+            page += 1
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": str(e)}, status_code=502)
+    holdings, tv, tg = _extract_ibkr_holdings(rows)
+    if not holdings:
+        return JSONResponse({"error": "No positions found in this IBKR account."}, status_code=400)
+    ending = acct[-4:]
+    label = f"IBKR ••{ending}"
+    sid = portfolio_store.create(user_id=(user or {}).get("id"), source="ibkr", label=label,
+                                 account_ending=ending, holdings=holdings,
+                                 total_value=tv, total_gain=tg)
+    return {"snapshot_id": sid, "key": f"pf:{sid}", "label": label,
+            "positions": len(holdings), "total_value": tv, "total_gain": tg}
+
+
+@app.get("/api/ibkr/quote")
+def ibkr_quote(symbol: str, sec_type: str = "STK"):
+    cl = _ibkr()
+    try:
+        conid = cl.conid_for(symbol.upper(), sec_type.upper())
+        if not conid:
+            return JSONResponse({"error": f"No IBKR contract for {symbol}"}, status_code=404)
+        snap = cl.snapshot([conid])
+        s = snap[0] if snap else {}
+        return {"symbol": symbol.upper(), "conid": conid, "sec_type": sec_type.upper(),
+                "last": s.get("31"), "bid": s.get("84"), "ask": s.get("86"),
+                "change_pct": s.get("83"), "raw": s}
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.post("/api/ibkr/order")
+async def ibkr_order(request: Request):
+    """Place a buy/sell order (stocks / ETF / crypto). Admin-only (RBAC). IBKR returns a
+    confirmation prompt (reply id) which the client must confirm via /api/ibkr/order/reply."""
+    try:
+        b = await request.json()
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"error": "invalid JSON body"}, status_code=400)
+    acct = (b.get("account_id") or "").strip()
+    symbol = (b.get("symbol") or "").strip().upper()
+    side = (b.get("side") or "").strip().upper()
+    qty = _num(b.get("quantity"))
+    order_type = (b.get("order_type") or "MKT").strip().upper()
+    sec_type = (b.get("sec_type") or "STK").strip().upper()
+    tif = (b.get("tif") or "DAY").strip().upper()
+    price = b.get("price")
+    if not (acct and symbol and side in ("BUY", "SELL") and qty > 0):
+        return JSONResponse({"error": "account_id, symbol, side (BUY/SELL) and quantity are required"}, status_code=400)
+    cl = _ibkr()
+    try:
+        conid = b.get("conid") or cl.conid_for(symbol, sec_type)
+        if not conid:
+            return JSONResponse({"error": f"No IBKR contract for {symbol}"}, status_code=404)
+        order = {"conid": int(conid), "orderType": order_type, "side": side,
+                 "quantity": qty, "tif": tif}
+        if order_type == "LMT" and price is not None:
+            order["price"] = _num(price)
+        res = cl.place_order(acct, order)
+        return {"result": res}   # may contain confirmation prompt(s) with reply id(s)
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.post("/api/ibkr/order/reply")
+async def ibkr_order_reply(request: Request):
+    b = await request.json()
+    reply_id = (b.get("reply_id") or "").strip()
+    if not reply_id:
+        return JSONResponse({"error": "reply_id is required"}, status_code=400)
+    try:
+        return {"result": _ibkr().reply(reply_id, bool(b.get("confirmed", True)))}
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/api/ibkr/orders")
+def ibkr_orders():
+    try:
+        return _ibkr().live_orders()
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.delete("/api/ibkr/accounts/{account_id}/order/{order_id}")
+def ibkr_cancel(account_id: str, order_id: str):
+    try:
+        return _ibkr().cancel_order(account_id, order_id)
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": str(e)}, status_code=502)
 
 
 @app.post("/api/users")
@@ -2021,11 +2224,11 @@ def api_portfolio_dates(source: str = Query(None)):
               "label": f"{s['date']} ({s['folder']})"} for s in _list_portfolio_snapshots()]
     if source == "excel":
         snaps = excel
-    elif source in ("etrade", "schwab"):
+    elif source in ("etrade", "schwab", "ibkr"):
         snaps = _stored_snapshots(source)
     else:
         snaps = excel + _stored_snapshots()
-    return {"snapshots": snaps, "sources": ["excel", "etrade", "schwab"]}
+    return {"snapshots": snaps, "sources": ["excel", "etrade", "schwab", "ibkr"]}
 
 
 def _is_stored_key(key: str) -> bool:
