@@ -2088,7 +2088,21 @@ function _positionCard(r){
         </div></div>`;
     }
   }
-  if(src && src!=='portfolio'){
+  if(src==='ibkr' && (r.qty!=null || r.cost_basis!=null)){
+    const qty=num(r.qty), cost=num(r.cost_basis), price=num(r.price), value=num(r.value)??((qty&&price)?qty*price:null);
+    const avg=(qty&&cost!=null)?cost/qty:null, gain=(value!=null&&cost!=null)?value-cost:null;
+    const cell=(l,v)=>`<div><div style="font-size:11px;color:var(--mut)">${l}</div><div style="font-size:15px;font-weight:700;margin-top:2px">${v}</div></div>`;
+    return `<div style="margin:14px 0;padding:14px 16px;background:linear-gradient(180deg,rgba(59,130,246,.09),transparent);border:1px solid var(--line);border-radius:12px">
+      <div style="font-size:11px;font-weight:800;letter-spacing:.6px;color:var(--acc);margin-bottom:10px">🧭 YOUR IBKR POSITION</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(108px,1fr));gap:14px">
+        ${cell('Shares', qty!=null?qty.toLocaleString():'—')}
+        ${cell('Average Cost', avg!=null?'$'+avg.toLocaleString(undefined,{maximumFractionDigits:2}):'—')}
+        ${cell('Current Price', price!=null?'$'+price.toLocaleString():'—')}
+        ${cell('Market Value', value!=null?'$'+value.toLocaleString(undefined,{maximumFractionDigits:0}):'—')}
+        ${cell('Unrealized Gain', gain!=null?`<span class="${gain>=0?'pos':'neg'}">${gain>=0?'+':'−'}$${Math.abs(Math.round(gain)).toLocaleString()}</span>`:'—')}
+      </div></div>`;
+  }
+  if(src && src!=='portfolio' && src!=='ibkr'){
     return `<div style="margin:14px 0;padding:10px 14px;background:var(--bg);border:1px solid var(--line);border-radius:12px;display:flex;align-items:center;gap:10px">
       <span style="font-size:11px;font-weight:800;letter-spacing:.6px;color:var(--mut)">NO POSITION</span>
       <span style="display:flex;gap:8px;margin-left:auto">
@@ -4331,6 +4345,7 @@ function ibkrSelectAccount(acct){
   ibkrDetail(acct);
   ibkrLoadOrders(acct);
 }
+window._ibScored = window._ibScored || {};
 async function ibkrDetail(acct){
   const box=$('#ib-detail-'+etEsc(acct)); if(!box) return;
   box.innerHTML='<div class="spin">Loading holdings…</div>';
@@ -4338,22 +4353,63 @@ async function ibkrDetail(acct){
   try { d=await (await fetch('/api/ibkr/accounts/'+encodeURIComponent(acct)+'/portfolio')).json(); }
   catch(e){ box.innerHTML='<div class="err">'+etEsc(e)+'</div>'; return; }
   if(d.error){ box.innerHTML='<div class="err">'+etEsc(d.error)+'</div>'; return; }
-  window._ibHoldings[acct] = {holdings:d.holdings||[], total_value:d.total_value, total_gain:d.total_gain};
+  const holdings=d.holdings||[];
+  window._ibHoldings[acct]={holdings, total_value:d.total_value, total_gain:d.total_gain};
+  if(!holdings.length){ window._ibScored[acct]=[]; box.innerHTML='<div class="pf-meta" style="margin-top:8px">No open positions in this account.</div>'; return; }
+  // Score the holdings with the Artik engine (same as the Portfolio page).
+  box.innerHTML='<div class="spin">Scoring '+holdings.length+' holding'+(holdings.length===1?'':'s')+' with the Artik engine…</div>';
+  let scored=[];
+  try { const a=await (await fetch('/api/analyze?symbols='+encodeURIComponent(holdings.map(h=>h.ticker).join(',')))).json(); scored=a.results||[]; }
+  catch(e){}
+  window._ibScored[acct]=holdings.map(h=>{
+    const r=scored.find(x=>(x.ticker||'').toUpperCase()===(h.ticker||'').toUpperCase())||{ticker:h.ticker};
+    const value=(r.price!=null&&h.qty!=null)?r.price*h.qty:null;
+    const gain=(value!=null&&h.cost_basis!=null)?value-h.cost_basis:null;
+    return {...r, qty:h.qty, cost_basis:h.cost_basis, value, gain,
+            gain_pct:(gain!=null&&h.cost_basis)?+(gain/h.cost_basis*100).toFixed(1):null};
+  });
   ibkrRenderHoldings(acct, ($('#ib-hold-search-'+etEsc(acct))||{}).value||'');
 }
 function ibkrRenderHoldings(acct, q){
   const box=$('#ib-detail-'+etEsc(acct)); if(!box) return;
-  const money=v=>v==null?'—':(typeof v==='number'?v.toLocaleString(undefined,{style:'currency',currency:'USD'}):etEsc(v));
-  const data=window._ibHoldings[acct]||{holdings:[]};
-  let h=data.holdings||[];
-  q=(q||'').trim().toUpperCase(); if(q) h=h.filter(x=>(x.ticker||'').toUpperCase().includes(q));
-  box.innerHTML = (h.length ? `<table class="mini" style="margin-top:8px;width:100%"><tr><th>Symbol</th><th>Qty</th><th>Cost basis</th><th></th></tr>`+
-    h.map(x=>`<tr><td><b>${etEsc(x.ticker)}</b></td><td>${etEsc(x.qty)}</td><td>${money(x.cost_basis)}</td>
-      <td style="text-align:right"><button class="ex-btn" onclick="openStock('${etEsc(x.ticker)}','ibkr')">Explain →</button></td></tr>`).join('')+
-    `<tr style="border-top:1px solid var(--line);font-weight:600"><td>Total value</td><td></td><td>${money(data.total_value)}</td><td></td></tr></table>`
-    : `<div class="pf-meta" style="margin-top:8px">${(data.holdings||[]).length?'No holdings match “'+etEsc(q)+'”.':'No open positions in this account.'}</div>`);
+  const rows=window._ibScored[acct]||[];
+  if(!rows.length){ box.innerHTML='<div class="pf-meta" style="margin-top:8px">No open positions in this account.</div>'; return; }
+  const money=v=>v==null?'—':'$'+Number(v).toLocaleString(undefined,{maximumFractionDigits:0});
+  q=(q||'').trim().toUpperCase(); const view=q?rows.filter(r=>(r.ticker||'').toUpperCase().includes(q)):rows;
+  const sc=rows.map(r=>r.score).filter(x=>x!=null);
+  const avg=sc.length?Math.round(sc.reduce((a,b)=>a+b,0)/sc.length):null;
+  let tv=0,tc=0,tp=0; rows.forEach(r=>{tv+=r.value||0;tc+=r.cost_basis||0;tp+=r.gain||0;});
+  const cnt=s=>rows.filter(r=>r.status===s).length;
+  const exec=`<div class="exec" style="margin:10px 0">
+    <div class="estat ring">${gring(avg)}<div><div class="lbl">Health Score</div><div class="sub">${sc.length} scored</div></div></div>
+    <div class="estat"><div class="lbl">Market Value</div><div class="big">${money(tv)}</div><div class="sub">cost ${money(tc)}</div></div>
+    <div class="estat"><div class="lbl">Total Gain</div><div class="big ${tp>=0?'pos':'neg'}">${tp>=0?'+':'−'}$${Math.abs(Math.round(tp)).toLocaleString()}</div><div class="sub ${tp>=0?'pos':'neg'}">${tc?((tp/tc*100)>=0?'+':'')+(tp/tc*100).toFixed(1)+'%':''}</div></div>
+    <div class="estat"><div class="lbl">Strong · BUY</div><div class="big pos">${cnt('BUY')}</div><div class="sub">of ${rows.length}</div></div>
+    <div class="estat"><div class="lbl">Hold</div><div class="big" style="color:var(--hold)">${cnt('HOLD')}</div><div class="sub">monitor</div></div>
+    <div class="estat"><div class="lbl">Sell</div><div class="big neg">${cnt('SELL')}</div><div class="sub">review</div></div>
+  </div>`;
+  const rowHtml=(r,i)=>`<tr class="row">
+    <td>${i+1}</td>
+    <td class="tick" data-fav-ticker="${etEsc(r.ticker)}">${favStar(r.ticker,'ibkr')} ${etEsc(r.ticker)}</td>
+    <td class="muted" style="font-size:12px">${etEsc(r.sector||'—')}</td>
+    <td class="num">${etEsc(r.qty)}</td>
+    <td class="num">${money(r.cost_basis)}</td>
+    <td class="num">${r.price!=null?'$'+r.price.toLocaleString():'—'}</td>
+    <td class="num">${money(r.value)}</td>
+    <td class="num">${r.score!=null?'<b>'+r.score+'</b>':'—'}</td>
+    <td>${r.status?statusBadge(r.status):'—'}</td>
+    <td class="num ${r.gain>=0?'pos':'neg'}">${r.gain!=null?(r.gain>=0?'+':'−')+'$'+Math.abs(Math.round(r.gain)).toLocaleString()+(r.gain_pct!=null?' ('+(r.gain_pct>=0?'+':'')+r.gain_pct+'%)':''):'—'}</td>
+    <td><button class="ex-btn" onclick="ibkrExplain('${etEsc(acct)}','${etEsc(r.ticker)}')">Explain →</button></td>
+  </tr>`;
+  const head=`<tr><th>#</th><th>Ticker</th><th>Sector</th><th class="num">Qty</th><th class="num">Cost</th><th class="num">Price</th><th class="num">Value</th><th class="num">Score</th><th>Status</th><th class="num">Gain</th><th></th></tr>`;
+  box.innerHTML = exec + `<table class="mini" style="width:100%">${head}${view.map(rowHtml).join('')}</table>`
+    + (q&&!view.length?'<div class="pf-meta">No holdings match “'+etEsc(q)+'”.</div>':'');
 }
 function ibkrFilterHoldings(acct, q){ ibkrRenderHoldings(acct, q); }
+function ibkrExplain(acct, ticker){
+  const r=(window._ibScored[acct]||[]).find(x=>(x.ticker||'').toUpperCase()===(ticker||'').toUpperCase());
+  if(r && r.breakdown) openStock(r, 'ibkr'); else openStock(ticker, 'ibkr');
+}
 async function ibkrAnalyze(acct){
   try {
     const r=await fetch('/api/ibkr/analyze',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({account_id:acct})});
