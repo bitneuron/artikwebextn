@@ -44,6 +44,7 @@ export default function Notes() {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [reminderOpen, setReminderOpen] = useState(false);
+  const [mobileEditing, setMobileEditing] = useState(false);   // mobile: list ↔ editor
 
   const selected = notes.find((n) => n.id === selectedId) || null;
   const allTags = useMemo(() => Array.from(new Set(notes.flatMap((n) => n.tags))).sort(), [notes]);
@@ -96,12 +97,15 @@ export default function Notes() {
     const n = await api.post<QuickNote>("/api/notes", body);
     await load();
     setSelectedId(n.id);
+    setMobileEditing(true);
   }
+  function openNote(id: number) { setSelectedId(id); setMobileEditing(true); }
   async function del() {
     if (!selected || !confirm("Delete this note?")) return;
     const id = selected.id;
     await api.del(`/api/notes/${id}`);
     setNotes((ns) => { const rest = ns.filter((n) => n.id !== id); setSelectedId(rest[0]?.id ?? null); return rest; });
+    setMobileEditing(false);
   }
   function addTag(t: string) { if (selected && t.trim()) patch({ tags: [...new Set([...selected.tags, t.trim()])] }); }
   function removeTag(t: string) { if (selected) patch({ tags: selected.tags.filter((x) => x !== t) }); }
@@ -111,7 +115,7 @@ export default function Notes() {
   return (
     <div className="-m-4 md:-m-6 flex h-[calc(100vh-3.5rem)]">
       {/* ── LIST PANE ─────────────────────────────────────────────── */}
-      <aside className="flex w-[340px] shrink-0 flex-col border-r border-slate-200 dark:border-slate-800">
+      <aside className={`${mobileEditing ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col border-r border-slate-200 dark:border-slate-800 md:w-[340px]`}>
         <div className="space-y-3 border-b border-slate-200 p-3 dark:border-slate-800">
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-2.5 opacity-40">🔍</span>
@@ -156,7 +160,7 @@ export default function Notes() {
 
         <div className="flex-1 overflow-y-auto">
           {notes.map((n) => (
-            <button key={n.id} onClick={() => setSelectedId(n.id)}
+            <button key={n.id} onClick={() => openNote(n.id)}
               className={`block w-full border-b border-slate-100 px-4 py-3 text-left dark:border-slate-800 ${selectedId === n.id ? "bg-brand/5 border-l-2 border-l-brand" : "hover:bg-slate-50 dark:hover:bg-slate-800/50"}`}>
               <div className="truncate font-semibold">{n.title || n.note_text.trim().slice(0, 40) || "Untitled"}</div>
               <div className="mt-0.5 line-clamp-2 text-sm opacity-60">{n.note_text.trim().slice(0, 140)}</div>
@@ -173,11 +177,14 @@ export default function Notes() {
       </aside>
 
       {/* ── EDITOR PANE ───────────────────────────────────────────── */}
-      <section className="flex-1 overflow-y-auto">
+      <section className={`${mobileEditing ? "flex" : "hidden md:flex"} min-w-0 flex-1 flex-col overflow-y-auto`}>
         {selected ? (
-          <div className="mx-auto max-w-3xl px-8 py-6">
+          <div className="mx-auto w-full max-w-3xl px-4 py-5 md:px-8 md:py-6">
+            {/* mobile back to list */}
+            <button className="mb-3 flex items-center gap-1 text-sm text-brand md:hidden"
+              onClick={() => setMobileEditing(false)}>‹ Notes</button>
             {/* breadcrumb + actions */}
-            <div className="mb-1 flex items-center justify-between text-sm">
+            <div className="mb-1 flex items-center justify-between gap-2 text-sm">
               <div className="flex min-w-0 items-center gap-1.5 text-slate-500 dark:text-slate-400">
                 <span>📓</span><span className="font-medium">{nbName(selected.notebook_id)}</span>
                 <span className="opacity-40">›</span>
@@ -190,7 +197,7 @@ export default function Notes() {
                   {reminderOpen && (
                     <>
                       <div className="fixed inset-0 z-20" onClick={() => setReminderOpen(false)} />
-                      <div className="absolute right-0 top-full z-30 mt-2 w-80 rounded-xl border border-slate-200 bg-white p-4 shadow-2xl ring-1 ring-brand/20 dark:border-slate-700 dark:bg-[#1c2333]">
+                      <div className="absolute right-0 top-full z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white p-4 shadow-2xl ring-1 ring-brand/20 dark:border-slate-700 dark:bg-[#1c2333] sm:w-80">
                         <div className="mb-3 flex items-center justify-between">
                           <span className="font-medium opacity-80">⏰ Reminder</span>
                           {selected.due_date && (
@@ -239,7 +246,7 @@ export default function Notes() {
             </div>
 
             {/* title */}
-            <input className="mb-4 w-full bg-transparent text-4xl font-bold outline-none placeholder:opacity-25"
+            <input className="mb-4 w-full bg-transparent text-2xl font-bold outline-none placeholder:opacity-25 md:text-4xl"
               placeholder="Untitled" value={draft.title} onChange={(e) => onTitle(e.target.value)} />
 
             {/* tags */}
