@@ -162,12 +162,20 @@ export default function Notes() {
           {notes.map((n) => (
             <button key={n.id} onClick={() => openNote(n.id)}
               className={`block w-full border-b border-slate-100 px-4 py-3 text-left dark:border-slate-800 ${selectedId === n.id ? "bg-brand/5 border-l-2 border-l-brand" : "hover:bg-slate-50 dark:hover:bg-slate-800/50"}`}>
-              <div className="truncate font-semibold">{n.title || n.note_text.trim().slice(0, 40) || "Untitled"}</div>
+              <div className="flex items-center gap-1.5">
+                <span className="truncate font-semibold">{n.title || n.note_text.trim().slice(0, 40) || "Untitled"}</span>
+                {n.is_favorite && <span className="shrink-0 text-amber-500">★</span>}
+              </div>
               <div className="mt-0.5 line-clamp-2 text-sm opacity-60">{n.note_text.trim().slice(0, 140)}</div>
+              {n.due_date && (
+                <div className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-amber-500">
+                  <span>⏰</span>
+                  <span>{fmtReminderDate(n.due_date)}{n.due_time ? `, ${fmt12h(n.due_time)}` : ""}</span>
+                  {n.repeat && <span className="opacity-80">· 🔁 {n.repeat}</span>}
+                </div>
+              )}
               <div className="mt-1 flex items-center gap-2 text-xs opacity-40">
                 <span>{fmtDate(n.updated_at)}</span>
-                {n.due_date && <span title="Has reminder">⏰</span>}
-                {n.is_favorite && <span className="text-amber-500">★</span>}
                 {n.tags.slice(0, 2).map((t) => <span key={t} className="rounded bg-slate-100 px-1 dark:bg-slate-800">#{t}</span>)}
               </div>
             </button>
