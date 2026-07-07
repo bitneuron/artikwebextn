@@ -55,7 +55,9 @@ export default function Notes() {
     if (notebookFilter) p.set("notebook_id", notebookFilter);
     if (tab === "reminders") p.set("has_reminder", "true");
     if (tagFilter) p.set("tag", tagFilter);
-    p.set("sort", "updated_at"); p.set("order", "desc"); p.set("limit", "200");
+    if (tab === "reminders") { p.set("sort", "due_date"); p.set("order", "asc"); }   // agenda: soonest first
+    else { p.set("sort", "updated_at"); p.set("order", "desc"); }
+    p.set("limit", "200");
     const rows = await api.get<QuickNote[]>(`/api/notes?${p.toString()}`);
     setNotes(rows);
     if (!keepSel || !rows.find((n) => n.id === selectedId)) setSelectedId(rows[0]?.id ?? null);
