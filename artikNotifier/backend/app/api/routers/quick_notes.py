@@ -39,13 +39,16 @@ def list_notes(
     user: User = Depends(get_current_user), db: Session = Depends(get_db),
     status: str | None = None, category: str | None = None, priority: str | None = None,
     tag: str | None = None, search: str | None = None,
+    notebook_id: int | None = None, is_favorite: bool | None = None,
+    has_reminder: bool | None = None,
     due_from: date | None = None, due_to: date | None = None,
     sort: str = "created_at", order: str = "desc",
     limit: int = Query(50, le=200), offset: int = 0,
 ):
     svc = _svc(db)
     rows = svc.list(user.id, status=status, category=category, priority=priority,
-                    tag=tag, search=search, due_from=due_from, due_to=due_to,
+                    tag=tag, search=search, notebook_id=notebook_id, is_favorite=is_favorite,
+                    has_reminder=has_reminder, due_from=due_from, due_to=due_to,
                     sort=sort, order=order, limit=limit, offset=offset)
     return [svc.to_out(n) for n in rows]
 

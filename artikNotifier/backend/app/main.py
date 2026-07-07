@@ -12,9 +12,10 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.routers import (admin, assistant, auth, dashboard, health, meta,
-                             notifications, notify_api, quick_notes, reminders)
+                             notebooks, notifications, notify_api, quick_notes, reminders)
 from app.core.config import settings
 from app.core.database import init_db
+from app.core.migrations import run_migrations
 from app.core.logging_config import log_event, setup_logging
 from app.scheduler.scheduler import start_scheduler, stop_scheduler
 
@@ -24,6 +25,7 @@ async def lifespan(app: FastAPI):
     setup_logging("INFO")
     settings.assert_secure_for_production()   # fail fast on insecure prod config
     init_db()
+    run_migrations()                          # notes-first: notebooks + note columns + backfill
     start_scheduler()
     log_event("app", "startup", environment=settings.environment)
     yield
@@ -69,9 +71,9 @@ async def rate_limit_and_headers(request: Request, call_next):
     return response
 
 
-for r in (auth.router, reminders.router, quick_notes.router, notifications.router,
-          dashboard.router, meta.router, assistant.router, admin.router,
-          notify_api.router, health.router):
+for r in (auth.router, reminders.router, quick_notes.router, notebooks.router,
+          notifications.router, dashboard.router, meta.router, assistant.router,
+          admin.router, notify_api.router, health.router):
     app.include_router(r)
 
 

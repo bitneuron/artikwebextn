@@ -27,6 +27,8 @@ class QuickNoteRepository(BaseRepository[QuickNote]):
 
     def query(self, user_id: int, *, status: str | None = None, category: str | None = None,
               priority: str | None = None, tag: str | None = None, search: str | None = None,
+              notebook_id: int | None = None, is_favorite: bool | None = None,
+              has_reminder: bool | None = None,
               due_from: date | None = None, due_to: date | None = None,
               include_deleted: bool = False,
               sort: str = "created_at", order: str = "desc",
@@ -40,6 +42,12 @@ class QuickNoteRepository(BaseRepository[QuickNote]):
             stmt = stmt.where(QuickNote.category == category)
         if priority:
             stmt = stmt.where(QuickNote.priority == priority)
+        if notebook_id is not None:
+            stmt = stmt.where(QuickNote.notebook_id == notebook_id)
+        if is_favorite:
+            stmt = stmt.where(QuickNote.is_favorite.is_(True))
+        if has_reminder:
+            stmt = stmt.where(QuickNote.due_date.isnot(None))
         if due_from:
             stmt = stmt.where(QuickNote.due_date >= due_from)
         if due_to:

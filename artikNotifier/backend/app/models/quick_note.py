@@ -35,14 +35,22 @@ class QuickNote(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
 
+    # Notes-first: every note lives in a notebook (nullable during migration, then backfilled).
+    notebook_id: Mapped[int | None] = mapped_column(
+        ForeignKey("notebooks.id", ondelete="SET NULL"), index=True)
+
     title: Mapped[str | None] = mapped_column(String(255))          # optional
     note_text: Mapped[str] = mapped_column(Text, nullable=False)    # required
     category: Mapped[str] = mapped_column(String(64), default="Personal")
     priority: Mapped[str] = mapped_column(String(16), default="medium")
     status: Mapped[str] = mapped_column(String(16), default="active", index=True)
 
+    is_favorite: Mapped[bool] = mapped_column(Boolean, default=False)
+    pinned: Mapped[bool] = mapped_column(Boolean, default=False)
+
     due_date: Mapped[date | None] = mapped_column(Date)             # optional
     due_time: Mapped[str | None] = mapped_column(String(5))         # "HH:MM", optional
+    repeat: Mapped[str | None] = mapped_column(String(16))          # none/daily/weekly/monthly/yearly
 
     # Reminder linkage (set once converted).
     reminder_id: Mapped[int | None] = mapped_column(

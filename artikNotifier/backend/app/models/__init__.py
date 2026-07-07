@@ -5,11 +5,12 @@ from app.models.notification import (NotificationRule, Notification, Notificatio
 from app.models.system import EmailTemplate, SchedulerJob, AuditLog
 from app.models.chat import ChatMessage
 from app.models.quick_note import QuickNote, quick_note_tags
+from app.models.notebook import Notebook
 
 __all__ = [
     "User", "Session", "PasswordReset", "UserPreferences",
     "Category", "Tag", "Reminder", "ReminderHistory", "reminder_tags",
     "NotificationRule", "Notification", "NotificationHistory",
     "EmailTemplate", "SchedulerJob", "AuditLog", "ChatMessage",
-    "QuickNote", "quick_note_tags",
+    "QuickNote", "quick_note_tags", "Notebook",
 ]

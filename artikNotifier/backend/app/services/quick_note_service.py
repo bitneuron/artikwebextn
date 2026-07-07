@@ -35,13 +35,26 @@ class QuickNoteService:
     # ── serialization / audit ─────────────────────────────────────────────────
     def to_out(self, n: QuickNote) -> dict:
         return {
-            "id": n.id, "user_id": n.user_id, "title": n.title, "note_text": n.note_text,
+            "id": n.id, "user_id": n.user_id, "notebook_id": n.notebook_id,
+            "title": n.title, "note_text": n.note_text,
             "category": n.category, "priority": n.priority, "status": n.status,
-            "due_date": n.due_date, "due_time": n.due_time, "reminder_id": n.reminder_id,
+            "is_favorite": bool(n.is_favorite), "pinned": bool(n.pinned),
+            "due_date": n.due_date, "due_time": n.due_time, "repeat": n.repeat,
+            "reminder_id": n.reminder_id,
             "archived": n.archived, "deleted": n.deleted,
             "tags": [t.name for t in n.tags],
             "created_at": n.created_at, "updated_at": n.updated_at,
         }
+
+    def _default_notebook_id(self, user_id: int) -> int:
+        from app.models.notebook import Notebook
+        nb = (self.db.query(Notebook)
+              .filter(Notebook.user_id == user_id, Notebook.is_default.is_(True)).first())
+        if not nb:
+            nb = Notebook(user_id=user_id, name="Personal", icon="📓", is_default=True)
+            self.db.add(nb)
+            self.db.flush()
+        return nb.id
 
     def _audit(self, user_id: int, action: str, note_id: int | None, detail: str = "") -> None:
         self.db.add(AuditLog(user_id=user_id, action=action, entity="quick_note",
@@ -50,10 +63,14 @@ class QuickNoteService:
 
     # ── CRUD ──────────────────────────────────────────────────────────────────
     def create(self, user_id: int, data) -> QuickNote:
+        notebook_id = getattr(data, "notebook_id", None) or self._default_notebook_id(user_id)
         n = QuickNote(
-            user_id=user_id, title=data.title, note_text=data.note_text,
+            user_id=user_id, notebook_id=notebook_id, title=data.title, note_text=data.note_text,
             category=data.category, priority=data.priority.value,
-            due_date=data.due_date, due_time=data.due_time, status="active")
+            is_favorite=bool(getattr(data, "is_favorite", False)),
+            pinned=bool(getattr(data, "pinned", False)),
+            due_date=data.due_date, due_time=data.due_time,
+            repeat=getattr(data, "repeat", None), status="active")
         self.repo.add(n)
         for name in data.tags:
             if name and name.strip():
@@ -75,7 +92,8 @@ class QuickNoteService:
     def update(self, user_id: int, note_id: int, data) -> QuickNote:
         n = self.get(user_id, note_id)
         fields = data.model_dump(exclude_unset=True)
-        for f in ("title", "note_text", "category", "due_date", "due_time"):
+        for f in ("title", "note_text", "category", "due_date", "due_time",
+                  "notebook_id", "is_favorite", "pinned", "repeat"):
             if f in fields:
                 setattr(n, f, fields[f])
         if fields.get("priority"):
