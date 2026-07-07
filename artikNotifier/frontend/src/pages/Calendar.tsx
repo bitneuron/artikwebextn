@@ -6,6 +6,13 @@ import { priorityColor } from "../lib/format";
 
 type NoteRem = { id: number; title: string; time: string | null };
 
+// Parse a "YYYY-MM-DD" as a LOCAL date. `new Date("2026-07-12")` parses as UTC midnight, which
+// renders one day early in negative-offset zones (e.g. PST); this keeps the calendar aligned.
+function parseLocalDate(s: string): Date {
+  const [y, m, d] = s.slice(0, 10).split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
@@ -61,7 +68,7 @@ export default function CalendarPage() {
       <div className="grid grid-cols-7 gap-1">
         {Array.from({ length: firstWeekday }).map((_, i) => <div key={`e${i}`} />)}
         {(data?.days ?? []).map((day) => {
-          const d = new Date(day.date);
+          const d = parseLocalDate(day.date);
           const isToday = d.toDateString() === today.toDateString();
           return (
             <div key={day.date} className={`min-h-[84px] rounded-lg border p-1 text-left ${isToday ? "border-brand bg-brand/5" : "border-slate-200 dark:border-slate-800"}`}>
