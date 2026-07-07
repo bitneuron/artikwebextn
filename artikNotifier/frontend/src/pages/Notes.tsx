@@ -10,6 +10,25 @@ const REPEATS = [["", "No repeat"], ["daily", "Daily"], ["weekly", "Weekly"], ["
 function fmtDate(s: string): string {
   return new Date(s).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
+function fmtReminderDate(s: string): string {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+function fmt12h(t: string): string {
+  const [h, m] = t.split(":").map(Number);
+  return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
+}
+const TAG_COLORS = [
+  "bg-indigo-500/20 text-indigo-600 dark:text-indigo-300",
+  "bg-blue-500/20 text-blue-600 dark:text-blue-300",
+  "bg-emerald-500/20 text-emerald-600 dark:text-emerald-300",
+  "bg-amber-500/20 text-amber-600 dark:text-amber-300",
+  "bg-pink-500/20 text-pink-600 dark:text-pink-300",
+  "bg-cyan-500/20 text-cyan-600 dark:text-cyan-300",
+];
+function tagColor(t: string): string {
+  return TAG_COLORS[[...t].reduce((a, c) => a + c.charCodeAt(0), 0) % TAG_COLORS.length];
+}
 
 export default function Notes() {
   const [params] = useSearchParams();
@@ -23,6 +42,7 @@ export default function Notes() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
   const [reminderOpen, setReminderOpen] = useState(false);
 
   const selected = notes.find((n) => n.id === selectedId) || null;
@@ -60,6 +80,7 @@ export default function Notes() {
       try {
         const upd = await api.put<QuickNote>(`/api/notes/${id}`, body);
         setNotes((ns) => ns.map((n) => (n.id === id ? upd : n)));
+        setSavedAt(Date.now());
       } finally { setSaving(false); }
     };
     if (timer.current) clearTimeout(timer.current);
@@ -155,17 +176,21 @@ export default function Notes() {
       <section className="flex-1 overflow-y-auto">
         {selected ? (
           <div className="mx-auto max-w-3xl px-8 py-6">
-            <div className="mb-2 flex items-center justify-between text-sm opacity-60">
-              <div className="truncate">📓 {nbName(selected.notebook_id)} <span className="opacity-40">›</span> {selected.title || "Untitled"}</div>
+            {/* breadcrumb + actions */}
+            <div className="mb-1 flex items-center justify-between text-sm">
+              <div className="flex min-w-0 items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                <span>📓</span><span className="font-medium">{nbName(selected.notebook_id)}</span>
+                <span className="opacity-40">›</span>
+                <span className="truncate text-slate-700 dark:text-slate-200">{selected.title || "Untitled"}</span>
+              </div>
               <div className="flex items-center gap-3">
-                {saving && <span className="text-xs opacity-50">Saving…</span>}
                 <div className="relative">
                   <button title="Reminder" onClick={() => setReminderOpen((o) => !o)}
-                    className={selected.due_date ? "text-brand" : ""}>⏰</button>
+                    className={selected.due_date ? "text-brand" : "opacity-70 hover:opacity-100"}>⏰</button>
                   {reminderOpen && (
                     <>
                       <div className="fixed inset-0 z-20" onClick={() => setReminderOpen(false)} />
-                      <div className="absolute right-0 top-full z-30 mt-2 w-80 rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-700 dark:bg-[#0d1117]">
+                      <div className="absolute right-0 top-full z-30 mt-2 w-80 rounded-xl border border-slate-200 bg-white p-4 shadow-2xl ring-1 ring-brand/20 dark:border-slate-700 dark:bg-[#1c2333]">
                         <div className="mb-3 flex items-center justify-between">
                           <span className="font-medium opacity-80">⏰ Reminder</span>
                           {selected.due_date && (
@@ -173,14 +198,18 @@ export default function Notes() {
                               onClick={() => patch({ due_date: null, due_time: null, repeat: null })}>Clear</button>
                           )}
                         </div>
+                        <label className="label">Date</label>
                         <input className="input mb-2 w-full" type="date" value={selected.due_date || ""}
                           onChange={(e) => patch({ due_date: e.target.value || null })} />
+                        <label className="label">Time</label>
                         <input className="input mb-2 w-full" type="time" value={selected.due_time || ""}
                           onChange={(e) => patch({ due_time: e.target.value || null })} />
+                        <label className="label">Repeat</label>
                         <select className="input mb-2 w-full" value={selected.repeat || ""}
                           onChange={(e) => patch({ repeat: e.target.value || null })}>
                           {REPEATS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                         </select>
+                        <label className="label">Notebook</label>
                         <select className="input w-full" value={selected.notebook_id ?? ""}
                           onChange={(e) => patch({ notebook_id: e.target.value ? Number(e.target.value) : null })}
                           title="Move to notebook">
@@ -190,37 +219,62 @@ export default function Notes() {
                     </>
                   )}
                 </div>
-                <button title="Favorite" onClick={() => patch({ is_favorite: !selected.is_favorite })}>{selected.is_favorite ? "★" : "☆"}</button>
-                <button title="Delete" onClick={del}>🗑</button>
+                <button title="Favorite" className="text-amber-500"
+                  onClick={() => patch({ is_favorite: !selected.is_favorite })}>{selected.is_favorite ? "★" : "☆"}</button>
+                <button title="Delete" className="opacity-70 hover:opacity-100" onClick={del}>🗑</button>
               </div>
             </div>
-            <div className="mb-4 text-xs opacity-40">Edited {fmtDate(selected.updated_at)}</div>
 
-            <input className="mb-3 w-full bg-transparent text-3xl font-bold outline-none placeholder:opacity-30"
-              placeholder="Title" value={draft.title} onChange={(e) => onTitle(e.target.value)} />
+            {/* edited + autosave status */}
+            <div className="mb-5 flex items-center gap-2 text-xs text-slate-400">
+              <span>Edited {fmtDate(selected.updated_at)}</span>
+              {(saving || savedAt) && (
+                <>
+                  <span>•</span>
+                  {saving
+                    ? <span>Saving…</span>
+                    : <span className="flex items-center gap-1 text-emerald-500">Auto saved <span>✓</span></span>}
+                </>
+              )}
+            </div>
+
+            {/* title */}
+            <input className="mb-4 w-full bg-transparent text-4xl font-bold outline-none placeholder:opacity-25"
+              placeholder="Untitled" value={draft.title} onChange={(e) => onTitle(e.target.value)} />
 
             {/* tags */}
-            <div className="mb-4 flex flex-wrap items-center gap-2">
+            <div className="mb-5 flex flex-wrap items-center gap-2">
               {selected.tags.map((t) => (
-                <span key={t} className="flex items-center gap-1 rounded-full bg-slate-200 px-2 py-0.5 text-xs dark:bg-slate-700">
-                  🏷 {t}<button className="opacity-60 hover:opacity-100" onClick={() => removeTag(t)}>×</button>
+                <span key={t} className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${tagColor(t)}`}>
+                  {t}<button className="opacity-50 hover:opacity-100" onClick={() => removeTag(t)}>×</button>
                 </span>
               ))}
-              <input className="w-24 border-b border-dashed border-slate-400 bg-transparent text-xs outline-none"
-                placeholder="+ add tag"
+              <input className="w-28 rounded-full border border-dashed border-slate-300 bg-transparent px-2.5 py-1 text-xs outline-none focus:border-brand dark:border-slate-600"
+                placeholder="🔔 Add tag"
                 onKeyDown={(e) => { if (e.key === "Enter") { addTag((e.target as HTMLInputElement).value); (e.target as HTMLInputElement).value = ""; } }} />
             </div>
 
+            {/* body */}
+            <div className="rounded-2xl border border-slate-200 bg-white/50 p-5 dark:border-slate-800 dark:bg-[#161b22]/50">
+              <textarea className="min-h-[42vh] w-full resize-none bg-transparent text-base leading-relaxed outline-none placeholder:opacity-30"
+                placeholder="Start writing…" value={draft.note_text} onChange={(e) => onBody(e.target.value)} />
+            </div>
+
+            {/* reminder card */}
             {selected.due_date && (
-              <div className="mb-4 inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-1 text-sm dark:bg-slate-800/60">
-                <span className="opacity-70">⏰ {selected.due_date}{selected.due_time ? ` · ${selected.due_time}` : ""}
-                  {selected.repeat ? ` · ${selected.repeat}` : ""}</span>
-                <button className="opacity-50 hover:opacity-100" onClick={() => setReminderOpen(true)}>edit</button>
+              <div className="mt-5 rounded-2xl border border-slate-200 p-4 dark:border-slate-800 dark:bg-[#161b22]/60">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="flex items-center gap-2 font-semibold"><span className="text-amber-500">⏰</span> Reminder</span>
+                  <button className="btn-ghost !px-3 !py-1 !text-xs" onClick={() => setReminderOpen(true)}>Edit Reminder</button>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-slate-500 dark:text-slate-300">
+                  <span className="flex items-center gap-1.5">📅 {fmtReminderDate(selected.due_date)}</span>
+                  {selected.due_time && <span className="flex items-center gap-1.5">🕐 {fmt12h(selected.due_time)}</span>}
+                  <span className="flex items-center gap-1.5">🔁 Repeat: {selected.repeat ? selected.repeat[0].toUpperCase() + selected.repeat.slice(1) : "None"}</span>
+                  <span className="flex items-center gap-1.5 text-emerald-500">🔔 Enabled</span>
+                </div>
               </div>
             )}
-
-            <textarea className="min-h-[55vh] w-full resize-none bg-transparent text-base leading-relaxed outline-none placeholder:opacity-30"
-              placeholder="Start writing…" value={draft.note_text} onChange={(e) => onBody(e.target.value)} />
           </div>
         ) : (
           <div className="grid h-full place-items-center text-center opacity-50">
