@@ -7,19 +7,21 @@ import AppSwitcher from "./AppSwitcher";
 import { APP_ENV, APP_VERSION } from "../platform/apps";
 
 const NAV = [
-  { to: "/", label: "Dashboard", icon: "🏠", end: true },
+  { to: "/", label: "Home", icon: "🏠", end: true },
+  { to: "/notes", label: "Notes", icon: "📝" },
+  { to: "/notebooks", label: "Notebooks", icon: "📚" },
   { to: "/reminders", label: "Reminders", icon: "⏰" },
   { to: "/calendar", label: "Calendar", icon: "🗓️" },
   { to: "/notifications", label: "Notifications", icon: "🔔" },
-  { to: "/notes", label: "Quick Notes", icon: "📝" },
-  { to: "/assistant", label: "AI Assistant", icon: "🤖" },
+  { to: "/assistant", label: "AI Copilot", icon: "🤖" },
   { to: "/settings", label: "Settings", icon: "⚙️" },
 ];
 
 // Per-route browser-tab titles → "ArtikNotifier — <Page>"
 const TITLES: Record<string, string> = {
-  "/": "Dashboard", "/reminders": "Reminders", "/calendar": "Calendar",
-  "/notifications": "Notifications", "/notes": "Quick Notes", "/assistant": "AI Assistant",
+  "/": "Home", "/notes": "Notes", "/notebooks": "Notebooks",
+  "/reminders": "Reminders", "/calendar": "Calendar",
+  "/notifications": "Notifications", "/assistant": "AI Copilot",
   "/settings": "Settings", "/admin": "Admin",
 };
 
@@ -79,7 +81,7 @@ export default function Layout() {
         <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-200 bg-white/80 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-[#0d1117]/80">
           <button className="md:hidden" onClick={() => setOpen(true)}>☰</button>
           <AppSwitcher />
-          <button className="btn-primary !px-3 !py-1.5" onClick={() => nav("/reminders/new")}>+ New Reminder</button>
+          <button className="btn-primary !px-3 !py-1.5" onClick={() => nav("/notes")}>+ New Note</button>
           <div className="ml-auto flex items-center gap-3">
             <NotificationBell />
             <button className="text-lg" title="Toggle theme" onClick={toggle}>{theme === "dark" ? "🌙" : "☀️"}</button>

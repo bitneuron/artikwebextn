@@ -40,13 +40,17 @@ export interface Reminder {
 export interface QuickNote {
   id: number;
   user_id: number;
+  notebook_id: number | null;
   title: string | null;
   note_text: string;
   category: string;
   priority: string;
   status: string;
+  is_favorite: boolean;
+  pinned: boolean;
   due_date: string | null;
   due_time: string | null;
+  repeat: string | null;
   reminder_id: number | null;
   archived: boolean;
   deleted: boolean;

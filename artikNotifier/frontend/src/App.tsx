@@ -12,6 +12,7 @@ import ReminderDetail from "./pages/ReminderDetail";
 import CalendarPage from "./pages/Calendar";
 import Notifications from "./pages/Notifications";
 import QuickNotes from "./pages/QuickNotes";
+import Notebooks from "./pages/Notebooks";
 import Assistant from "./pages/Assistant";
 import Admin from "./pages/Admin";
 import Settings from "./pages/Settings";
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/notes" element={<QuickNotes />} />
+        <Route path="/notebooks" element={<Notebooks />} />
         <Route path="/assistant" element={<Assistant />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/settings" element={<Settings />} />

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../api/client";
 import type { NoteOptions, QuickNote } from "../api/types";
 
+interface Notebook { id: number; name: string; icon: string | null; is_default: boolean; }
+
 const EMPTY_FORM = { title: "", note_text: "", category: "Personal", priority: "medium",
-  due_date: "", due_time: "", tags: "" };
+  due_date: "", due_time: "", tags: "", notebook_id: "", repeat: "", is_favorite: false };
 
 type Form = typeof EMPTY_FORM;
 
@@ -21,6 +23,9 @@ function payloadFrom(f: Form) {
     due_date: f.due_date || null,
     due_time: f.due_time || null,
     tags: tagsToArray(f.tags),
+    notebook_id: f.notebook_id ? Number(f.notebook_id) : null,
+    repeat: f.repeat || null,
+    is_favorite: f.is_favorite,
   };
 }
 
@@ -42,15 +47,22 @@ export default function QuickNotes() {
   const [busy, setBusy] = useState(false);
   const captureRef = useRef<HTMLTextAreaElement>(null);
   const nav = useNavigate();
+  const [searchParams] = useSearchParams();
+  const notebookFilter = searchParams.get("notebook_id") || "";
+  const [notebooks, setNotebooks] = useState<Notebook[]>([]);
+  const activeNotebook = notebooks.find((n) => String(n.id) === notebookFilter);
 
   function flash(msg: string) { setToast(msg); setTimeout(() => setToast(null), 3000); }
 
   async function load() {
     const params = new URLSearchParams();
     Object.entries(q).forEach(([k, v]) => v && params.set(k, v));
+    if (notebookFilter) params.set("notebook_id", notebookFilter);
     setItems(await api.get<QuickNote[]>(`/api/notes?${params.toString()}`));
   }
   useEffect(() => { api.get<NoteOptions>("/api/notes/options").then(setOptions); }, []);
+  useEffect(() => { api.get<Notebook[]>("/api/notebooks").then(setNotebooks); }, []);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [notebookFilter]);
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [q]);
 
   async function create(e?: React.FormEvent) {
@@ -114,6 +126,11 @@ export default function QuickNotes() {
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
             <input className="input col-span-2 sm:col-span-3 lg:col-span-2" placeholder="Title (optional)"
               value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            <select className="input" value={form.notebook_id || notebookFilter}
+              onChange={(e) => setForm({ ...form, notebook_id: e.target.value })} title="Notebook">
+              <option value="">📓 Notebook…</option>
+              {notebooks.map((nb) => <option key={nb.id} value={nb.id}>{(nb.icon || "📓") + " " + nb.name}</option>)}
+            </select>
             <select className="input" value={form.category}
               onChange={(e) => setForm({ ...form, category: e.target.value })}>
               {options?.categories.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -126,7 +143,13 @@ export default function QuickNotes() {
               onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
             <input className="input" type="time" value={form.due_time}
               onChange={(e) => setForm({ ...form, due_time: e.target.value })} />
-            <input className="input col-span-2 sm:col-span-3 lg:col-span-6" placeholder="Tags (comma separated)"
+            <select className="input" value={form.repeat}
+              onChange={(e) => setForm({ ...form, repeat: e.target.value })} title="Repeat">
+              <option value="">No repeat</option>
+              <option value="daily">Daily</option><option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option><option value="yearly">Yearly</option>
+            </select>
+            <input className="input col-span-2 sm:col-span-3 lg:col-span-5" placeholder="Tags (comma separated)"
               value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} />
           </div>
         )}
@@ -238,7 +261,11 @@ function EditModal({ note, options, onClose, onSaved }: {
     title: note.title ?? "", note_text: note.note_text, category: note.category,
     priority: note.priority, due_date: note.due_date ?? "", due_time: note.due_time ?? "",
     tags: note.tags.join(", "),
+    notebook_id: note.notebook_id ? String(note.notebook_id) : "",
+    repeat: note.repeat ?? "", is_favorite: note.is_favorite ?? false,
   });
+  const [notebooks, setNotebooks] = useState<Notebook[]>([]);
+  useEffect(() => { api.get<Notebook[]>("/api/notebooks").then(setNotebooks); }, []);
   const [busy, setBusy] = useState(false);
 
   async function save(e: React.FormEvent) {
@@ -258,6 +285,11 @@ function EditModal({ note, options, onClose, onSaved }: {
         <textarea className="input min-h-[120px] w-full" value={f.note_text}
           onChange={(e) => setF({ ...f, note_text: e.target.value })} required />
         <div className="grid grid-cols-2 gap-2">
+          <select className="input col-span-2" value={f.notebook_id}
+            onChange={(e) => setF({ ...f, notebook_id: e.target.value })} title="Notebook">
+            <option value="">📓 Notebook…</option>
+            {notebooks.map((nb) => <option key={nb.id} value={nb.id}>{(nb.icon || "📓") + " " + nb.name}</option>)}
+          </select>
           <select className="input" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })}>
             {options?.categories.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
@@ -268,6 +300,16 @@ function EditModal({ note, options, onClose, onSaved }: {
             onChange={(e) => setF({ ...f, due_date: e.target.value })} />
           <input className="input" type="time" value={f.due_time}
             onChange={(e) => setF({ ...f, due_time: e.target.value })} />
+          <select className="input col-span-2" value={f.repeat}
+            onChange={(e) => setF({ ...f, repeat: e.target.value })} title="Repeat reminder">
+            <option value="">No repeat</option>
+            <option value="daily">Daily</option><option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option><option value="yearly">Yearly</option>
+          </select>
+          <label className="col-span-2 flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={f.is_favorite}
+              onChange={(e) => setF({ ...f, is_favorite: e.target.checked })} /> ⭐ Favorite
+          </label>
         </div>
         <input className="input w-full" placeholder="Tags (comma separated)" value={f.tags}
           onChange={(e) => setF({ ...f, tags: e.target.value })} />
