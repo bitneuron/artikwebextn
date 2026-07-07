@@ -23,6 +23,7 @@ export default function Notes() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [reminderOpen, setReminderOpen] = useState(false);
 
   const selected = notes.find((n) => n.id === selectedId) || null;
   const allTags = useMemo(() => Array.from(new Set(notes.flatMap((n) => n.tags))).sort(), [notes]);
@@ -46,6 +47,7 @@ export default function Notes() {
   useEffect(() => {
     if (selected) setDraft({ title: selected.title ?? "", note_text: selected.note_text });
     else setDraft({ title: "", note_text: "" });
+    setReminderOpen(false);
     // eslint-disable-next-line
   }, [selectedId]);
 
@@ -157,6 +159,37 @@ export default function Notes() {
               <div className="truncate">📓 {nbName(selected.notebook_id)} <span className="opacity-40">›</span> {selected.title || "Untitled"}</div>
               <div className="flex items-center gap-3">
                 {saving && <span className="text-xs opacity-50">Saving…</span>}
+                <div className="relative">
+                  <button title="Reminder" onClick={() => setReminderOpen((o) => !o)}
+                    className={selected.due_date ? "text-brand" : ""}>⏰</button>
+                  {reminderOpen && (
+                    <>
+                      <div className="fixed inset-0 z-20" onClick={() => setReminderOpen(false)} />
+                      <div className="absolute right-0 top-full z-30 mt-2 w-80 rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-700 dark:bg-[#0d1117]">
+                        <div className="mb-3 flex items-center justify-between">
+                          <span className="font-medium opacity-80">⏰ Reminder</span>
+                          {selected.due_date && (
+                            <button className="text-xs text-red-500"
+                              onClick={() => patch({ due_date: null, due_time: null, repeat: null })}>Clear</button>
+                          )}
+                        </div>
+                        <input className="input mb-2 w-full" type="date" value={selected.due_date || ""}
+                          onChange={(e) => patch({ due_date: e.target.value || null })} />
+                        <input className="input mb-2 w-full" type="time" value={selected.due_time || ""}
+                          onChange={(e) => patch({ due_time: e.target.value || null })} />
+                        <select className="input mb-2 w-full" value={selected.repeat || ""}
+                          onChange={(e) => patch({ repeat: e.target.value || null })}>
+                          {REPEATS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                        </select>
+                        <select className="input w-full" value={selected.notebook_id ?? ""}
+                          onChange={(e) => patch({ notebook_id: e.target.value ? Number(e.target.value) : null })}
+                          title="Move to notebook">
+                          {notebooks.map((nb) => <option key={nb.id} value={nb.id}>{(nb.icon || "📓") + " " + nb.name}</option>)}
+                        </select>
+                      </div>
+                    </>
+                  )}
+                </div>
                 <button title="Favorite" onClick={() => patch({ is_favorite: !selected.is_favorite })}>{selected.is_favorite ? "★" : "☆"}</button>
                 <button title="Delete" onClick={del}>🗑</button>
               </div>
@@ -178,22 +211,13 @@ export default function Notes() {
                 onKeyDown={(e) => { if (e.key === "Enter") { addTag((e.target as HTMLInputElement).value); (e.target as HTMLInputElement).value = ""; } }} />
             </div>
 
-            {/* integrated reminder */}
-            <div className="mb-5 flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800/50">
-              <span className="opacity-60">⏰ Reminder</span>
-              <input className="input !py-1" type="date" value={selected.due_date || ""}
-                onChange={(e) => patch({ due_date: e.target.value || null })} />
-              <input className="input !py-1" type="time" value={selected.due_time || ""}
-                onChange={(e) => patch({ due_time: e.target.value || null })} />
-              <select className="input !py-1" value={selected.repeat || ""}
-                onChange={(e) => patch({ repeat: e.target.value || null })}>
-                {REPEATS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-              </select>
-              <select className="input !py-1" value={selected.notebook_id ?? ""}
-                onChange={(e) => patch({ notebook_id: e.target.value ? Number(e.target.value) : null })} title="Move to notebook">
-                {notebooks.map((nb) => <option key={nb.id} value={nb.id}>{(nb.icon || "📓") + " " + nb.name}</option>)}
-              </select>
-            </div>
+            {selected.due_date && (
+              <div className="mb-4 inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-1 text-sm dark:bg-slate-800/60">
+                <span className="opacity-70">⏰ {selected.due_date}{selected.due_time ? ` · ${selected.due_time}` : ""}
+                  {selected.repeat ? ` · ${selected.repeat}` : ""}</span>
+                <button className="opacity-50 hover:opacity-100" onClick={() => setReminderOpen(true)}>edit</button>
+              </div>
+            )}
 
             <textarea className="min-h-[55vh] w-full resize-none bg-transparent text-base leading-relaxed outline-none placeholder:opacity-30"
               placeholder="Start writing…" value={draft.note_text} onChange={(e) => onBody(e.target.value)} />
