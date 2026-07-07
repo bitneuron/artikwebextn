@@ -913,6 +913,31 @@ async def ibkr_analyze(request: Request):
             "positions": len(holdings), "total_value": tv, "total_gain": tg}
 
 
+def _ibkr_metric(summary: dict, *keys):
+    for k in keys:
+        v = summary.get(k) if isinstance(summary, dict) else None
+        if isinstance(v, dict):
+            v = v.get("amount")
+        if v not in (None, ""):
+            return _num(v)
+    return None
+
+
+@app.get("/api/ibkr/accounts/{account_id}/summary")
+def ibkr_account_summary(account_id: str):
+    try:
+        s = _ibkr().summary(account_id)
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": str(e)}, status_code=502)
+    return {
+        "net_liquidation": _ibkr_metric(s, "netliquidation", "netLiquidation"),
+        "buying_power": _ibkr_metric(s, "buyingpower", "buyingPower", "availablefunds"),
+        "cash": _ibkr_metric(s, "totalcashvalue", "settledcash", "cashbalance", "totalCashValue"),
+        "unrealized_pnl": _ibkr_metric(s, "unrealizedpnl", "unrealizedPnl"),
+        "realized_pnl": _ibkr_metric(s, "realizedpnl", "realizedPnl"),
+    }
+
+
 @app.get("/api/ibkr/quote")
 def ibkr_quote(symbol: str, sec_type: str = "STK"):
     cl = _ibkr()

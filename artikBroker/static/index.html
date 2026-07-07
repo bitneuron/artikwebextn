@@ -227,6 +227,40 @@
     border-radius:999px; padding:5px 11px; font-size:12px; cursor:pointer; white-space:nowrap; }
   .page-search .ps-chips .chip:hover { border-color:var(--acc); color:var(--acc); }
   @media (max-width:640px){ .page-search .ps-input { min-width:0; width:100%; } .page-search .ps-row .cta-sm { flex:1; } }
+  /* ── IBKR brokerage page (professional card layout) ── */
+  .ibk-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
+  .ibk-acct-name { font-size:26px; font-weight:800; display:flex; align-items:center; gap:10px; }
+  .ibk-pill { font-size:11px; font-weight:700; letter-spacing:.5px; background:var(--panel2); border:1px solid var(--line); border-radius:6px; padding:3px 8px; color:var(--mut); }
+  .ibk-sub { color:var(--mut); font-size:13px; margin-top:4px; }
+  .ibk-actions { display:flex; gap:10px; flex-wrap:wrap; }
+  .ibk-action { display:flex; align-items:center; gap:11px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 16px; cursor:pointer; min-width:158px; transition:border-color .12s; }
+  .ibk-action:hover { border-color:var(--acc); }
+  .ibk-action .t { font-weight:700; font-size:14px; } .ibk-action .s { color:var(--mut); font-size:11.5px; margin-top:1px; }
+  .ibk-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)) minmax(0,1.15fr); gap:12px; margin-bottom:16px; }
+  .ibk-metric { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  .ibk-metric .l { color:var(--mut); font-size:12.5px; } .ibk-metric .v { font-size:24px; font-weight:800; margin:6px 0 2px; } .ibk-metric .s { color:var(--mut); font-size:12px; }
+  .ibk-card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin-bottom:16px; }
+  .ibk-card-title { display:flex; align-items:center; gap:9px; font-size:18px; font-weight:700; }
+  .ibk-card-sub { color:var(--mut); font-size:13px; margin:4px 0 0 33px; }
+  .ibk-seg { display:inline-flex; background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:3px; }
+  .ibk-seg button { border:0; background:transparent; color:var(--mut); padding:8px 22px; border-radius:8px; font-weight:700; cursor:pointer; font-size:14px; }
+  .ibk-seg button.buy.on { background:rgba(52,211,153,.16); color:#34d399; } .ibk-seg button.sell.on { background:rgba(248,113,113,.16); color:#f87171; }
+  .ibk-form { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)) auto auto; gap:12px; align-items:end; margin-top:14px; }
+  .ibk-field label { display:block; color:var(--mut); font-size:12px; margin-bottom:6px; }
+  .ibk-field input, .ibk-field select { width:100%; background:var(--bg); border:1px solid var(--line); color:var(--txt); border-radius:9px; padding:11px 12px; font-size:14px; }
+  .ibk-btn-quote { background:var(--panel2); border:1px solid var(--line); color:var(--txt); border-radius:9px; padding:11px 18px; font-weight:700; cursor:pointer; }
+  .ibk-btn-preview { background:linear-gradient(90deg,var(--acc),var(--acc2)); border:0; color:#fff; border-radius:9px; padding:11px 20px; font-weight:700; cursor:pointer; }
+  .ibk-tabs { display:flex; gap:24px; border-bottom:1px solid var(--line); margin:14px 0 0; }
+  .ibk-tab { padding:9px 2px 11px; color:var(--mut); cursor:pointer; border-bottom:2px solid transparent; font-weight:600; font-size:14px; }
+  .ibk-tab.on { color:var(--txt); border-bottom-color:var(--acc); }
+  .ibk-otable { width:100%; border-collapse:collapse; margin-top:6px; }
+  .ibk-otable th { text-align:left; color:var(--mut); font-size:11px; letter-spacing:.5px; text-transform:uppercase; padding:12px; border-bottom:1px solid var(--line); }
+  .ibk-otable td { padding:14px 12px; border-bottom:1px solid var(--line); font-size:14px; }
+  .ibk-otable tr:last-child td { border-bottom:0; }
+  .ibk-badge { display:inline-block; font-size:12px; font-weight:700; border-radius:6px; padding:3px 10px; background:rgba(59,130,246,.16); color:#7aa2ff; }
+  .ibk-search-box { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:0 14px; display:flex; align-items:center; gap:6px; }
+  .ibk-search-box input { background:transparent; border:0; color:var(--txt); padding:14px 4px; width:100%; outline:none; font-size:14px; }
+  @media (max-width:1000px){ .ibk-metrics { grid-template-columns:repeat(2,1fr); } .ibk-form { grid-template-columns:1fr 1fr; } }
   select { background:var(--panel); color:var(--txt); border:1px solid var(--line);
            border-radius:8px; padding:8px 12px; font-size:14px; }
   .pf-meta { color:var(--mut); font-size:12.5px; }
@@ -4320,44 +4354,66 @@ function ibkrSelectAccount(acct){
   localStorage.setItem('ib_acct_sel', acct);
   const box=$('#ib-accts'); if(!box) return;
   const key=etEsc(acct);
-  box.innerHTML = `<div class="card" style="margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
-        <div><div style="font-weight:600">Account ${key}</div><div class="pf-meta">Interactive Brokers · ${etEsc((_ibAccounts.find(a=>a.accountId===acct)||{}).accountType||'')}</div></div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="ghost" onclick="ibkrDetail('${key}')">🔄 Refresh holdings</button>
-          <button class="ghost" onclick="ibkrAskCopilot('${key}')">🤖 Ask Copilot</button>
-          <button class="ex-btn" onclick="ibkrAnalyze('${key}')">📊 Analyze Portfolio</button>
-        </div>
+  const type=((_ibAccounts.find(a=>a.accountId===acct)||{}).accountType)||'INDIVIDUAL';
+  box.innerHTML = `
+    <div class="ibk-head">
+      <div>
+        <div class="ibk-acct-name">Account ${key} <span class="ibk-pill">${etEsc(type.toUpperCase())}</span></div>
+        <div class="ibk-sub">Interactive Brokers · ${etEsc(type.charAt(0)+type.slice(1).toLowerCase())} Account</div>
       </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;flex-wrap:wrap;gap:8px">
-        <span style="font-weight:600" class="up-label">📈 Your holdings</span>
-        <input id="ib-hold-search-${key}" placeholder="Search ticker…" style="width:150px" oninput="ibkrFilterHoldings('${key}', this.value)">
+      <div class="ibk-actions">
+        <div class="ibk-action" onclick="ibkrDetail('${key}');ibkrLoadSummary('${key}')"><span style="font-size:20px">🔄</span><div><div class="t">Refresh holdings</div><div class="s">Update your positions</div></div></div>
+        <div class="ibk-action" onclick="ibkrAskCopilot('${key}')"><span style="font-size:20px">🤖</span><div><div class="t">Ask Copilot</div><div class="s">Ask anything</div></div></div>
+        <div class="ibk-action" onclick="ibkrAnalyze('${key}')"><span style="font-size:20px">📊</span><div><div class="t">Analyze Portfolio</div><div class="s">Deep portfolio insights</div></div></div>
       </div>
-      <div id="ib-detail-${key}"><div class="spin">Loading holdings…</div></div>
-    </div>${ibkrTradeCard(key)}
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <span class="up-label" style="font-weight:600">📑 Orders</span>
-        <button class="ghost" onclick="ibkrLoadOrders('${key}')">🔄 Refresh orders</button>
+    </div>
+    <div class="ibk-metrics">
+      <div class="ibk-metric"><div class="l">Net Liquidation</div><div class="v" id="ibm-netliq-${key}">—</div><div class="s">Day change</div></div>
+      <div class="ibk-metric"><div class="l">Buying Power</div><div class="v" id="ibm-bp-${key}">—</div><div class="s">Available</div></div>
+      <div class="ibk-metric"><div class="l">Cash</div><div class="v" id="ibm-cash-${key}">—</div><div class="s">Settled Cash</div></div>
+      <div class="ibk-metric"><div class="l">Unrealized P&amp;L</div><div class="v" id="ibm-pnl-${key}">—</div><div class="s" id="ibm-pnlpct-${key}">—</div></div>
+      <div class="ibk-search-box"><span style="color:var(--mut)">🔎</span><input id="ib-hold-search-${key}" placeholder="Search ticker…" oninput="ibkrFilterHoldings('${key}', this.value)"></div>
+    </div>
+    <div id="ib-holdcard-${key}"></div>
+    ${ibkrTradeCard(key)}
+    <div class="ibk-card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span class="ibk-card-title">📋 Orders</span>
+        <button class="ibk-btn-quote" onclick="ibkrLoadOrders('${key}')">🔄 Refresh orders</button>
       </div>
       <div id="ib-orders-${key}"><div class="spin">Loading orders…</div></div>
     </div>`;
+  ibkrLoadSummary(acct);
   ibkrDetail(acct);
   ibkrLoadOrders(acct);
 }
 window._ibScored = window._ibScored || {};
+async function ibkrLoadSummary(acct){
+  const key=etEsc(acct);
+  let d; try { d=await (await fetch('/api/ibkr/accounts/'+encodeURIComponent(acct)+'/summary')).json(); } catch(e){ return; }
+  if(!d || d.error) return;
+  const money=v=>v==null?'$0.00':'$'+Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  const set=(id,v)=>{ const el=$('#'+id); if(el) el.textContent=v; };
+  set('ibm-netliq-'+key, money(d.net_liquidation));
+  set('ibm-bp-'+key, money(d.buying_power));
+  set('ibm-cash-'+key, money(d.cash));
+  const pnl=d.unrealized_pnl; set('ibm-pnl-'+key, money(pnl));
+  const pel=$('#ibm-pnl-'+key); if(pel) pel.style.color = (pnl==null)?'':(pnl>=0?'#34d399':'#f87171');
+  const nl=d.net_liquidation, pct=(pnl!=null&&nl)?(pnl/nl*100):null;
+  set('ibm-pnlpct-'+key, pct!=null?((pct>=0?'+':'')+pct.toFixed(2)+'%'):'—');
+  const pctEl=$('#ibm-pnlpct-'+key); if(pctEl) pctEl.style.color=(pct==null)?'':(pct>=0?'#34d399':'#f87171');
+}
 async function ibkrDetail(acct){
-  const box=$('#ib-detail-'+etEsc(acct)); if(!box) return;
-  box.innerHTML='<div class="spin">Loading holdings…</div>';
+  const box=$('#ib-holdcard-'+etEsc(acct)); if(!box) return;
+  box.innerHTML='<div class="ibk-card"><div class="spin">Loading holdings…</div></div>';
   let d;
   try { d=await (await fetch('/api/ibkr/accounts/'+encodeURIComponent(acct)+'/portfolio')).json(); }
-  catch(e){ box.innerHTML='<div class="err">'+etEsc(e)+'</div>'; return; }
-  if(d.error){ box.innerHTML='<div class="err">'+etEsc(d.error)+'</div>'; return; }
+  catch(e){ box.innerHTML='<div class="ibk-card"><div class="err">'+etEsc(e)+'</div></div>'; return; }
+  if(d.error){ box.innerHTML='<div class="ibk-card"><div class="err">'+etEsc(d.error)+'</div></div>'; return; }
   const holdings=d.holdings||[];
   window._ibHoldings[acct]={holdings, total_value:d.total_value, total_gain:d.total_gain};
-  if(!holdings.length){ window._ibScored[acct]=[]; box.innerHTML='<div class="pf-meta" style="margin-top:8px">No open positions in this account.</div>'; return; }
-  // Score the holdings with the Artik engine (same as the Portfolio page).
-  box.innerHTML='<div class="spin">Scoring '+holdings.length+' holding'+(holdings.length===1?'':'s')+' with the Artik engine…</div>';
+  if(!holdings.length){ window._ibScored[acct]=[]; box.innerHTML=''; return; }   // no card when empty (matches design)
+  box.innerHTML='<div class="ibk-card"><div class="spin">Scoring '+holdings.length+' holdings with the Artik engine…</div></div>';
   let scored=[];
   try { const a=await (await fetch('/api/analyze?symbols='+encodeURIComponent(holdings.map(h=>h.ticker).join(',')))).json(); scored=a.results||[]; }
   catch(e){}
@@ -4371,39 +4427,34 @@ async function ibkrDetail(acct){
   ibkrRenderHoldings(acct, ($('#ib-hold-search-'+etEsc(acct))||{}).value||'');
 }
 function ibkrRenderHoldings(acct, q){
-  const box=$('#ib-detail-'+etEsc(acct)); if(!box) return;
+  const box=$('#ib-holdcard-'+etEsc(acct)); if(!box) return;
   const rows=window._ibScored[acct]||[];
-  if(!rows.length){ box.innerHTML='<div class="pf-meta" style="margin-top:8px">No open positions in this account.</div>'; return; }
+  if(!rows.length){ box.innerHTML=''; return; }
   const money=v=>v==null?'—':'$'+Number(v).toLocaleString(undefined,{maximumFractionDigits:0});
   q=(q||'').trim().toUpperCase(); const view=q?rows.filter(r=>(r.ticker||'').toUpperCase().includes(q)):rows;
   const sc=rows.map(r=>r.score).filter(x=>x!=null);
   const avg=sc.length?Math.round(sc.reduce((a,b)=>a+b,0)/sc.length):null;
-  let tv=0,tc=0,tp=0; rows.forEach(r=>{tv+=r.value||0;tc+=r.cost_basis||0;tp+=r.gain||0;});
-  const cnt=s=>rows.filter(r=>r.status===s).length;
-  const exec=`<div class="exec" style="margin:10px 0">
-    <div class="estat ring">${gring(avg)}<div><div class="lbl">Health Score</div><div class="sub">${sc.length} scored</div></div></div>
-    <div class="estat"><div class="lbl">Market Value</div><div class="big">${money(tv)}</div><div class="sub">cost ${money(tc)}</div></div>
-    <div class="estat"><div class="lbl">Total Gain</div><div class="big ${tp>=0?'pos':'neg'}">${tp>=0?'+':'−'}$${Math.abs(Math.round(tp)).toLocaleString()}</div><div class="sub ${tp>=0?'pos':'neg'}">${tc?((tp/tc*100)>=0?'+':'')+(tp/tc*100).toFixed(1)+'%':''}</div></div>
-    <div class="estat"><div class="lbl">Strong · BUY</div><div class="big pos">${cnt('BUY')}</div><div class="sub">of ${rows.length}</div></div>
-    <div class="estat"><div class="lbl">Hold</div><div class="big" style="color:var(--hold)">${cnt('HOLD')}</div><div class="sub">monitor</div></div>
-    <div class="estat"><div class="lbl">Sell</div><div class="big neg">${cnt('SELL')}</div><div class="sub">review</div></div>
-  </div>`;
-  const rowHtml=(r,i)=>`<tr class="row">
-    <td>${i+1}</td>
-    <td class="tick" data-fav-ticker="${etEsc(r.ticker)}">${favStar(r.ticker,'ibkr')} ${etEsc(r.ticker)}</td>
+  const head=`<tr><th>Symbol</th><th>Sector</th><th>Qty</th><th>Avg Cost</th><th>Price</th><th>Value</th><th>Score</th><th>Status</th><th>Gain</th><th>Action</th></tr>`;
+  const row=r=>{ const avgc=(r.qty&&r.cost_basis!=null)?r.cost_basis/r.qty:null; return `<tr>
+    <td>${favStar(r.ticker,'ibkr')} <b>${etEsc(r.ticker)}</b></td>
     <td class="muted" style="font-size:12px">${etEsc(r.sector||'—')}</td>
-    <td class="num">${etEsc(r.qty)}</td>
-    <td class="num">${money(r.cost_basis)}</td>
-    <td class="num">${r.price!=null?'$'+r.price.toLocaleString():'—'}</td>
-    <td class="num">${money(r.value)}</td>
-    <td class="num">${r.score!=null?'<b>'+r.score+'</b>':'—'}</td>
+    <td>${etEsc(r.qty)}</td>
+    <td>${money(avgc)}</td>
+    <td>${r.price!=null?'$'+r.price.toLocaleString():'—'}</td>
+    <td>${money(r.value)}</td>
+    <td>${r.score!=null?'<b style="color:'+scoreColor(r.score)+'">'+r.score+'</b>':'—'}</td>
     <td>${r.status?statusBadge(r.status):'—'}</td>
-    <td class="num ${r.gain>=0?'pos':'neg'}">${r.gain!=null?(r.gain>=0?'+':'−')+'$'+Math.abs(Math.round(r.gain)).toLocaleString()+(r.gain_pct!=null?' ('+(r.gain_pct>=0?'+':'')+r.gain_pct+'%)':''):'—'}</td>
-    <td><button class="ex-btn" onclick="ibkrExplain('${etEsc(acct)}','${etEsc(r.ticker)}')">Explain →</button></td>
-  </tr>`;
-  const head=`<tr><th>#</th><th>Ticker</th><th>Sector</th><th class="num">Qty</th><th class="num">Cost</th><th class="num">Price</th><th class="num">Value</th><th class="num">Score</th><th>Status</th><th class="num">Gain</th><th></th></tr>`;
-  box.innerHTML = exec + `<table class="mini" style="width:100%">${head}${view.map(rowHtml).join('')}</table>`
-    + (q&&!view.length?'<div class="pf-meta">No holdings match “'+etEsc(q)+'”.</div>':'');
+    <td class="${r.gain>=0?'pos':'neg'}">${r.gain!=null?(r.gain>=0?'+':'−')+'$'+Math.abs(Math.round(r.gain)).toLocaleString()+(r.gain_pct!=null?' ('+(r.gain_pct>=0?'+':'')+r.gain_pct+'%)':''):'—'}</td>
+    <td><button class="ibk-btn-quote" style="padding:6px 12px" onclick="ibkrExplain('${etEsc(acct)}','${etEsc(r.ticker)}')">Explain →</button></td>
+  </tr>`; };
+  box.innerHTML = `<div class="ibk-card">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <span class="ibk-card-title">📈 Holdings</span>
+      ${avg!=null?`<span class="pf-meta">Artik Health Score <b style="color:${scoreColor(avg)}">${avg}</b> · ${rows.length} position${rows.length===1?'':'s'}</span>`:''}
+    </div>
+    <table class="ibk-otable">${head}${view.map(row).join('')}</table>
+    ${q&&!view.length?'<div class="pf-meta" style="padding:10px">No holdings match “'+etEsc(q)+'”.</div>':''}
+  </div>`;
 }
 function ibkrFilterHoldings(acct, q){ ibkrRenderHoldings(acct, q); }
 function ibkrExplain(acct, ticker){
@@ -4419,23 +4470,29 @@ async function ibkrAnalyze(acct){
     showTab('portfolio'); loadPortfolioDates();
   } catch(e){ alert('Analyze Portfolio failed: '+e.message); }
 }
-// Trade panel — buy/sell stocks · ETF · crypto
+// Place a Trade card — buy/sell stocks · ETF · crypto
+window._ibSide = window._ibSide || 'BUY';
+function ibkrSetSide(s){ window._ibSide=s; document.querySelectorAll('.ibk-seg button').forEach(b=>b.classList.toggle('on', b.dataset.side===s)); }
 function ibkrTradeCard(acct){
-  return `<div class="card">
-    <div class="up-label" style="font-weight:600;margin-bottom:8px">🛒 Trade — buy / sell (stocks · ETF · crypto)</div>
-    <div class="pf-bar" style="gap:8px">
-      <select id="ib-tr-side"><option value="BUY">Buy</option><option value="SELL">Sell</option></select>
-      <input id="ib-tr-sym" placeholder="Symbol e.g. AAPL / BTC" style="width:150px" oninput="this.value=this.value.toUpperCase()">
-      <select id="ib-tr-sec"><option value="STK">Stock / ETF</option><option value="CRYPTO">Crypto</option></select>
-      <input id="ib-tr-qty" type="number" min="0" step="any" placeholder="Qty" style="width:90px">
-      <select id="ib-tr-type" onchange="$('#ib-tr-px').style.display=this.value==='LMT'?'':'none'"><option value="MKT">Market</option><option value="LMT">Limit</option></select>
-      <input id="ib-tr-px" type="number" min="0" step="any" placeholder="Limit $" style="width:100px;display:none">
-      <select id="ib-tr-tif"><option value="DAY">DAY</option><option value="GTC">GTC</option></select>
-      <button class="ghost" onclick="ibkrQuote('${etEsc(acct)}')">💲 Quote</button>
-      <button class="ex-btn" onclick="ibkrPlaceOrder('${etEsc(acct)}')">Preview order →</button>
+  window._ibSide='BUY';
+  return `<div class="ibk-card">
+    <div class="ibk-card-title">📈 Place a Trade</div>
+    <div class="ibk-card-sub">Orders route to IBKR live via the Client Portal API. Review confirmation before submitting.</div>
+    <div class="ibk-seg" style="margin-top:14px">
+      <button class="buy on" data-side="BUY" onclick="ibkrSetSide('BUY')">Buy</button>
+      <button class="sell" data-side="SELL" onclick="ibkrSetSide('SELL')">Sell</button>
     </div>
-    <div id="ib-tr-out" class="pf-meta" style="margin-top:8px"></div>
-    <div class="pf-meta" style="margin-top:4px;font-size:11px">Orders route to IBKR live via the Client Portal API. Review the confirmation before submitting.</div>
+    <div class="ibk-form">
+      <div class="ibk-field"><label>Symbol</label><input id="ib-tr-sym" placeholder="e.g. AAPL / BTC" oninput="this.value=this.value.toUpperCase()"></div>
+      <div class="ibk-field"><label>Asset Type</label><select id="ib-tr-sec"><option value="STK">Stock / ETF</option><option value="CRYPTO">Crypto</option></select></div>
+      <div class="ibk-field"><label>Quantity</label><input id="ib-tr-qty" type="number" min="0" step="any" placeholder="Qty"></div>
+      <div class="ibk-field"><label>Order Type</label><select id="ib-tr-type" onchange="document.getElementById('ib-tr-pxwrap').style.display=this.value==='LMT'?'':'none'"><option value="MKT">Market</option><option value="LMT">Limit</option></select></div>
+      <div class="ibk-field"><label>Time in Force</label><select id="ib-tr-tif"><option value="DAY">DAY</option><option value="GTC">GTC</option></select></div>
+      <div class="ibk-field" id="ib-tr-pxwrap" style="display:none"><label>Limit $</label><input id="ib-tr-px" type="number" min="0" step="any" placeholder="Limit"></div>
+      <button class="ibk-btn-quote" onclick="ibkrQuote('${etEsc(acct)}')">$ Quote</button>
+      <button class="ibk-btn-preview" onclick="ibkrPlaceOrder('${etEsc(acct)}')">Preview order →</button>
+    </div>
+    <div id="ib-tr-out" class="pf-meta" style="margin-top:12px"></div>
   </div>`;
 }
 async function ibkrQuote(acct){
@@ -4449,7 +4506,7 @@ async function ibkrQuote(acct){
   } catch(e){ out.innerHTML='<span class="err">'+etEsc(e)+'</span>'; }
 }
 async function ibkrPlaceOrder(acct){
-  const side=($('#ib-tr-side')||{}).value, sym=($('#ib-tr-sym')||{}).value, sec=($('#ib-tr-sec')||{}).value,
+  const side=window._ibSide||'BUY', sym=($('#ib-tr-sym')||{}).value, sec=($('#ib-tr-sec')||{}).value,
     qty=($('#ib-tr-qty')||{}).value, type=($('#ib-tr-type')||{}).value, tif=($('#ib-tr-tif')||{}).value, px=($('#ib-tr-px')||{}).value;
   const out=$('#ib-tr-out');
   if(!sym||!(parseFloat(qty)>0)){ if(out) out.textContent='Symbol and a positive quantity are required.'; return; }
@@ -4488,7 +4545,9 @@ async function ibkrConfirmOrder(replyId, acct){
     ibkrRenderOrderResult(acct, d.result, out);
   } catch(e){ out.innerHTML='<span class="err">'+etEsc(e)+'</span>'; }
 }
-// Orders — open + completed, with cancel for open orders.
+// Orders — tabbed (open / completed), styled table with cancel for open orders.
+window._ibOrders = window._ibOrders || {};
+window._ibOrdersTab = window._ibOrdersTab || {};
 async function ibkrLoadOrders(acct){
   const box=$('#ib-orders-'+etEsc(acct)); if(!box) return;
   box.innerHTML='<div class="spin">Loading orders…</div>';
@@ -4499,18 +4558,35 @@ async function ibkrLoadOrders(acct){
   let orders=(d && (d.orders||d))||[]; if(!Array.isArray(orders)) orders=[];
   orders=orders.filter(o=>o && (!o.acct || o.acct===acct));
   const OPEN=new Set(['PreSubmitted','Submitted','PendingSubmit','PendingCancel','PreSubmit']);
-  const open=orders.filter(o=>OPEN.has(o.status)), done=orders.filter(o=>!OPEN.has(o.status));
-  const row=(o,cancel)=>`<tr>
+  window._ibOrders[acct]={open:orders.filter(o=>OPEN.has(o.status)), done:orders.filter(o=>!OPEN.has(o.status))};
+  ibkrRenderOrders(acct);
+}
+function ibkrOrdersTab(acct, tab){ window._ibOrdersTab[acct]=tab; ibkrRenderOrders(acct); }
+function ibkrRenderOrders(acct){
+  const box=$('#ib-orders-'+etEsc(acct)); if(!box) return;
+  const data=window._ibOrders[acct]||{open:[],done:[]};
+  const tab=window._ibOrdersTab[acct]||'open';
+  const list=tab==='open'?data.open:data.done;
+  const secLabel=o=>({STK:'Stock',CRYPTO:'Crypto'}[o.secType]|| (o.secType||'Stock'));
+  const row=o=>`<tr>
     <td><b>${etEsc(o.ticker||o.symbol||o.conidex||o.conid||'')}</b></td>
-    <td>${etEsc(o.side||'')}</td>
+    <td style="font-weight:700;color:${(o.side==='BUY')?'#34d399':(o.side==='SELL'?'#f87171':'var(--txt)')}">${etEsc(o.side||'')}</td>
     <td>${etEsc(o.totalSize||o.remainingQuantity||o.filledQuantity||'')}</td>
+    <td>${etEsc(secLabel(o))}</td>
     <td>${etEsc(o.orderType||'')}${o.price?(' @ '+etEsc(o.price)):(o.limitPrice?(' @ '+etEsc(o.limitPrice)):'')}</td>
-    <td><span class="badge">${etEsc(o.status||'')}</span></td>
-    <td style="text-align:right">${cancel&&o.orderId?`<button class="ex-btn" onclick="ibkrCancelOrder('${etEsc(acct)}','${etEsc(o.orderId)}')">✕ Cancel</button>`:etEsc(o.lastExecutionTime_r||o.orderDesc||'')}</td></tr>`;
-  const tbl=(title,list,cancel)=>`<div class="up-label" style="margin:8px 0 4px">${title} (${list.length})</div>`+
-    (list.length?`<table class="mini" style="width:100%"><tr><th>Symbol</th><th>Side</th><th>Qty</th><th>Type</th><th>Status</th><th></th></tr>${list.map(o=>row(o,cancel)).join('')}</table>`
-      :`<div class="pf-meta">None.</div>`);
-  box.innerHTML = tbl('🟢 Open orders', open, true) + tbl('✅ Completed / cancelled', done, false);
+    <td>${etEsc(o.timeInForce||o.tif||'DAY')}</td>
+    <td><span class="ibk-badge">${etEsc(o.status||'')}</span></td>
+    <td>${(tab==='open'&&o.orderId)?`<button class="ibk-btn-quote" style="padding:6px 12px" onclick="ibkrCancelOrder('${etEsc(acct)}','${etEsc(o.orderId)}')">✕ Cancel</button>`:'—'}</td>
+  </tr>`;
+  const head=`<tr><th>Symbol</th><th>Side</th><th>Qty</th><th>Type</th><th>Order Type</th><th>Time in Force</th><th>Status</th><th>Action</th></tr>`;
+  box.innerHTML = `
+    <div class="ibk-tabs">
+      <div class="ibk-tab ${tab==='open'?'on':''}" onclick="ibkrOrdersTab('${etEsc(acct)}','open')">Open orders (${data.open.length})</div>
+      <div class="ibk-tab ${tab==='done'?'on':''}" onclick="ibkrOrdersTab('${etEsc(acct)}','done')">Completed / Cancelled (${data.done.length})</div>
+    </div>
+    ${list.length
+      ? `<table class="ibk-otable">${head}${list.map(row).join('')}</table><div class="pf-meta" style="margin-top:10px">Showing ${list.length} ${tab==='open'?'open':'completed'} order${list.length===1?'':'s'}</div>`
+      : `<div class="pf-meta" style="padding:16px 0">${tab==='open'?'No open orders.':'No completed or cancelled orders.'}</div>`}`;
 }
 async function ibkrCancelOrder(acct, orderId){
   if(!confirm('Cancel IBKR order '+orderId+'?')) return;
