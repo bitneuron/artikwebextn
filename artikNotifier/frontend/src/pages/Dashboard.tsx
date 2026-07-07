@@ -14,11 +14,30 @@ const STAT = [
   { key: "unread", label: "Unread", icon: "🔔", color: "text-violet-500" },
 ];
 
+type NotesMetrics = { notes: number; notebooks: number; favorites: number; reminders: number };
+
 export default function DashboardPage() {
   const [data, setData] = useState<Dashboard | null>(null);
+  const [nm, setNm] = useState<NotesMetrics | null>(null);
 
   async function load() { setData(await api.get<Dashboard>("/api/dashboard")); }
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    (async () => {
+      const [nbs, favs, rems] = await Promise.all([
+        api.get<{ note_count: number }[]>("/api/notebooks"),
+        api.get<unknown[]>("/api/notes?is_favorite=true&limit=200"),
+        api.get<unknown[]>("/api/notes?has_reminder=true&limit=200"),
+      ]);
+      setNm({
+        notes: nbs.reduce((a, b) => a + (b.note_count || 0), 0),
+        notebooks: nbs.length,
+        favorites: favs.length,
+        reminders: rems.length,
+      });
+    })().catch(() => {});
+  }, []);
 
   async function act(action: string, r: any) { if (await reminderAction(action, r)) load(); }
 
@@ -37,8 +56,25 @@ export default function DashboardPage() {
     </div>
   );
 
+  const NoteStat = ({ to, icon, label, value, color }: { to: string; icon: string; label: string; value: number | undefined; color: string }) => (
+    <Link to={to} className="card transition hover:border-brand hover:shadow-lg">
+      <div className="text-xs text-slate-400">{icon} {label}</div>
+      <div className={`text-2xl font-bold ${color}`}>{value ?? "—"}</div>
+    </Link>
+  );
+
   return (
     <div className="space-y-6">
+      <div>
+        <h2 className="mb-2 text-sm font-semibold text-slate-500">📒 Notes</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <NoteStat to="/notes" icon="📝" label="Notes" value={nm?.notes} color="text-brand" />
+          <NoteStat to="/notebooks" icon="📚" label="Notebooks" value={nm?.notebooks} color="text-indigo-500" />
+          <NoteStat to="/notes" icon="⭐" label="Favorites" value={nm?.favorites} color="text-amber-500" />
+          <NoteStat to="/notes?tab=reminders" icon="⏰" label="Reminders" value={nm?.reminders} color="text-emerald-500" />
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {STAT.map((s) => (
           <div key={s.key} className="card">

@@ -37,7 +37,7 @@ export default function Notes() {
 
   const [notes, setNotes] = useState<QuickNote[]>([]);
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
-  const [tab, setTab] = useState<"notes" | "reminders">("notes");
+  const [tab, setTab] = useState<"notes" | "reminders">(params.get("tab") === "reminders" ? "reminders" : "notes");
   const [search, setSearch] = useState("");
   const [tagFilter, setTagFilter] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
