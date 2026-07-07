@@ -33,6 +33,7 @@ function tagColor(t: string): string {
 export default function Notes() {
   const [params] = useSearchParams();
   const notebookFilter = params.get("notebook_id") || "";
+  const deepNoteId = params.get("note") || "";   // deep-link from Calendar: /notes?note=<id>
 
   const [notes, setNotes] = useState<QuickNote[]>([]);
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
@@ -64,6 +65,14 @@ export default function Notes() {
   }
   useEffect(() => { load(false); /* eslint-disable-next-line */ }, [search, notebookFilter, tab, tagFilter]);
   useEffect(() => { api.get<Notebook[]>("/api/notebooks").then(setNotebooks); }, []);
+  // Deep-link: /notes?note=<id> (e.g. from the Calendar) opens that note once loaded.
+  useEffect(() => {
+    if (deepNoteId && notes.some((n) => n.id === Number(deepNoteId))) {
+      setSelectedId(Number(deepNoteId));
+      setMobileEditing(true);
+    }
+    // eslint-disable-next-line
+  }, [deepNoteId, notes]);
 
   // ── editor draft + debounced autosave ─────────────────────────────────────
   const [draft, setDraft] = useState({ title: "", note_text: "" });
