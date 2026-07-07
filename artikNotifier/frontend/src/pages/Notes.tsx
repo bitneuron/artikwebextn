@@ -226,7 +226,8 @@ export default function Notes() {
                         </div>
                         <label className="label">Date</label>
                         <input className="input mb-2 w-full" type="date" value={selected.due_date || ""}
-                          onChange={(e) => patch({ due_date: e.target.value || null })} />
+                          min="2000-01-01" max="2100-12-31"
+                          onChange={(e) => { const v = e.target.value; if (v && (v < "2000-01-01" || v > "2100-12-31")) return; patch({ due_date: v || null }); }} />
                         <label className="label">Time</label>
                         <input className="input mb-2 w-full" type="time" value={selected.due_time || ""}
                           onChange={(e) => patch({ due_time: e.target.value || null })} />
