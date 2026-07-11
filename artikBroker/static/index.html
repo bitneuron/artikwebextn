@@ -261,6 +261,11 @@
   .ibk-search-box { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:0 14px; display:flex; align-items:center; gap:6px; }
   .ibk-search-box input { background:transparent; border:0; color:var(--txt); padding:14px 4px; width:100%; outline:none; font-size:14px; }
   @media (max-width:1000px){ .ibk-metrics { grid-template-columns:repeat(2,1fr); } .ibk-form { grid-template-columns:1fr 1fr; } }
+  /* Trading Desk form labels */
+  .td-f { display:flex; flex-direction:column; gap:4px; font-size:12px; }
+  .td-f > span { color:var(--mut); }
+  .td-f input, .td-f select { background:var(--bg); border:1px solid var(--line); color:var(--txt); border-radius:8px; padding:8px 10px; font-size:13px; }
+  .td-tab { font-size:13px; }
   select { background:var(--panel); color:var(--txt); border:1px solid var(--line);
            border-radius:8px; padding:8px 12px; font-size:14px; }
   .pf-meta { color:var(--mut); font-size:12.5px; }
@@ -914,6 +919,8 @@
       <button class="nav-item" id="tab-favorites" onclick="showTab('favorites')"><span class="ic">⭐</span><span>Favorites</span><span id="fav-nav-count" class="navcount"></span></button>
       <button class="nav-item" id="tab-sp500" onclick="showTab('sp500')"><span class="ic">🏛️</span><span>S&amp;P 500</span></button>
       <button class="nav-item" id="tab-dow" onclick="showTab('dow')"><span class="ic">🎩</span><span>Dow</span></button>
+      <div class="nav-sec">Trading Desk</div>
+      <button class="nav-item" id="tab-trading" onclick="showTab('trading')"><span class="ic">🤖</span><span>Trading Desk</span></button>
       <div class="nav-sec">Intelligence</div>
       <button class="nav-item hidden" id="tab-agents" onclick="showTab('agents')"><span class="ic">🤖</span><span>Agents</span></button>
       <button class="nav-item" id="tab-history" onclick="showTab('history')"><span class="ic">🕘</span><span>History</span></button>
@@ -1128,6 +1135,33 @@
     </div>
     <div id="ps-dow"></div>
     <div id="dow-out"><div class="spin">Loading…</div></div>
+  </section>
+
+  <!-- TRADING DESK (autonomous scan → recommendations; SCAN_ONLY by default) -->
+  <section id="view-trading" class="hidden">
+    <div class="pf-bar" style="flex-wrap:wrap;gap:8px">
+      <span class="up-label">🤖 Autonomous Trading Desk</span>
+      <span id="td-mode" class="badge">SCAN_ONLY</span>
+      <span id="td-agentstate" class="pf-meta"></span>
+      <span style="flex:1"></span>
+      <button class="ex-btn" onclick="tradingScan()">⚡ Scan opportunities</button>
+      <button class="ghost" onclick="tradingAgentCtl('pause')">⏸ Pause</button>
+      <button class="ghost" onclick="tradingAgentCtl('resume')">▶ Resume</button>
+      <button class="ghost" style="color:#f87171;border-color:#7f1d1d" onclick="tradingAgentCtl('kill')">🛑 Kill switch</button>
+    </div>
+    <div style="display:flex;gap:6px;margin:10px 0;flex-wrap:wrap" id="td-tabbar">
+      <button class="ghost td-tab" data-tdtab="dashboard" onclick="tdTab('dashboard')">📊 Dashboard</button>
+      <button class="ghost td-tab" data-tdtab="opps" onclick="tdTab('opps')">🎯 Opportunities</button>
+      <button class="ghost td-tab" data-tdtab="paper" onclick="tdTab('paper')">📝 Paper Trading</button>
+      <button class="ghost td-tab" data-tdtab="settings" onclick="tdTab('settings')">⚙️ Agent Settings</button>
+      <button class="ghost td-tab" data-tdtab="log" onclick="tdTab('log')">🗒️ Decision Log</button>
+    </div>
+    <div id="td-dashboard" class="td-pane"><div class="spin">Loading…</div></div>
+    <div id="td-opps" class="td-pane hidden"></div>
+    <div id="td-paper" class="td-pane hidden"></div>
+    <div id="td-settings" class="td-pane hidden"></div>
+    <div id="td-log" class="td-pane hidden"></div>
+    <div class="pf-meta" style="margin-top:14px;font-size:11px;opacity:.7">Not investment advice. The desk flags high-probability ideas under risk limits — it never guarantees profit. Live trading is admin-only and disabled by default.</div>
   </section>
 
   <!-- HISTORY VIEW (past searches, stored in this browser) -->
@@ -2951,9 +2985,194 @@ function downloadCSV(){
 // ── Tabs ────────────────────────────────────────────────────────────────────
 let _pfLoaded = false;
 const _idxLoaded = {};
-const _VIEWS = ['analyze','detail','portfolio','etrade','schwab','ibkr','favorites','sp500','dow','history','agents','skills','users','settings'];
+/* ═══════════ Autonomous Trading Desk ═══════════ */
+function tdEsc(s){ return escapeHtml(String(s==null?'':s)); }
+function tdMoney(v){ return v==null?'—':'$'+Number(v).toLocaleString(undefined,{maximumFractionDigits:2}); }
+function tdToast(msg){ let t=$('#td-toast'); if(!t){ t=document.createElement('div'); t.id='td-toast'; t.style.cssText='position:fixed;bottom:18px;right:18px;z-index:9999;background:var(--panel2,#161b22);border:1px solid var(--line);border-radius:10px;padding:10px 14px;box-shadow:0 8px 30px rgba(0,0,0,.4);max-width:340px'; document.body.appendChild(t);} t.textContent=msg; t.style.display='block'; clearTimeout(window._tdToastT); window._tdToastT=setTimeout(()=>t.style.display='none',3500); }
+window._tdSettings=null; window._tdOpps=null; window._tdTab='dashboard';
+function tradingInit(){
+  fetch('/api/trading/settings').then(r=>r.json()).then(d=>{
+    window._tdSettings=d.settings; window._tdState=d.state; window._tdModes=d.modes;
+    const b=$('#td-mode'); if(b) b.textContent=d.settings.trading_mode;
+    const st=$('#td-agentstate'); if(st) st.textContent=d.state.killed?'🛑 killed':(d.state.paused?'⏸ paused':'● active');
+  }).catch(()=>{});
+  tdTab(window._tdTab||'dashboard');
+}
+function tdTab(name){
+  window._tdTab=name;
+  document.querySelectorAll('.td-pane').forEach(p=>p.classList.add('hidden'));
+  const pane=$('#td-'+name); if(pane) pane.classList.remove('hidden');
+  document.querySelectorAll('.td-tab').forEach(b=>{ const on=b.dataset.tdtab===name; b.style.background=on?'var(--acc)':''; b.style.color=on?'#fff':''; b.style.borderColor=on?'var(--acc)':''; });
+  if(name==='dashboard') tdLoadDashboard();
+  else if(name==='opps'){ if(window._tdOpps) tdRenderOpps(window._tdOpps); else if(pane) pane.innerHTML='<div class="pf-meta" style="padding:8px">Click “⚡ Scan opportunities” to analyze your Portfolio + S&amp;P 500 + Favorites.</div>'; }
+  else if(name==='paper') tdLoadPaper();
+  else if(name==='settings') tdLoadSettings();
+  else if(name==='log') tdLoadLog();
+}
+function tdPortfolioPayload(){ return (window._pfRows||[]).filter(r=>r&&r.ticker&&!r.error); }
+function tdFavTickers(){ try { return getFavorites().map(f=>(f&&f.ticker)||f).filter(Boolean); } catch(e){ return []; } }
+async function tradingScan(){
+  tdTab('opps'); const pane=$('#td-opps'); pane.innerHTML='<div class="spin">Scanning Portfolio + S&amp;P 500 + Favorites…</div>';
+  try{
+    const r=await fetch('/api/trading/scan',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({portfolio:tdPortfolioPayload(),favorites:tdFavTickers(),scope:'all'})});
+    const d=await r.json();
+    if(!r.ok){ pane.innerHTML='<div class="card">'+tdEsc(d.error||'Scan failed')+'</div>'; return; }
+    window._tdOpps=d; tdRenderOpps(d);
+  }catch(e){ pane.innerHTML='<div class="card err">'+tdEsc(e)+'</div>'; }
+}
+const TD_CAT_COLOR={'Take Profit':'#34d399','Reduce Position':'#f59e0b','Increase Position':'#60a5fa','New Position':'#a78bfa','Momentum':'#22d3ee','Pullback':'#f472b6','Portfolio Improvement':'#94a3b8'};
+function tdRenderOpps(d){
+  const pane=$('#td-opps'); const recs=d.recommendations||[]; const ctx=d.context||{};
+  const hdr=`<div class="pf-bar" style="margin-bottom:10px;flex-wrap:wrap"><span class="up-label">🎯 ${recs.length} opportunities</span>
+    <span class="pf-meta">Portfolio ${tdMoney(ctx.total_value)} · ${ctx.positions||0} positions · top sector ${tdEsc(ctx.top_sector||'—')}${ctx.concentration_pct?(' ('+ctx.concentration_pct+'%)'):''}</span>
+    <span style="flex:1"></span><span class="badge">mode ${tdEsc(d.mode)}</span></div>`;
+  pane.innerHTML = hdr + (recs.length? recs.map(tdCard).join('') : '<div class="card">No opportunities passed the risk filters. Loosen thresholds in Agent Settings or scan again later.</div>')
+    + (d.rejected&&d.rejected.length? `<details style="margin-top:8px"><summary class="pf-meta" style="cursor:pointer">${d.rejected.length} filtered by the risk engine</summary>`+d.rejected.map(r=>`<div class="pf-meta" style="padding:3px 0">${tdEsc(r.ticker)} — ${tdEsc((r.risk_reasons||[]).join('; '))}</div>`).join('')+'</details>':'');
+}
+function tdCell(l,v){ return `<div style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px"><div style="opacity:.6">${l}</div><div style="font-weight:600">${v==null||v===''?'—':tdEsc(v)}</div></div>`; }
+function tdCard(rec){
+  const sideCol=rec.side==='BUY'?'#34d399':(rec.side==='SELL'?'#f87171':'#94a3b8');
+  const t=tdEsc(rec.ticker);
+  return `<div class="card" style="margin-bottom:10px" data-td-tk="${t}">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
+      <div><span style="font-size:16px;font-weight:700">${t}</span> <span class="pf-meta">${tdEsc(rec.company||'')}</span>
+        <div style="margin-top:4px;display:flex;gap:5px;flex-wrap:wrap">
+          <span class="badge" style="background:${(TD_CAT_COLOR[rec.category]||'#334155')}22;color:${TD_CAT_COLOR[rec.category]||'#94a3b8'}">${tdEsc(rec.category)}</span>
+          <span class="badge" style="color:${sideCol}">${tdEsc(rec.side)}</span>
+          <span class="badge">${tdEsc(rec.source)}</span></div></div>
+      <div style="text-align:right"><div style="font-size:20px;font-weight:800">${rec.confidence}%</div><div class="pf-meta">confidence</div></div>
+    </div>
+    <div class="pf-meta" style="margin:8px 0">${tdEsc(rec.reason)}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:7px;margin:8px 0;font-size:12px">
+      ${tdCell('Artik',rec.artik_score)}${tdCell('Entry',tdMoney(rec.entry))}${tdCell('Target',tdMoney(rec.target))}${tdCell('Stop',tdMoney(rec.stop))}
+      ${tdCell('R:R',rec.risk_reward)}${tdCell('Shares',rec.suggested_shares)}${tdCell('Alloc',tdMoney(rec.dollar_allocation))}${tdCell('Impact',rec.portfolio_impact)}
+    </div>
+    <div class="pf-meta" style="font-size:11px;line-height:1.7">${(rec.signals||[]).map(s=>'• '+tdEsc(s)).join(' &nbsp; ')}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
+      <button class="ex-btn" onclick="tdAct('copilot','${t}')">🤖 Analyze with Artik Copilot</button>
+      <button class="ghost" onclick="tdAct('paper','${t}')">📝 Paper Trade</button>
+      <button class="ghost" onclick="tdAct('submit','${t}')">🚀 Submit Order</button>
+      <button class="ghost" onclick="this.closest('.card').style.display='none'">✕ Dismiss</button>
+    </div>
+  </div>`;
+}
+function tdFind(tk){ return (window._tdOpps&&window._tdOpps.recommendations||[]).find(r=>(r.ticker||'')===tk); }
+function tdAct(action, tk){ const rec=tdFind(tk); if(!rec) return; if(action==='copilot') tdCopilot(rec); else if(action==='paper') tdPaper(rec); else if(action==='submit') tdSubmit(rec); }
+function tdCopilot(rec){
+  const c=(window._tdOpps&&window._tdOpps.context)||{};
+  const q=`I'm considering a ${rec.side} (${rec.category}) in ${rec.ticker} — ${rec.company||''}.
+Recommendation: entry ${rec.entry}, target ${rec.target}, stop ${rec.stop}, R:R ${rec.risk_reward}, suggested ${rec.suggested_shares} sh (${tdMoney(rec.dollar_allocation)}), confidence ${rec.confidence}%, Artik score ${rec.artik_score}, engine status ${rec.status}, RSI ${rec.rsi}.
+Signals: ${(rec.signals||[]).join('; ')}. Portfolio impact: ${rec.portfolio_impact}.
+My portfolio: ${tdMoney(c.total_value)} across ${c.positions||0} positions; top sector ${c.top_sector||'—'} at ${c.concentration_pct||0}%.
+Should I take this trade? Why or why not — key risks, expected probability, and any better alternatives?`;
+  if(typeof copilotAsk==='function') copilotAsk(q); else tdToast('Copilot unavailable');
+}
+async function tdPaper(rec){
+  const qty=rec.suggested_shares|| Math.max(1, Math.floor((rec.dollar_allocation||1000)/(rec.entry||1)));
+  try{
+    const r=await fetch('/api/trading/paper/trade',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({ticker:rec.ticker,company:rec.company,side:rec.side,qty,entry:rec.entry,target:rec.target,stop:rec.stop,category:rec.category,confidence:rec.confidence})});
+    const d=await r.json(); if(r.ok){ tdToast('📝 Paper trade opened: '+rec.side+' '+qty+' '+rec.ticker+' @ '+tdMoney(rec.entry)); if(window._tdTab==='paper') tdLoadPaper(); } else tdToast(d.error||'paper trade failed');
+  }catch(e){ tdToast(''+e); }
+}
+async function tdSubmit(rec){
+  const s=window._tdSettings||{};
+  if(!(s.live_trading_enabled)){ tdToast('⛔ Live trading is disabled. An admin must enable it in Agent Settings. Use Paper Trade instead.'); return; }
+  if(!confirm('Submit a LIVE '+rec.side+' order for '+rec.suggested_shares+' '+rec.ticker+'? This uses REAL money via IBKR.')) return;
+  try{
+    const r=await fetch('/api/trading/live/order',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({account_id:s.ibkr_account||'',symbol:rec.ticker,side:rec.side,quantity:rec.suggested_shares,order_type:'MKT',sec_type:'STK',tif:'DAY'})});
+    const d=await r.json(); tdToast(r.ok?'🚀 Order sent — see the IBKR tab / Order History.':('⛔ '+(d.error||'blocked')));
+  }catch(e){ tdToast(''+e); }
+}
+async function tradingAgentCtl(action){
+  if(action==='kill' && !confirm('Activate the KILL SWITCH? This pauses the agent and forces SCAN_ONLY + live-off.')) return;
+  try{ const r=await fetch('/api/trading/agent/'+action,{method:'POST'}); const d=await r.json(); if(!r.ok){ tdToast(d.error||'blocked'); return; } window._tdState=d.state; const st=$('#td-agentstate'); if(st) st.textContent=d.state.killed?'🛑 killed':(d.state.paused?'⏸ paused':'● active'); tdToast('Agent '+action+' ✓'); if(action==='kill'){ const b=$('#td-mode'); if(b) b.textContent='SCAN_ONLY'; } }catch(e){ tdToast(''+e); }
+}
+async function tdLoadDashboard(){
+  const pane=$('#td-dashboard'); pane.innerHTML='<div class="spin">Loading…</div>';
+  try{
+    const d=await (await fetch('/api/trading/dashboard')).json();
+    const stat=(l,v,c)=>`<div class="card"><div class="pf-meta">${l}</div><div style="font-size:22px;font-weight:800${c?';color:'+c:''}">${v}</div></div>`;
+    pane.innerHTML=`
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px">
+        ${stat('Trading Mode', tdEsc(d.mode))}
+        ${stat('Agent', d.state.killed?'🛑 killed':(d.state.paused?'⏸ paused':'● active'))}
+        ${stat('Paper Account', tdMoney(d.paper_account_size))}
+        ${stat('Open Positions', d.open_positions)}
+        ${stat('Closed Trades', d.closed_trades)}
+        ${stat('Paper Realized P/L', tdMoney(d.paper_realized_pl), d.paper_realized_pl>=0?'#34d399':'#f87171')}
+        ${stat('Win Rate', d.win_rate+'%')}
+        ${stat('Avg Win', tdMoney(d.avg_win),'#34d399')}
+        ${stat('Avg Loss', tdMoney(d.avg_loss),'#f87171')}
+        ${stat('Profit Factor', d.profit_factor)}
+        ${stat('Trades Today', d.trades_today)}
+        ${stat('Live Trading', d.live_enabled?'ON':'OFF', d.live_enabled?'#f59e0b':'#94a3b8')}
+      </div>
+      <div class="pf-bar"><span class="up-label">🗒️ Recent decisions</span></div>
+      <div class="card">${(d.recent_decisions||[]).length? d.recent_decisions.map(x=>`<div class="pf-meta" style="padding:3px 0">${tdEsc((x.ts||'').slice(0,19).replace('T',' '))} — ${tdEsc(x.event)}${x.ticker?(' '+tdEsc(x.ticker)):''}${x.recommendations!=null?(' ('+x.recommendations+' recs)'):''}</div>`).join(''):'<span class="pf-meta">No activity yet. Run a scan.</span>'}</div>`;
+  }catch(e){ pane.innerHTML='<div class="card err">'+tdEsc(e)+'</div>'; }
+}
+async function tdLoadPaper(){
+  const pane=$('#td-paper'); pane.innerHTML='<div class="spin">Loading…</div>';
+  try{
+    const d=await (await fetch('/api/trading/paper/positions')).json();
+    const rows=d.positions||[]; const open=rows.filter(p=>p.status==='open'); const closed=rows.filter(p=>p.status==='closed');
+    const tbl=(list,isOpen)=>list.length?`<table class="mini" style="width:100%"><tr><th>Ticker</th><th>Side</th><th>Qty</th><th>Entry</th><th>${isOpen?'Target/Stop':'Exit'}</th><th>${isOpen?'':'P/L'}</th><th></th></tr>`+
+      list.map(p=>`<tr><td><b>${tdEsc(p.ticker)}</b></td><td>${tdEsc(p.side)}</td><td>${tdEsc(p.qty)}</td><td>${tdMoney(p.entry)}</td>
+        <td>${isOpen?(tdMoney(p.target)+' / '+tdMoney(p.stop)):tdMoney(p.exit)}</td>
+        <td class="${(p.realized_pl||0)>=0?'pos':'neg'}">${isOpen?'—':(p.realized_pl>=0?'+':'')+tdMoney(p.realized_pl)}</td>
+        <td>${isOpen?`<button class="ghost" onclick="tdClosePaper('${p.id}','${tdEsc(p.ticker)}')">Close</button>`:''}</td></tr>`).join('')+`</table>`:`<div class="pf-meta">None.</div>`;
+    pane.innerHTML=`<div class="pf-bar"><span class="up-label">📝 Open paper positions (${open.length})</span></div>${tbl(open,true)}
+      <div class="pf-bar" style="margin-top:12px"><span class="up-label">✅ Closed (${closed.length})</span></div>${tbl(closed,false)}`;
+  }catch(e){ pane.innerHTML='<div class="card err">'+tdEsc(e)+'</div>'; }
+}
+async function tdClosePaper(id, tk){
+  const px=prompt('Close '+tk+' at price:'); if(px==null||px==='') return;
+  try{ const r=await fetch('/api/trading/paper/close',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id,exit:parseFloat(px)})}); const d=await r.json(); if(r.ok){ tdToast('Closed '+tk+' — P/L '+tdMoney(d.position.realized_pl)); tdLoadPaper(); } else tdToast(d.error||'failed'); }catch(e){ tdToast(''+e); }
+}
+function tdLoadSettings(){
+  const pane=$('#td-settings'); const s=window._tdSettings; if(!s){ pane.innerHTML='<div class="spin">Loading…</div>'; setTimeout(tdLoadSettings,400); return; }
+  const admin=window._isAdmin;
+  const modes=(window._tdModes||['SCAN_ONLY','PAPER_TRADING','LIVE_TRADING_WITH_APPROVAL','LIVE_TRADING_AUTO']);
+  const num=(k,l,step)=>`<label class="td-f"><span>${l}</span><input type="number" step="${step||'any'}" id="tdf-${k}" value="${s[k]}"></label>`;
+  pane.innerHTML=`<div class="card">
+    <div class="up-label" style="margin-bottom:8px">⚙️ Agent Settings</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">
+      <label class="td-f"><span>Trading Mode ${admin?'':'(admin-only)'}</span><select id="tdf-trading_mode" ${admin?'':'disabled'}>${modes.map(m=>`<option value="${m}" ${s.trading_mode===m?'selected':''}>${m}</option>`).join('')}</select></label>
+      ${num('scan_interval_min','Scan interval (min)')}
+      ${num('max_trades_per_day','Max trades / day')}
+      ${num('max_open_positions','Max open positions')}
+      ${num('max_position_size_pct','Max position size %')}
+      ${num('max_risk_per_trade_pct','Max risk / trade %')}
+      ${num('max_daily_loss_pct','Max daily loss %')}
+      ${num('min_confidence','Min confidence')}
+      ${num('min_artik_score','Min Artik score')}
+      ${num('default_stop_loss_pct','Default stop %')}
+      ${num('default_profit_target_pct','Default target %')}
+      ${num('trailing_stop_pct','Trailing stop %')}
+      ${num('paper_account_size','Paper account $')}
+      <label class="td-f"><span>IBKR account ${admin?'':'(admin-only)'}</span><input id="tdf-ibkr_account" value="${tdEsc(s.ibkr_account||'')}" ${admin?'':'disabled'}></label>
+      <label class="td-f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="tdf-live_trading_enabled" ${s.live_trading_enabled?'checked':''} ${admin?'':'disabled'}><span>Enable live trading ${admin?'':'(admin-only)'}</span></label>
+      <label class="td-f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="tdf-allow_swing_trades" ${s.allow_swing_trades?'checked':''}><span>Allow swing trades</span></label>
+    </div>
+    <div style="margin-top:12px"><button class="ex-btn" onclick="tdSaveSettings()">Save settings</button>
+      ${admin?'':'<span class="pf-meta" style="margin-left:8px">Mode / live-trading / risk limits are admin-only.</span>'}</div>
+  </div>`;
+}
+async function tdSaveSettings(){
+  const g=id=>{ const el=$('#tdf-'+id); return el?(el.type==='checkbox'?el.checked:(el.type==='number'?parseFloat(el.value):el.value)):undefined; };
+  const keys=['trading_mode','scan_interval_min','max_trades_per_day','max_open_positions','max_position_size_pct','max_risk_per_trade_pct','max_daily_loss_pct','min_confidence','min_artik_score','default_stop_loss_pct','default_profit_target_pct','trailing_stop_pct','paper_account_size','ibkr_account','live_trading_enabled','allow_swing_trades'];
+  const body={}; keys.forEach(k=>{ const el=$('#tdf-'+k); if(el&&!el.disabled){ const v=g(k); if(v!==undefined&&!(typeof v==='number'&&isNaN(v))) body[k]=v; } });
+  try{ const r=await fetch('/api/trading/settings',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(body)}); const d=await r.json(); if(r.ok){ window._tdSettings=d.settings; const b=$('#td-mode'); if(b) b.textContent=d.settings.trading_mode; tdToast('Settings saved ✓'); } else tdToast(d.error||'save failed'); }catch(e){ tdToast(''+e); }
+}
+async function tdLoadLog(){
+  const pane=$('#td-log'); pane.innerHTML='<div class="spin">Loading…</div>';
+  try{ const d=await (await fetch('/api/trading/dashboard')).json(); const rows=d.recent_decisions||[];
+    pane.innerHTML='<div class="card">'+(rows.length?rows.map(x=>`<div class="pf-meta" style="padding:4px 0;border-bottom:1px solid var(--line)">${tdEsc((x.ts||'').slice(0,19).replace('T',' '))} — <b>${tdEsc(x.event)}</b> ${tdEsc(x.ticker||'')} ${x.scope?('scope='+tdEsc(x.scope)):''} ${x.recommendations!=null?(x.recommendations+' recs / '+ (x.rejected||0)+' filtered'):''} ${x.pl!=null?('P/L '+tdMoney(x.pl)):''}</div>`).join(''):'<span class="pf-meta">No decisions logged yet.</span>')+'</div>';
+  }catch(e){ pane.innerHTML='<div class="card err">'+tdEsc(e)+'</div>'; }
+}
+const _VIEWS = ['analyze','detail','portfolio','etrade','schwab','ibkr','favorites','sp500','dow','trading','history','agents','skills','users','settings'];
 const _TITLES = {analyze:'Analyze', detail:'Stock Detail', portfolio:'Portfolio', etrade:'E*TRADE', schwab:'Charles Schwab', ibkr:'Interactive Brokers', favorites:'Favorites',
-                 sp500:'S&P 500', dow:'Dow Jones', history:'History', agents:'Agents', skills:'Skills Management', users:'User Management', settings:'Settings'};
+                 sp500:'S&P 500', dow:'Dow Jones', trading:'Trading Desk', history:'History', agents:'Agents', skills:'Skills Management', users:'User Management', settings:'Settings'};
 function showTab(name, navId){
   // Admin-only views: block non-admins (belt & suspenders; backend also returns 403).
   if(window._me && !window._isAdmin && (name==='etrade'||name==='schwab'||name==='ibkr'||name==='portfolio'||name==='users')){
@@ -2974,6 +3193,7 @@ function showTab(name, navId){
   if(name==='portfolio' && !_pfLoaded){ _pfLoaded = true; loadPortfolioDates(); }
   if(name==='favorites'){ loadFavorites(); }
   if((name==='sp500'||name==='dow') && !_idxLoaded[name]){ _idxLoaded[name]=true; loadIndex(name); }
+  if(name==='trading'){ tradingInit(); }
   if(name==='history'){ renderHistory(); }
   if(name==='agents'){ loadAgents(); }
   if(name==='users'){ loadUsers(); }

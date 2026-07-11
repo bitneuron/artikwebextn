@@ -48,6 +48,8 @@ import ibkr  # noqa: E402  (Interactive Brokers — Client Portal Web API)
 import intelligence  # noqa: E402  (intelligence signal computation)
 import intelligence_store  # noqa: E402  (persistent intelligence snapshots for trends)
 import portfolio_store  # noqa: E402  (persistent broker portfolio snapshots)
+import trading_store  # noqa: E402  (Trading Desk: settings/paper/log KV, durable)
+import trading_desk  # noqa: E402  (Trading Desk: universe/recommendation/risk engine)
 import models as _models  # noqa: E402  (LLM model chains + version fallback)
 import news_runs  # noqa: E402  (run history + results reader)
 import news_data  # noqa: E402  (deletes a config's run history/logs + exclusive-ticker articles)
@@ -1013,6 +1015,202 @@ def ibkr_cancel(account_id: str, order_id: str):
         return _ibkr().cancel_order(account_id, order_id)
     except Exception as e:  # noqa: BLE001
         return JSONResponse({"error": str(e)}, status_code=502)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Autonomous Trading Desk — SCAN_ONLY by default; live trading admin-gated + off.
+# Holdings come from the Portfolio page (passed in), NEVER fetched from IBKR.
+# ══════════════════════════════════════════════════════════════════════════════
+def _is_admin(request: Request) -> bool:
+    u = _current_user(request)
+    return bool((u and u.get("role") == "admin") or OPEN_MODE)
+
+
+@app.get("/api/trading/settings")
+def trading_get_settings():
+    return {"settings": trading_store.get_settings(), "state": trading_store.get_state(),
+            "modes": ["SCAN_ONLY", "PAPER_TRADING", "LIVE_TRADING_WITH_APPROVAL", "LIVE_TRADING_AUTO"]}
+
+
+@app.put("/api/trading/settings")
+async def trading_put_settings(request: Request):
+    try:
+        patch = await request.json()
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"error": "invalid JSON"}, status_code=400)
+    patch = {k: v for k, v in (patch or {}).items() if k in trading_desk.DEFAULT_SETTINGS}
+    # Admin-only governance fields (live trading + risk limits) are dropped for non-admins.
+    if not _is_admin(request):
+        blocked = [k for k in patch if k in trading_desk.ADMIN_ONLY_FIELDS]
+        for k in blocked:
+            patch.pop(k, None)
+        if blocked:
+            trading_store.log_decision({"event": "settings_blocked", "fields": blocked})
+    # Hard guard: live modes require an admin AND the explicit live switch.
+    if patch.get("trading_mode") in trading_desk.LIVE_MODES:
+        s = trading_store.get_settings()
+        if not (_is_admin(request) and s.get("live_trading_enabled")):
+            patch["trading_mode"] = "SCAN_ONLY"
+    return {"settings": trading_store.save_settings(patch)}
+
+
+@app.post("/api/trading/scan")
+async def trading_scan(request: Request):
+    """Scan the combined universe (Portfolio + S&P 500 + Favorites) and return risk-checked
+    recommendations. Portfolio holdings + favorites are supplied by the client (Portfolio page is
+    the source of truth); the server adds the S&P 500 list and scores anything missing."""
+    try:
+        b = await request.json()
+    except Exception:  # noqa: BLE001
+        b = {}
+    portfolio = b.get("portfolio") or []
+    if not portfolio and b.get("scope", "all") in ("all", "portfolio"):
+        return JSONResponse({"error": "Please load or select a portfolio before starting the Trading Agent.",
+                             "need_portfolio": True}, status_code=400)
+    favorites = b.get("favorites") or []
+    scope = b.get("scope", "all")
+    settings = trading_store.get_settings()
+    ctx = trading_desk.portfolio_context(portfolio)
+
+    universe = trading_desk.build_universe(portfolio, favorites, INDEX_TICKERS["sp500"], scope)[:60]
+    held = {(h.get("ticker") or "").upper(): h for h in portfolio}
+    # Reuse scores already carried by portfolio rows; score the rest concurrently (no LLM).
+    to_score = [t for t in universe if t not in held or held[t].get("score") is None]
+    scored: dict[str, dict] = {}
+    if to_score:
+        with ThreadPoolExecutor(max_workers=6) as ex:
+            for r in ex.map(lambda t: analyze_one(t, allow_llm=False), to_score):
+                if r and r.get("ticker"):
+                    scored[r["ticker"].upper()] = r
+
+    recs, rejected = [], []
+    for t in universe:
+        row = scored.get(t) or (held.get(t) if held.get(t, {}).get("score") is not None else None)
+        if not row:
+            continue
+        row = {**row, "ticker": t}
+        rec = trading_desk.make_recommendation(row, held.get(t), ctx, settings)
+        ok, reasons = trading_desk.risk_check(rec, settings, ctx, trading_store.get_state())
+        rec["risk_ok"] = ok
+        rec["risk_reasons"] = reasons
+        rec["source"] = "portfolio" if t in held else ("favorite" if t in {f.upper() for f in favorites} else "sp500")
+        (recs if ok else rejected).append(rec)
+
+    recs.sort(key=lambda r: -r["confidence"])
+    trading_store.set_state({"last_scan": trading_store._now()})
+    trading_store.log_decision({"event": "scan", "scope": scope, "universe": len(universe),
+                                "recommendations": len(recs), "rejected": len(rejected)})
+    return {"as_of": trading_store._now(), "mode": settings["trading_mode"],
+            "context": ctx, "recommendations": recs, "rejected": rejected[:40]}
+
+
+@app.get("/api/trading/dashboard")
+def trading_dashboard():
+    s = trading_store.get_settings()
+    st = trading_store.get_state()
+    paper = trading_store.list_paper()
+    openp = [p for p in paper if p.get("status") == "open"]
+    closed = [p for p in paper if p.get("status") == "closed"]
+    wins = [p for p in closed if (p.get("realized_pl") or 0) > 0]
+    losses = [p for p in closed if (p.get("realized_pl") or 0) <= 0]
+    gross_win = sum(p["realized_pl"] for p in wins) or 0
+    gross_loss = abs(sum(p["realized_pl"] for p in losses)) or 0
+    return {
+        "mode": s["trading_mode"], "state": st,
+        "paper_account_size": s["paper_account_size"],
+        "open_positions": len(openp), "closed_trades": len(closed),
+        "paper_realized_pl": round(sum(p.get("realized_pl") or 0 for p in closed), 2),
+        "win_rate": round(len(wins) / len(closed) * 100, 1) if closed else 0,
+        "avg_win": round(gross_win / len(wins), 2) if wins else 0,
+        "avg_loss": round(gross_loss / len(losses), 2) if losses else 0,
+        "profit_factor": round(gross_win / gross_loss, 2) if gross_loss else (gross_win and 99.0 or 0),
+        "trades_today": st.get("trades_today", 0),
+        "live_enabled": bool(s.get("live_trading_enabled")),
+        "recent_decisions": trading_store.list_log(15),
+    }
+
+
+@app.get("/api/trading/paper/positions")
+def trading_paper_positions():
+    return {"positions": trading_store.list_paper()}
+
+
+@app.post("/api/trading/paper/trade")
+async def trading_paper_trade(request: Request):
+    try:
+        b = await request.json()
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"error": "invalid JSON"}, status_code=400)
+    entry = _num(b.get("entry"))
+    qty = _num(b.get("qty")) or _num(b.get("suggested_shares")) or 0
+    if not (b.get("ticker") and entry and qty > 0):
+        return JSONResponse({"error": "ticker, entry and qty are required"}, status_code=400)
+    pos = trading_store.add_paper({
+        "ticker": (b.get("ticker") or "").upper(), "company": b.get("company"),
+        "side": (b.get("side") or "BUY").upper(), "qty": qty, "entry": entry,
+        "target": _num(b.get("target")), "stop": _num(b.get("stop")),
+        "category": b.get("category"), "confidence": b.get("confidence"), "mode": "paper"})
+    trading_store.log_decision({"event": "paper_trade", "ticker": pos["ticker"], "qty": qty, "entry": entry})
+    return {"position": pos}
+
+
+@app.post("/api/trading/paper/close")
+async def trading_paper_close(request: Request):
+    try:
+        b = await request.json()
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"error": "invalid JSON"}, status_code=400)
+    pos = trading_store.close_paper((b.get("id") or ""), _num(b.get("exit")) or 0)
+    if not pos:
+        return JSONResponse({"error": "open paper position not found"}, status_code=404)
+    trading_store.log_decision({"event": "paper_close", "ticker": pos["ticker"], "pl": pos["realized_pl"]})
+    return {"position": pos}
+
+
+@app.post("/api/trading/agent/{action}")
+async def trading_agent_control(action: str, request: Request):
+    """Safety controls. Kill/pause governance is admin-only."""
+    if action in ("kill", "resume-live", "reset") and not _is_admin(request):
+        return JSONResponse({"error": "admin only"}, status_code=403)
+    if action == "pause":
+        st = trading_store.set_state({"paused": True})
+    elif action == "resume":
+        st = trading_store.set_state({"paused": False})
+    elif action == "kill":
+        st = trading_store.set_state({"killed": True, "paused": True})
+        trading_store.save_settings({"trading_mode": "SCAN_ONLY", "live_trading_enabled": False})
+    elif action == "reset":
+        st = trading_store.set_state({"killed": False, "paused": False, "trades_today": 0})
+    else:
+        return JSONResponse({"error": f"unknown action '{action}'"}, status_code=400)
+    trading_store.log_decision({"event": f"agent_{action}"})
+    return {"state": st}
+
+
+@app.post("/api/trading/live/order")
+async def trading_live_order(request: Request):
+    """Submit a LIVE order via IBKR — heavily gated: admin + live_trading_enabled + a live mode.
+    Delegates to the existing IBKR order path (the only place IBKR is used: execution)."""
+    if not _is_admin(request):
+        return JSONResponse({"error": "Live trading is admin-only."}, status_code=403)
+    s = trading_store.get_settings()
+    st = trading_store.get_state()
+    if st.get("killed"):
+        return JSONResponse({"error": "Kill switch active — live trading disabled."}, status_code=423)
+    if not (s.get("live_trading_enabled") and s.get("trading_mode") in trading_desk.LIVE_MODES):
+        return JSONResponse({"error": "Live trading is disabled. Enable it in Agent Settings (admin)."}, status_code=409)
+    try:
+        b = await request.json()
+    except Exception:  # noqa: BLE001
+        b = {}
+    # account_id must be in the request body (client fills it from Agent Settings' ibkr_account),
+    # because the delegated ibkr_order re-reads the same (cached) body.
+    if not (b.get("account_id") or "").strip():
+        return JSONResponse({"error": "account_id required — set/select the IBKR account in Agent Settings."},
+                            status_code=400)
+    trading_store.set_state({"trades_today": (st.get("trades_today") or 0) + 1})
+    trading_store.log_decision({"event": "live_order", "ticker": b.get("symbol"), "side": b.get("side")})
+    return await ibkr_order(request)   # reuse the vetted IBKR order handler (admin RBAC also applies)
 
 
 @app.post("/api/users")
