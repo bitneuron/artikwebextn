@@ -61,3 +61,8 @@ artikBroker/search_history/
 artikBroker/config/
 # Agent run logs (under the collector data dir)
 **/data/news_collector/logs/
+
+# Claude Code local tooling (machine-specific: settings, agent memory, skill cache)
+.claude/
+.agents/
+skills-lock.json
