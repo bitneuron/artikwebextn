@@ -20,6 +20,9 @@ artikAgents/src/
 # methodology so Skills Management can read/edit the skill .md files in production.
 artikAgents/agents/knowledge_bases/*
 !artikAgents/agents/knowledge_bases/stock_analysis
+# ArtikFinance: the personal financial statement workbook is the bundled import source
+# (private ECR image, login-gated app — intended per the ArtikFinance spec).
+!artikAgents/agents/knowledge_bases/personal_financial_statement
 artikBroker/config/                         # runtime state (users.db, .app_secret, schedules) — never bake into the image
 artikBroker/cache/                          # regenerable daily cache
 artikBroker/search_history/                 # local dev history store (S3 used on AWS)
