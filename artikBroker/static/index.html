@@ -3058,19 +3058,62 @@ function finYears(page){
   sel.innerHTML='<option value="">All years</option>'+ys.map(y=>`<option value="${y}">${y}</option>`).join('');
   if(ys.map(String).includes(cur)) sel.value=cur;
 }
-function finLine(points, valueKey, color){
+function finLine(points, valueKey, color, label){
   const vs=points.map(p=>p[valueKey]).filter(v=>v!=null);
   if(vs.length<2) return '<div class="pf-meta">Not enough data to chart.</div>';
-  const min=Math.min(...vs), max=Math.max(...vs), W=760, H=150, pad=6;
-  const x=i=>pad+i*(W-2*pad)/(points.length-1), y=v=>H-pad-((v-min)/((max-min)||1))*(H-2*pad);
+  const min=Math.min(...vs), max=Math.max(...vs), mid=(min+max)/2;
+  const W=780, H=170, L=74, R=12, T=10, B=34;
+  const x=i=>L+i*(W-L-R)/(points.length-1), y=v=>H-B-((v-min)/((max-min)||1))*(H-T-B);
   const pl=points.map((p,i)=>`${x(i).toFixed(1)},${y(p[valueKey]).toFixed(1)}`).join(' ');
+  const c=color||'var(--acc)';
+  const grid=[min,mid,max].map(v=>`<line x1="${L}" y1="${y(v)}" x2="${W-R}" y2="${y(v)}" stroke="var(--line)" stroke-dasharray="3,4"/>
+    <text x="${L-6}" y="${y(v)+4}" fill="var(--mut)" font-size="11" text-anchor="end">${finMoney(v)}</text>`).join('');
+  const step=Math.max(1, Math.round((points.length-1)/6));
+  const ticks=points.map((p,i)=>({p,i})).filter(({i})=>i%step===0||i===points.length-1)
+    .map(({p,i})=>`<line x1="${x(i)}" y1="${H-B}" x2="${x(i)}" y2="${H-B+4}" stroke="var(--mut)"/>
+      <text x="${x(i)}" y="${H-B+16}" fill="var(--mut)" font-size="10" text-anchor="middle">${escapeHtml(String(p.period||''))}</text>`).join('');
   const last=points[points.length-1];
-  return `<svg viewBox="0 0 ${W} ${H+22}" style="width:100%;height:auto">
-    <polyline points="${pl}" fill="none" stroke="${color||'var(--acc)'}" stroke-width="2.5" stroke-linejoin="round"/>
-    <text x="${pad}" y="${H+16}" fill="var(--mut)" font-size="11">${escapeHtml(points[0].period||'')} · low ${finMoney(min)}</text>
-    <text x="${W-pad}" y="${H+16}" fill="var(--mut)" font-size="11" text-anchor="end">${escapeHtml(last.period||'')} · ${finMoney(last[valueKey])}</text>
+  return `<div style="display:flex;gap:16px;align-items:center;margin-bottom:4px;font-size:12px">
+      <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:18px;height:3px;background:${c};border-radius:2px;display:inline-block"></span>${escapeHtml(label||'Value')} ($)</span>
+      <span class="pf-meta">latest: ${finMoney(last[valueKey])} (${escapeHtml(String(last.period||''))})</span>
+    </div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">
+    ${grid}
+    <line x1="${L}" y1="${T}" x2="${L}" y2="${H-B}" stroke="var(--mut)" stroke-width="1"/>
+    <line x1="${L}" y1="${H-B}" x2="${W-R}" y2="${H-B}" stroke="var(--mut)" stroke-width="1"/>
+    <polyline points="${pl}" fill="none" stroke="${c}" stroke-width="2.5" stroke-linejoin="round"/>
+    ${ticks}
+    <text x="${(L+W-R)/2}" y="${H-2}" fill="var(--mut)" font-size="11" text-anchor="middle">Year →</text>
   </svg>`;
 }
+/* sortable + filterable data table (all Financial Statements tables) */
+window._finT={};
+function finDataTable(id, cols, rows){
+  window._finT[id]={cols, rows, q:'', k:null, dir:1};
+  return `<div class="card" style="overflow-x:auto">
+    <input placeholder="🔍 Filter table…" style="max-width:260px;margin-bottom:8px;background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 10px;font-size:13px" oninput="finTQ('${id}',this.value)">
+    <span class="pf-meta" id="ft-n-${id}" style="margin-left:8px"></span>
+    <div id="ft-${id}">${finTBody(id)}</div></div>`;
+}
+function finTBody(id){
+  const t=window._finT[id]; let rows=t.rows;
+  if(t.q){ const q=t.q.toLowerCase();
+    rows=rows.filter(r=>Object.values(r).some(v=>String(v??'').toLowerCase().includes(q))); }
+  if(t.k){ const dir=t.dir;
+    rows=rows.slice().sort((a,b)=>{ const av=a[t.k], bv=b[t.k];
+      if(av==null&&bv==null) return 0; if(av==null) return 1; if(bv==null) return -1;
+      return (typeof av==='number'&&typeof bv==='number' ? av-bv : String(av).localeCompare(String(bv)))*dir; }); }
+  setTimeout(()=>{ const cnt=$('#ft-n-'+id); if(cnt) cnt.textContent=rows.length+' rows'; },0);
+  const head='<tr>'+t.cols.map(c=>`<th style="cursor:pointer;white-space:nowrap;user-select:none" title="Click to sort" onclick="finTSort('${id}','${c.key}')">${c.label}${t.k===c.key?(t.dir>0?' ▲':' ▼'):''}</th>`).join('')+'</tr>';
+  const body=rows.slice(0,500).map(r=>'<tr>'+t.cols.map(c=>{
+    const v=r[c.key];
+    const disp=c.render?c.render(r):(c.money?finMoney(v):escapeHtml(String(v??'—')));
+    return `<td${c.money&&(v??0)<0?' class="neg"':''}>${disp}</td>`;
+  }).join('')+'</tr>').join('');
+  return `<table class="mini" style="width:100%">${head}${body}</table>`+(rows.length>500?`<div class="pf-meta">Showing 500 of ${rows.length} — refine the filter.</div>`:'');
+}
+function finTQ(id,v){ window._finT[id].q=v; const el=$('#ft-'+id); if(el) el.innerHTML=finTBody(id); }
+function finTSort(id,k){ const t=window._finT[id]; t.dir=(t.k===k)?-t.dir:1; t.k=k; const el=$('#ft-'+id); if(el) el.innerHTML=finTBody(id); }
 function finBars(cats){
   const entries=Object.entries(cats||{}).filter(([,v])=>v>0);
   const max=Math.max(...entries.map(([,v])=>v),1);
@@ -3085,8 +3128,10 @@ function finRender(){
   if(!d){ out.innerHTML='<div class="spin">Loading…</div>'; return; }
   const yr=$('#fin-year').value?parseInt($('#fin-year').value):null;
   $('#fin-asof').textContent = (d.latest&&d.latest.period)?('as of '+d.latest.period):'';
+  const ps=r=>r.year+((r.quarter||4)/10);
   if(page==='overview'){
     const st=d.stats||{}, s=window._finData.summary||{};
+    const rows=(d.points||[]).map(p=>({_ps:ps(p), period:p.period, assets:p.assets, liabilities:p.liabilities, net_worth:p.net_worth})).reverse();
     out.innerHTML = `<div class="fin-cards">
         ${finCard('Net Worth', finMoney(st.current), '#34d399')}
         ${finCard('Total Assets', finMoney(s.total_assets))}
@@ -3095,29 +3140,42 @@ function finRender(){
         ${finCard('Highest', finMoney(st.highest))}${finCard('Lowest', finMoney(st.lowest))}${finCard('Average', finMoney(st.average))}
         ${finCard('Debt / Assets', s.debt_to_asset_pct!=null?s.debt_to_asset_pct+'%':'—')}
       </div>
-      <div class="fin-chart"><div class="up-label" style="margin-bottom:8px">Net Worth Timeline (${(d.points||[]).length} periods)</div>${finLine(d.points||[],'net_worth')}</div>
+      <div class="fin-chart"><div class="up-label" style="margin-bottom:8px">Net Worth Timeline (${(d.points||[]).length} periods)</div>${finLine(d.points||[],'net_worth',null,'Net Worth')}</div>
       ${(s.insights&&s.insights.length)?`<div class="card" style="margin-bottom:14px"><div class="up-label" style="margin-bottom:6px">💡 Insights</div>${s.insights.map(i=>'<div class="pf-meta" style="padding:2px 0">• '+escapeHtml(i)+'</div>').join('')}</div>`:''}
-      ${finTable('<tr><th>Period</th><th>Assets</th><th>Liabilities</th><th>Net Worth</th></tr>',
-        (d.points||[]).slice().reverse().map(p=>`<tr><td>${escapeHtml(p.period)}</td><td>${finMoney(p.assets)}</td><td>${finMoney(p.liabilities)}</td><td class="${p.net_worth>=0?'pos':'neg'}"><b>${finMoney(p.net_worth)}</b></td></tr>`).join(''))}`;
+      ${finDataTable('nw', [
+        {key:'_ps', label:'Period', render:r=>escapeHtml(r.period)},
+        {key:'assets', label:'Assets', money:1},
+        {key:'liabilities', label:'Liabilities', money:1},
+        {key:'net_worth', label:'Net Worth', money:1, render:r=>`<b class="${r.net_worth>=0?'pos':'neg'}">${finMoney(r.net_worth)}</b>`},
+      ], rows)}`;
   } else if(page==='assets'||page==='liabilities'){
     const lt=d.latest||{}, cats=lt.categories||{};
-    const rows=(d.rows||[]).filter(r=>!r.is_total&&(!yr||r.year===yr));
+    const rows=(d.rows||[]).filter(r=>!r.is_total&&(!yr||r.year===yr))
+      .map(r=>({item:r.item, category:r.category||'', _ps:ps(r), period:(r.quarter?('Q'+r.quarter+' '):'')+r.year, value:r.value})).reverse();
     const cardset = page==='assets'
       ? [['Total Assets',lt.total],['Brokerage',cats['Brokerage']],['401K',cats['401K']],['529',cats['529']],['Cash',cats['Cash']],['Crypto',cats['Crypto']],['Real Estate',cats['Real Estate']]]
       : [['Total Debt',lt.total],['Mortgage',cats['Mortgage']],['Margin',cats['Margin']],['Credit Card',cats['Credit Card']],['Loan',cats['Loan']],['Other Debt',cats['Other Debt']]];
     out.innerHTML = `<div class="fin-cards">${cardset.filter(([,v])=>v!=null).map(([l,v])=>finCard(l,finMoney(v))).join('')}</div>
-      <div class="fin-chart"><div class="up-label" style="margin-bottom:8px">${page==='assets'?'Asset':'Debt'} Trend</div>${finLine(d.timeline||[],'total', page==='assets'?'var(--acc)':'#f87171')}</div>
+      <div class="fin-chart"><div class="up-label" style="margin-bottom:8px">${page==='assets'?'Asset':'Debt'} Trend</div>${finLine(d.timeline||[],'total', page==='assets'?'var(--acc)':'#f87171', page==='assets'?'Total Assets':'Total Debt')}</div>
       <div class="fin-chart"><div class="up-label" style="margin-bottom:8px">${lt.period?('Composition · '+lt.period):'Composition'}</div>${finBars(cats)}</div>
-      ${finTable('<tr><th>Item</th><th>Category</th><th>Period</th><th>Value</th></tr>',
-        rows.slice().reverse().slice(0,400).map(r=>`<tr><td>${escapeHtml(r.item)}</td><td class="muted">${escapeHtml(r.category||'')}</td><td>${r.quarter?('Q'+r.quarter+' '):''}${r.year}</td><td>${finMoney(r.value)}</td></tr>`).join(''))}`;
+      ${finDataTable(page, [
+        {key:'item', label:'Item'},
+        {key:'category', label:'Category'},
+        {key:'_ps', label:'Period', render:r=>escapeHtml(r.period)},
+        {key:'value', label:'Value', money:1},
+      ], rows)}`;
   } else if(page==='cashflow'){
     const items=[...new Set((d.rows||[]).map(r=>r.item))];
-    const rows=(d.rows||[]).filter(r=>!yr||r.year===yr);
-    out.innerHTML = `<div class="fin-chart"><div class="up-label" style="margin-bottom:8px">Tracked metrics: ${items.map(escapeHtml).join(' · ')}</div>${finLine(d.timeline||[],'total','#22d3ee')}</div>
-      ${finTable('<tr><th>Metric</th><th>Period</th><th>Value</th></tr>',
-        rows.slice().reverse().slice(0,400).map(r=>`<tr><td>${escapeHtml(r.item)}</td><td>${r.quarter?('Q'+r.quarter+' '):''}${r.year}</td><td>${finMoney(r.value)}</td></tr>`).join(''))}`;
+    const rows=(d.rows||[]).filter(r=>!yr||r.year===yr)
+      .map(r=>({item:r.item, _ps:ps(r), period:(r.quarter?('Q'+r.quarter+' '):'')+r.year, value:r.value})).reverse();
+    out.innerHTML = `<div class="fin-chart"><div class="up-label" style="margin-bottom:8px">Tracked metrics: ${items.map(escapeHtml).join(' · ')}</div>${finLine(d.timeline||[],'total','#22d3ee','Cashflow Total')}</div>
+      ${finDataTable('cf', [
+        {key:'item', label:'Metric'},
+        {key:'_ps', label:'Period', render:r=>escapeHtml(r.period)},
+        {key:'value', label:'Value', money:1},
+      ], rows)}`;
   } else if(page==='tax'){
-    const rows=(d.rows||[]).filter(r=>!yr||r.year===yr);
+    const rows=(d.rows||[]).filter(r=>!yr||r.year===yr).slice().reverse();
     const last=(d.rows||[])[d.rows.length-1]||{};
     const pts=(d.rows||[]).map(r=>({period:String(r.year), total_income:r.total_income}));
     out.innerHTML = `<div class="fin-cards">
@@ -3125,14 +3183,27 @@ function finRender(){
         ${finCard('Wages', finMoney(last.wages))}${finCard('Capital Gains', finMoney(last.capital_gain))}
         ${finCard('Dividends', finMoney(last.dividend))}${finCard('Tax Refund', finMoney(last.tax_refund))}
       </div>
-      <div class="fin-chart"><div class="up-label" style="margin-bottom:8px">Income Growth</div>${finLine(pts,'total_income','#a78bfa')}</div>
-      ${finTable('<tr><th>Year</th><th>Total Income</th><th>Wages</th><th>Capital Gain</th><th>Dividend</th><th>Interest</th><th>Refund</th><th>Other</th></tr>',
-        rows.slice().reverse().map(r=>`<tr><td><b>${r.year}</b></td><td>${finMoney(r.total_income)}</td><td>${finMoney(r.wages)}</td><td>${finMoney(r.capital_gain)}</td><td>${finMoney(r.dividend)}</td><td>${finMoney(r.interest)}</td><td>${finMoney(r.tax_refund)}</td><td>${finMoney(r.other_income)}</td></tr>`).join(''))}`;
+      <div class="fin-chart"><div class="up-label" style="margin-bottom:8px">Income Growth</div>${finLine(pts,'total_income','#a78bfa','Total Income')}</div>
+      ${finDataTable('tax', [
+        {key:'year', label:'Year', render:r=>'<b>'+r.year+'</b>'},
+        {key:'total_income', label:'Total Income', money:1},
+        {key:'wages', label:'Wages', money:1},
+        {key:'capital_gain', label:'Capital Gain', money:1},
+        {key:'dividend', label:'Dividend', money:1},
+        {key:'interest', label:'Interest', money:1},
+        {key:'tax_refund', label:'Refund', money:1},
+        {key:'other_income', label:'Other', money:1},
+      ], rows)}`;
   } else if(page==='ccinterest'){
+    const pct=v=>v==null?'—':(v<1?(v*100).toFixed(2)+'%':v+'%');
     out.innerHTML = `<div class="pf-meta" style="margin-bottom:8px">APR reference per card (from the workbook's Credit Card Interest sheet).</div>`+
-      finTable('<tr><th>Card</th><th>Purchase APR</th><th>Cash Advance</th><th>Balance Transfer</th><th>Note</th></tr>',
-        (d.rows||[]).map(r=>{const pct=v=>v==null?'—':(v<1?(v*100).toFixed(2)+'%':v+'%');
-          return `<tr><td><b>${escapeHtml(r.card)}</b></td><td>${pct(r.purchase_apr)}</td><td>${pct(r.cash_advance_apr)}</td><td>${pct(r.balance_transfer_apr)}</td><td class="muted">${escapeHtml(r.note||'')}</td></tr>`;}).join(''));
+      finDataTable('cc', [
+        {key:'card', label:'Card', render:r=>'<b>'+escapeHtml(r.card)+'</b>'},
+        {key:'purchase_apr', label:'Purchase APR', render:r=>pct(r.purchase_apr)},
+        {key:'cash_advance_apr', label:'Cash Advance', render:r=>pct(r.cash_advance_apr)},
+        {key:'balance_transfer_apr', label:'Balance Transfer', render:r=>pct(r.balance_transfer_apr)},
+        {key:'note', label:'Note', render:r=>'<span class="muted">'+escapeHtml(r.note||'')+'</span>'},
+      ], d.rows||[]);
   } else if(page==='expenses'){
     const save=(d.monthly_income&&d.monthly_spend)?((d.monthly_income-d.monthly_spend)/d.monthly_income*100):null;
     out.innerHTML = `<div class="fin-cards">
@@ -3141,8 +3212,12 @@ function finRender(){
         ${finCard('Savings Rate', save!=null?save.toFixed(0)+'%':'—', save>=0?'#34d399':'#f87171')}
       </div>
       <div class="fin-chart"><div class="up-label" style="margin-bottom:8px">Spending by Category</div>${finBars(d.categories)}</div>
-      ${finTable('<tr><th>Account</th><th>Description</th><th>Category</th><th>Amount</th></tr>',
-        (d.lines||[]).map(r=>`<tr><td class="muted">${escapeHtml(r.account_group||'')}</td><td style="max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.description)}">${escapeHtml((r.description||'').slice(0,80))}</td><td>${escapeHtml(r.category)}</td><td class="${r.amount>=0?'pos':'neg'}">${finMoney(r.amount)}</td></tr>`).join(''))}`;
+      ${finDataTable('exp', [
+        {key:'account_group', label:'Account', render:r=>'<span class="muted">'+escapeHtml(r.account_group||'')+'</span>'},
+        {key:'description', label:'Description', render:r=>`<span style="display:inline-block;max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom" title="${escapeHtml(r.description)}">${escapeHtml((r.description||'').slice(0,80))}</span>`},
+        {key:'category', label:'Category'},
+        {key:'amount', label:'Amount', money:1, render:r=>`<span class="${r.amount>=0?'pos':'neg'}">${finMoney(r.amount)}</span>`},
+      ], d.lines||[])}`;
   }
 }
 function finCopilot(){
