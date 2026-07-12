@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>artikBroker — Stock Analyzer</title>
+<title>ArtikFinance — Personal Finance & Investing</title>
 <style>
   :root {
     --bg:#070b12; --panel:#111824; --panel2:#1b2433; --line:#26313f;
@@ -266,6 +266,16 @@
   .td-f > span { color:var(--mut); }
   .td-f input, .td-f select { background:var(--bg); border:1px solid var(--line); color:var(--txt); border-radius:8px; padding:8px 10px; font-size:13px; }
   .td-tab { font-size:13px; }
+  /* ArtikFinance — Financial Statements */
+  .fin-sub { padding-left:34px !important; font-size:13px; }
+  .app.collapsed #fin-tree { display:none; }
+  .fin-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; margin-bottom:14px; }
+  .fin-cards .card .v { font-size:20px; font-weight:800; margin-top:4px; overflow-wrap:anywhere; }
+  .fin-chart { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:14px; }
+  .fin-bar { display:flex; align-items:center; gap:8px; margin:4px 0; font-size:12.5px; }
+  .fin-bar .lbl { width:120px; color:var(--mut); text-align:right; flex:none; }
+  .fin-bar .track { flex:1; background:var(--bg); border-radius:6px; height:18px; overflow:hidden; }
+  .fin-bar .fill { height:100%; border-radius:6px; background:linear-gradient(90deg,var(--acc),var(--acc2)); }
   select { background:var(--panel); color:var(--txt); border:1px solid var(--line);
            border-radius:8px; padding:8px 12px; font-size:14px; }
   .pf-meta { color:var(--mut); font-size:12.5px; }
@@ -903,15 +913,15 @@
   <aside class="sidebar">
     <div class="brand">
       <div class="logo">A</div>
-      <div class="name">artik<span>_broker</span></div>
+      <div class="name">artik<span>_finance</span></div>
       <button class="collapse" title="Collapse menu" onclick="toggleNav()">‹</button>
     </div>
     <nav class="side-nav">
-      <div class="nav-sec">Workspace</div>
+      <div class="nav-sec">Home</div>
       <button class="nav-item active" id="nav-dashboard" onclick="showTab('analyze','nav-dashboard')"><span class="ic">🏠</span><span>Dashboard</span></button>
       <button class="nav-item" id="tab-analyze" onclick="showTab('analyze')"><span class="ic">🔍</span><span>Analyze</span></button>
       <button class="nav-item" id="nav-research" onclick="goResearch()"><span class="ic">🧭</span><span>Research</span></button>
-      <div class="nav-sec">Markets</div>
+      <div class="nav-sec">Broker</div>
       <button class="nav-item" id="tab-portfolio" onclick="showTab('portfolio')"><span class="ic">💼</span><span>Portfolio</span></button>
       <button class="nav-item" id="tab-etrade" onclick="showTab('etrade')"><span class="ic">🔗</span><span>E*TRADE</span></button>
       <button class="nav-item" id="tab-schwab" onclick="showTab('schwab')"><span class="ic">🏦</span><span>Schwab</span></button>
@@ -919,9 +929,19 @@
       <button class="nav-item" id="tab-favorites" onclick="showTab('favorites')"><span class="ic">⭐</span><span>Favorites</span><span id="fav-nav-count" class="navcount"></span></button>
       <button class="nav-item" id="tab-sp500" onclick="showTab('sp500')"><span class="ic">🏛️</span><span>S&amp;P 500</span></button>
       <button class="nav-item" id="tab-dow" onclick="showTab('dow')"><span class="ic">🎩</span><span>Dow</span></button>
-      <div class="nav-sec">Trading Desk</div>
       <button class="nav-item" id="tab-trading" onclick="showTab('trading')"><span class="ic">🤖</span><span>Trading Desk</span></button>
-      <div class="nav-sec">Intelligence</div>
+      <div class="nav-sec">Personal Finance</div>
+      <button class="nav-item" id="tab-finance" onclick="finToggleTree()"><span class="ic">📑</span><span>Financial Statements</span><span class="ic" id="fin-caret" style="margin-left:auto;font-size:10px">▸</span></button>
+      <div id="fin-tree" class="hidden">
+        <button class="nav-item fin-sub" onclick="showFinance('overview')"><span class="ic">📈</span><span>Net Worth</span></button>
+        <button class="nav-item fin-sub" onclick="showFinance('assets')"><span class="ic">💰</span><span>Assets</span></button>
+        <button class="nav-item fin-sub" onclick="showFinance('liabilities')"><span class="ic">💳</span><span>Liabilities</span></button>
+        <button class="nav-item fin-sub" onclick="showFinance('cashflow')"><span class="ic">💵</span><span>Cash Flow</span></button>
+        <button class="nav-item fin-sub" onclick="showFinance('tax')"><span class="ic">🧾</span><span>Tax &amp; Income</span></button>
+        <button class="nav-item fin-sub" onclick="showFinance('ccinterest')"><span class="ic">💳</span><span>Card Interest</span></button>
+        <button class="nav-item fin-sub" onclick="showFinance('expenses')"><span class="ic">📅</span><span>Monthly Expenses</span></button>
+      </div>
+      <div class="nav-sec">Administration</div>
       <button class="nav-item hidden" id="tab-agents" onclick="showTab('agents')"><span class="ic">🤖</span><span>Agents</span></button>
       <button class="nav-item" id="tab-history" onclick="showTab('history')"><span class="ic">🕘</span><span>History</span></button>
       <button class="nav-item" id="tab-skills" onclick="showTab('skills')"><span class="ic">🧠</span><span>Skills</span></button>
@@ -946,7 +966,7 @@
   <section id="view-analyze">
     <div class="hero">
       <!-- 1 · Title -->
-      <h1>Ask Artik Broker</h1>
+      <h1>Ask ArtikFinance</h1>
       <div class="tag">Search in plain English, screen by criteria, or enter tickers.</div>
 
       <!-- 2 · Mode selector (above the search box) -->
@@ -1166,6 +1186,19 @@
     <div class="pf-meta" style="margin-top:14px;font-size:11px;opacity:.7">Not investment advice. The desk flags high-probability ideas under risk limits — it never guarantees profit. Live trading is admin-only and disabled by default.</div>
   </section>
 
+  <!-- ARTIKFINANCE — PERSONAL FINANCIAL STATEMENTS (imported workbook → DB) -->
+  <section id="view-finance" class="hidden">
+    <div class="pf-bar" style="flex-wrap:wrap;gap:8px">
+      <span class="up-label" id="fin-title">📑 Financial Statements</span>
+      <span class="pf-meta" id="fin-asof"></span>
+      <span style="flex:1"></span>
+      <select id="fin-year" onchange="finRender()" style="display:none"><option value="">All years</option></select>
+      <button class="ex-btn" onclick="finCopilot()">🤖 Analyze with Artik Copilot</button>
+      <button class="ghost" onclick="finReimport()" title="Re-import the bundled workbook">↻ Re-import</button>
+    </div>
+    <div id="fin-out" style="margin-top:12px"><div class="spin">Loading…</div></div>
+  </section>
+
   <!-- HISTORY VIEW (past searches, stored in this browser) -->
   <section id="view-history" class="hidden">
     <div class="pf-bar">
@@ -1182,7 +1215,7 @@
   <section id="view-agents" class="hidden">
     <div class="pf-bar">
       <span class="up-label">🤖 Agent Management</span>
-      <span class="pf-meta" id="ag-sched-note">Background agents that feed Artik Broker with intelligence signals.</span>
+      <span class="pf-meta" id="ag-sched-note">Background agents that feed ArtikFinance with intelligence signals.</span>
       <button class="ghost" style="margin-left:auto" onclick="addAgentConfig()">➕ Add Configuration</button>
       <button class="ghost" onclick="viewRunHistory()">🕓 Run History</button>
       <button class="ghost" onclick="loadAgents()">🔄 Refresh</button>
@@ -2311,7 +2344,7 @@ function detContent(r, name){
     return `
       <div class="panel-card"><h3>🤖 AI Summary</h3>
         <div class="ai-summary">${summary}</div>
-        <button class="ex-btn" style="margin-top:12px" onclick="analyzeWithCopilot()">💬 Ask Artik Broker AI for deeper analysis</button>
+        <button class="ex-btn" style="margin-top:12px" onclick="analyzeWithCopilot()">💬 Ask ArtikFinance AI for deeper analysis</button>
       </div>
       <div class="panel-card"><h3>Score Breakdown</h3>${kpiCards(b.categories)}
         <div class="formula" style="margin-top:14px">final = ( base − penalties ) × multiplier = ( <b>${b.base}</b> − <b>${b.penalties}</b> ) × <b>${b.multiplier}×</b> = <b>${b.final}</b> → <b>${r.rating}</b></div>
@@ -2987,6 +3020,151 @@ function downloadCSV(){
 // ── Tabs ────────────────────────────────────────────────────────────────────
 let _pfLoaded = false;
 const _idxLoaded = {};
+/* ═══════════ ArtikFinance — Personal Financial Statements ═══════════ */
+const FIN_TITLES = {overview:'📈 Net Worth', assets:'💰 Assets', liabilities:'💳 Liabilities',
+  cashflow:'💵 Cash Flow', tax:'🧾 Tax & Income', ccinterest:'💳 Credit Card Interest', expenses:'📅 Monthly Expenses'};
+window._finPage='overview'; window._finData={};
+function finToggleTree(){ const t=$('#fin-tree'); t.classList.toggle('hidden'); const c=$('#fin-caret'); if(c) c.textContent=t.classList.contains('hidden')?'▸':'▾'; }
+function finMoney(v){ return v==null?'—':(v<0?'-':'')+'$'+Math.abs(Math.round(v)).toLocaleString(); }
+function showFinance(page){
+  window._finPage=page;
+  const t=$('#fin-tree'); if(t&&t.classList.contains('hidden')) finToggleTree();
+  showTab('finance','tab-finance');
+  $('#fin-title').textContent = FIN_TITLES[page]||'📑 Financial Statements';
+  finLoad(page);
+}
+const FIN_EP = {overview:'/api/finance/networth', assets:'/api/finance/assets', liabilities:'/api/finance/liabilities',
+  cashflow:'/api/finance/cashflow', tax:'/api/finance/tax', ccinterest:'/api/finance/ccinterest', expenses:'/api/finance/expenses'};
+async function finLoad(page){
+  const out=$('#fin-out'); out.innerHTML='<div class="spin">Loading…</div>';
+  try{
+    if(!window._finData[page]){
+      const r=await fetch(FIN_EP[page]); const d=await r.json();
+      if(!r.ok){ out.innerHTML='<div class="card">'+escapeHtml(d.error||'Failed to load')+'</div>'; return; }
+      window._finData[page]=d;
+      if(page==='overview' && !window._finData.summary){
+        try{ window._finData.summary=await (await fetch('/api/finance/summary')).json(); }catch(e){}
+      }
+    }
+    finYears(page); finRender();
+  }catch(e){ out.innerHTML='<div class="card err">'+escapeHtml(String(e))+'</div>'; }
+}
+function finYears(page){
+  const sel=$('#fin-year'); const d=window._finData[page];
+  const rows=(d&&(d.rows||d.points))||[];
+  const ys=[...new Set(rows.map(r=>r.year).filter(Boolean))].sort();
+  sel.style.display = ys.length>1 && ['assets','liabilities','cashflow','tax'].includes(page) ? '' : 'none';
+  const cur=sel.value;
+  sel.innerHTML='<option value="">All years</option>'+ys.map(y=>`<option value="${y}">${y}</option>`).join('');
+  if(ys.map(String).includes(cur)) sel.value=cur;
+}
+function finLine(points, valueKey, color){
+  const vs=points.map(p=>p[valueKey]).filter(v=>v!=null);
+  if(vs.length<2) return '<div class="pf-meta">Not enough data to chart.</div>';
+  const min=Math.min(...vs), max=Math.max(...vs), W=760, H=150, pad=6;
+  const x=i=>pad+i*(W-2*pad)/(points.length-1), y=v=>H-pad-((v-min)/((max-min)||1))*(H-2*pad);
+  const pl=points.map((p,i)=>`${x(i).toFixed(1)},${y(p[valueKey]).toFixed(1)}`).join(' ');
+  const last=points[points.length-1];
+  return `<svg viewBox="0 0 ${W} ${H+22}" style="width:100%;height:auto">
+    <polyline points="${pl}" fill="none" stroke="${color||'var(--acc)'}" stroke-width="2.5" stroke-linejoin="round"/>
+    <text x="${pad}" y="${H+16}" fill="var(--mut)" font-size="11">${escapeHtml(points[0].period||'')} · low ${finMoney(min)}</text>
+    <text x="${W-pad}" y="${H+16}" fill="var(--mut)" font-size="11" text-anchor="end">${escapeHtml(last.period||'')} · ${finMoney(last[valueKey])}</text>
+  </svg>`;
+}
+function finBars(cats){
+  const entries=Object.entries(cats||{}).filter(([,v])=>v>0);
+  const max=Math.max(...entries.map(([,v])=>v),1);
+  return entries.map(([k,v])=>`<div class="fin-bar"><span class="lbl">${escapeHtml(k)}</span>
+    <div class="track"><div class="fill" style="width:${(v/max*100).toFixed(1)}%"></div></div>
+    <span style="min-width:90px">${finMoney(v)}</span></div>`).join('') || '<div class="pf-meta">No data.</div>';
+}
+function finCard(l,v,c){ return `<div class="card"><div class="pf-meta">${l}</div><div class="v"${c?` style="color:${c}"`:''}>${v}</div></div>`; }
+function finTable(head, rowsHtml){ return `<div class="card" style="overflow-x:auto"><table class="mini" style="width:100%">${head}${rowsHtml}</table></div>`; }
+function finRender(){
+  const page=window._finPage, d=window._finData[page], out=$('#fin-out');
+  if(!d){ out.innerHTML='<div class="spin">Loading…</div>'; return; }
+  const yr=$('#fin-year').value?parseInt($('#fin-year').value):null;
+  $('#fin-asof').textContent = (d.latest&&d.latest.period)?('as of '+d.latest.period):'';
+  if(page==='overview'){
+    const st=d.stats||{}, s=window._finData.summary||{};
+    out.innerHTML = `<div class="fin-cards">
+        ${finCard('Net Worth', finMoney(st.current), '#34d399')}
+        ${finCard('Total Assets', finMoney(s.total_assets))}
+        ${finCard('Total Liabilities', finMoney(s.total_liabilities), '#f87171')}
+        ${finCard('CAGR', st.cagr_pct!=null?st.cagr_pct+'%':'—')}
+        ${finCard('Highest', finMoney(st.highest))}${finCard('Lowest', finMoney(st.lowest))}${finCard('Average', finMoney(st.average))}
+        ${finCard('Debt / Assets', s.debt_to_asset_pct!=null?s.debt_to_asset_pct+'%':'—')}
+      </div>
+      <div class="fin-chart"><div class="up-label" style="margin-bottom:8px">Net Worth Timeline (${(d.points||[]).length} periods)</div>${finLine(d.points||[],'net_worth')}</div>
+      ${(s.insights&&s.insights.length)?`<div class="card" style="margin-bottom:14px"><div class="up-label" style="margin-bottom:6px">💡 Insights</div>${s.insights.map(i=>'<div class="pf-meta" style="padding:2px 0">• '+escapeHtml(i)+'</div>').join('')}</div>`:''}
+      ${finTable('<tr><th>Period</th><th>Assets</th><th>Liabilities</th><th>Net Worth</th></tr>',
+        (d.points||[]).slice().reverse().map(p=>`<tr><td>${escapeHtml(p.period)}</td><td>${finMoney(p.assets)}</td><td>${finMoney(p.liabilities)}</td><td class="${p.net_worth>=0?'pos':'neg'}"><b>${finMoney(p.net_worth)}</b></td></tr>`).join(''))}`;
+  } else if(page==='assets'||page==='liabilities'){
+    const lt=d.latest||{}, cats=lt.categories||{};
+    const rows=(d.rows||[]).filter(r=>!r.is_total&&(!yr||r.year===yr));
+    const cardset = page==='assets'
+      ? [['Total Assets',lt.total],['Brokerage',cats['Brokerage']],['401K',cats['401K']],['529',cats['529']],['Cash',cats['Cash']],['Crypto',cats['Crypto']],['Real Estate',cats['Real Estate']]]
+      : [['Total Debt',lt.total],['Mortgage',cats['Mortgage']],['Margin',cats['Margin']],['Credit Card',cats['Credit Card']],['Loan',cats['Loan']],['Other Debt',cats['Other Debt']]];
+    out.innerHTML = `<div class="fin-cards">${cardset.filter(([,v])=>v!=null).map(([l,v])=>finCard(l,finMoney(v))).join('')}</div>
+      <div class="fin-chart"><div class="up-label" style="margin-bottom:8px">${page==='assets'?'Asset':'Debt'} Trend</div>${finLine(d.timeline||[],'total', page==='assets'?'var(--acc)':'#f87171')}</div>
+      <div class="fin-chart"><div class="up-label" style="margin-bottom:8px">${lt.period?('Composition · '+lt.period):'Composition'}</div>${finBars(cats)}</div>
+      ${finTable('<tr><th>Item</th><th>Category</th><th>Period</th><th>Value</th></tr>',
+        rows.slice().reverse().slice(0,400).map(r=>`<tr><td>${escapeHtml(r.item)}</td><td class="muted">${escapeHtml(r.category||'')}</td><td>${r.quarter?('Q'+r.quarter+' '):''}${r.year}</td><td>${finMoney(r.value)}</td></tr>`).join(''))}`;
+  } else if(page==='cashflow'){
+    const items=[...new Set((d.rows||[]).map(r=>r.item))];
+    const rows=(d.rows||[]).filter(r=>!yr||r.year===yr);
+    out.innerHTML = `<div class="fin-chart"><div class="up-label" style="margin-bottom:8px">Tracked metrics: ${items.map(escapeHtml).join(' · ')}</div>${finLine(d.timeline||[],'total','#22d3ee')}</div>
+      ${finTable('<tr><th>Metric</th><th>Period</th><th>Value</th></tr>',
+        rows.slice().reverse().slice(0,400).map(r=>`<tr><td>${escapeHtml(r.item)}</td><td>${r.quarter?('Q'+r.quarter+' '):''}${r.year}</td><td>${finMoney(r.value)}</td></tr>`).join(''))}`;
+  } else if(page==='tax'){
+    const rows=(d.rows||[]).filter(r=>!yr||r.year===yr);
+    const last=(d.rows||[])[d.rows.length-1]||{};
+    const pts=(d.rows||[]).map(r=>({period:String(r.year), total_income:r.total_income}));
+    out.innerHTML = `<div class="fin-cards">
+        ${finCard('Latest Year', last.year||'—')}${finCard('Total Income', finMoney(last.total_income))}
+        ${finCard('Wages', finMoney(last.wages))}${finCard('Capital Gains', finMoney(last.capital_gain))}
+        ${finCard('Dividends', finMoney(last.dividend))}${finCard('Tax Refund', finMoney(last.tax_refund))}
+      </div>
+      <div class="fin-chart"><div class="up-label" style="margin-bottom:8px">Income Growth</div>${finLine(pts,'total_income','#a78bfa')}</div>
+      ${finTable('<tr><th>Year</th><th>Total Income</th><th>Wages</th><th>Capital Gain</th><th>Dividend</th><th>Interest</th><th>Refund</th><th>Other</th></tr>',
+        rows.slice().reverse().map(r=>`<tr><td><b>${r.year}</b></td><td>${finMoney(r.total_income)}</td><td>${finMoney(r.wages)}</td><td>${finMoney(r.capital_gain)}</td><td>${finMoney(r.dividend)}</td><td>${finMoney(r.interest)}</td><td>${finMoney(r.tax_refund)}</td><td>${finMoney(r.other_income)}</td></tr>`).join(''))}`;
+  } else if(page==='ccinterest'){
+    out.innerHTML = `<div class="pf-meta" style="margin-bottom:8px">APR reference per card (from the workbook's Credit Card Interest sheet).</div>`+
+      finTable('<tr><th>Card</th><th>Purchase APR</th><th>Cash Advance</th><th>Balance Transfer</th><th>Note</th></tr>',
+        (d.rows||[]).map(r=>{const pct=v=>v==null?'—':(v<1?(v*100).toFixed(2)+'%':v+'%');
+          return `<tr><td><b>${escapeHtml(r.card)}</b></td><td>${pct(r.purchase_apr)}</td><td>${pct(r.cash_advance_apr)}</td><td>${pct(r.balance_transfer_apr)}</td><td class="muted">${escapeHtml(r.note||'')}</td></tr>`;}).join(''));
+  } else if(page==='expenses'){
+    const save=(d.monthly_income&&d.monthly_spend)?((d.monthly_income-d.monthly_spend)/d.monthly_income*100):null;
+    out.innerHTML = `<div class="fin-cards">
+        ${finCard('Monthly Income', finMoney(d.monthly_income), '#34d399')}
+        ${finCard('Monthly Spend', finMoney(d.monthly_spend), '#f87171')}
+        ${finCard('Savings Rate', save!=null?save.toFixed(0)+'%':'—', save>=0?'#34d399':'#f87171')}
+      </div>
+      <div class="fin-chart"><div class="up-label" style="margin-bottom:8px">Spending by Category</div>${finBars(d.categories)}</div>
+      ${finTable('<tr><th>Account</th><th>Description</th><th>Category</th><th>Amount</th></tr>',
+        (d.lines||[]).map(r=>`<tr><td class="muted">${escapeHtml(r.account_group||'')}</td><td style="max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.description)}">${escapeHtml((r.description||'').slice(0,80))}</td><td>${escapeHtml(r.category)}</td><td class="${r.amount>=0?'pos':'neg'}">${finMoney(r.amount)}</td></tr>`).join(''))}`;
+  }
+}
+function finCopilot(){
+  const page=window._finPage, d=window._finData[page]||{}, s=window._finData.summary||{};
+  let ctx=`I'm looking at my ${FIN_TITLES[page]||page} page in ArtikFinance (personal financial statements, 2015→now).\n`;
+  if(s.net_worth!=null) ctx+=`Snapshot: net worth ${finMoney(s.net_worth)}, assets ${finMoney(s.total_assets)}, liabilities ${finMoney(s.total_liabilities)}, debt/assets ${s.debt_to_asset_pct}%.\n`;
+  if(page==='overview'&&d.points) ctx+=`Net worth timeline: `+d.points.map(p=>`${p.period}: ${finMoney(p.net_worth)}`).join('; ')+`.\n`;
+  if((page==='assets'||page==='liabilities')&&d.latest) ctx+=`${page} composition (${d.latest.period}): `+Object.entries(d.latest.categories||{}).map(([k,v])=>`${k} ${finMoney(v)}`).join(', ')+`. Trend: `+(d.timeline||[]).map(t=>`${t.period} ${finMoney(t.total)}`).join('; ')+`.\n`;
+  if(page==='tax'&&d.rows) ctx+=`Tax-income by year: `+d.rows.map(r=>`${r.year}: income ${finMoney(r.total_income)}`).join('; ')+`.\n`;
+  if(page==='expenses'&&d.categories) ctx+=`Monthly spending: income ${finMoney(d.monthly_income)}, spend ${finMoney(d.monthly_spend)}, by category `+Object.entries(d.categories).map(([k,v])=>`${k} ${finMoney(v)}`).join(', ')+`.\n`;
+  if(page==='ccinterest'&&d.rows) ctx+=`Card APRs: `+d.rows.map(r=>`${r.card} ${r.purchase_apr}`).join('; ')+`.\n`;
+  ctx+=`\nAnalyze this: key trends, what improved or worsened and why it matters, risks, and 3 concrete recommendations to improve my finances.`;
+  if(typeof copilotAsk==='function') copilotAsk(ctx);
+}
+async function finReimport(){
+  if(!confirm('Re-import the bundled financial statement workbook? This replaces the imported data (the workbook itself is untouched).')) return;
+  const r=await fetch('/api/finance/reimport',{method:'POST'}); const d=await r.json();
+  window._finData={};
+  alert(r.ok&&d.ok?`Re-imported: ${d.records} records, ${d.tax_years} tax years, ${d.expense_lines} expense lines.`:(d.error||'import failed'));
+  finLoad(window._finPage);
+}
+
 /* ═══════════ Autonomous Trading Desk ═══════════ */
 function tdEsc(s){ return escapeHtml(String(s==null?'':s)); }
 function tdMoney(v){ return v==null?'—':'$'+Number(v).toLocaleString(undefined,{maximumFractionDigits:2}); }
@@ -3237,18 +3415,18 @@ async function tdLoadLog(){
     pane.innerHTML='<div class="card">'+(rows.length?rows.map(x=>`<div class="pf-meta" style="padding:4px 0;border-bottom:1px solid var(--line)">${tdTime(x.ts)} — <b>${tdEsc(x.event)}</b> ${tdEsc(x.ticker||'')} ${x.scope?('scope='+tdEsc(x.scope)):''} ${x.recommendations!=null?(x.recommendations+' recs / '+ (x.rejected||0)+' filtered'):''} ${x.pl!=null?('P/L '+tdMoney(x.pl)):''}</div>`).join(''):'<span class="pf-meta">No decisions logged yet.</span>')+'</div>';
   }catch(e){ pane.innerHTML='<div class="card err">'+tdEsc(e)+'</div>'; }
 }
-const _VIEWS = ['analyze','detail','portfolio','etrade','schwab','ibkr','favorites','sp500','dow','trading','history','agents','skills','users','settings'];
+const _VIEWS = ['analyze','detail','portfolio','etrade','schwab','ibkr','favorites','sp500','dow','trading','finance','history','agents','skills','users','settings'];
 const _TITLES = {analyze:'Analyze', detail:'Stock Detail', portfolio:'Portfolio', etrade:'E*TRADE', schwab:'Charles Schwab', ibkr:'Interactive Brokers', favorites:'Favorites',
-                 sp500:'S&P 500', dow:'Dow Jones', trading:'Trading Desk', history:'History', agents:'Agents', skills:'Skills Management', users:'User Management', settings:'Settings'};
+                 sp500:'S&P 500', dow:'Dow Jones', trading:'Trading Desk', finance:'Financial Statements', history:'History', agents:'Agents', skills:'Skills Management', users:'User Management', settings:'Settings'};
 function showTab(name, navId){
   // Admin-only views: block non-admins (belt & suspenders; backend also returns 403).
-  if(window._me && !window._isAdmin && (name==='etrade'||name==='schwab'||name==='ibkr'||name==='portfolio'||name==='users')){
+  if(window._me && !window._isAdmin && (name==='etrade'||name==='schwab'||name==='ibkr'||name==='portfolio'||name==='users'||name==='finance')){
     name='analyze'; navId='nav-dashboard';
   }
   _VIEWS.forEach(v => { const el=$('#view-'+v); if(el) el.classList.toggle('hidden', v!==name); });
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
   const nav = $('#'+(navId || ('tab-'+name))); if(nav) nav.classList.add('active');
-  if($('#wtitle')) $('#wtitle').textContent = _TITLES[name] || 'Artik Broker';
+  if($('#wtitle')) $('#wtitle').textContent = _TITLES[name] || 'ArtikFinance';
   $('#app').classList.remove('navopen');
   // Keep window._rows pointing at the active result set so index-based
   // showDetail/Explain handlers resolve the right row (analyze vs favorites).

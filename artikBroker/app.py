@@ -16,6 +16,7 @@ from pathlib import Path
 import csv
 import io
 import json
+import threading
 import os
 import secrets
 import re
@@ -50,6 +51,7 @@ import intelligence_store  # noqa: E402  (persistent intelligence snapshots for 
 import portfolio_store  # noqa: E402  (persistent broker portfolio snapshots)
 import trading_store  # noqa: E402  (Trading Desk: settings/paper/log KV, durable)
 import trading_desk  # noqa: E402  (Trading Desk: universe/recommendation/risk engine)
+import finance  # noqa: E402  (ArtikFinance: personal financial statement import + queries)
 import models as _models  # noqa: E402  (LLM model chains + version fallback)
 import news_runs  # noqa: E402  (run history + results reader)
 import news_data  # noqa: E402  (deletes a config's run history/logs + exclusive-ticker articles)
@@ -244,7 +246,8 @@ async def _auth_gate(request: Request, call_next):
     request.state.user = user
     # Role-based access: E*TRADE + Portfolio APIs are admin-only (server-side enforced,
     # not just hidden in the sidebar).
-    _ADMIN_ONLY = ("/api/etrade", "/api/schwab", "/api/ibkr", "/api/portfolio", "/api/analyze_portfolio")
+    _ADMIN_ONLY = ("/api/etrade", "/api/schwab", "/api/ibkr", "/api/portfolio",
+                   "/api/analyze_portfolio", "/api/finance")
     if user.get("role") != "admin" and any(path.startswith(p) for p in _ADMIN_ONLY):
         return JSONResponse({"error": "admin only"}, status_code=403)
     if user["must_reset_password"] and path not in (
@@ -286,7 +289,7 @@ def _auth_page(title: str, fields: str, endpoint: str, submit: str, extra: str =
     # NOTE: <form> has no method/action — submission is intercepted by JS and sent as
     # JSON, so a password can never be transmitted as form data or land in the URL.
     head = f"""<!doctype html><html><head><meta charset=utf-8>
-<meta name=viewport content="width=device-width,initial-scale=1"><title>artikBroker — {title}</title>
+<meta name=viewport content="width=device-width,initial-scale=1"><title>ArtikFinance — {title}</title>
 <style>body{{margin:0;height:100vh;display:grid;place-items:center;background:#0d1117;color:#e6edf3;
 font-family:-apple-system,Segoe UI,Roboto,sans-serif}}form{{background:#161b22;border:1px solid #30363d;
 border-radius:12px;padding:28px 26px;width:320px}}h1{{font-size:18px;margin:0 0 4px}}p.sub{{margin:0 0 18px;
@@ -295,7 +298,7 @@ input{{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:8px;bord
 background:#0d1117;color:#e6edf3;font-size:14px}}button{{margin-top:16px;width:100%;padding:10px;border:0;
 border-radius:8px;background:#1f6feb;color:#fff;font-weight:600;font-size:14px;cursor:pointer}}
 .err{{color:#f85149;font-size:13px;margin:10px 0 0}}a{{color:#58a6ff;font-size:12.5px}}</style></head>
-<body><form id=authform autocomplete=on><h1>🔎 artikBroker</h1><p class=sub>{title}</p>
+<body><form id=authform autocomplete=on><h1>💠 ArtikFinance</h1><p class=sub>{title}</p>
 {fields}<div class=err id=autherr style="display:none"></div><button type=submit>{submit}</button>{extra}</form>"""
     return head + _auth_script(endpoint) + "</body></html>"
 
@@ -1362,6 +1365,68 @@ def _start_trading_scheduler():
     trading_scheduler.start(scan_core=_trading_scan_core, load_portfolio=_trading_portfolio)
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# ArtikFinance — Personal Financial Statements (admin-only via _ADMIN_ONLY).
+# The bundled workbook imports once at startup; the DB is the runtime source.
+# ══════════════════════════════════════════════════════════════════════════════
+@app.on_event("startup")
+def _finance_startup_import():
+    threading.Thread(target=finance.ensure_imported, daemon=True).start()
+
+
+@app.get("/api/finance/summary")
+def finance_summary():
+    return finance.summary()
+
+
+@app.get("/api/finance/assets")
+def finance_assets():
+    return {"timeline": finance.timeline("asset"), "latest": finance.latest_breakdown("asset"),
+            "rows": finance.records("asset")}
+
+
+@app.get("/api/finance/liabilities")
+def finance_liabilities():
+    return {"timeline": finance.timeline("liability"), "latest": finance.latest_breakdown("liability"),
+            "rows": finance.records("liability")}
+
+
+@app.get("/api/finance/networth")
+def finance_networth():
+    return finance.net_worth()
+
+
+@app.get("/api/finance/cashflow")
+def finance_cashflow():
+    return {"timeline": finance.timeline("cashflow"), "rows": finance.records("cashflow")}
+
+
+@app.get("/api/finance/tax")
+def finance_tax():
+    return {"rows": finance.tax_income()}
+
+
+@app.get("/api/finance/ccinterest")
+def finance_ccinterest():
+    return {"rows": finance.cc_interest()}
+
+
+@app.get("/api/finance/expenses")
+def finance_expenses():
+    return finance.monthly_expenses()
+
+
+@app.get("/api/finance/imports")
+def finance_imports():
+    return {"workbook": finance.workbook_path(), "history": finance.import_history()}
+
+
+@app.post("/api/finance/reimport")
+def finance_reimport():
+    """Re-import the bundled workbook, replacing existing data (audited in import history)."""
+    return finance.run_import(replace=True)
+
+
 @app.post("/api/users")
 async def api_users_create(request: Request):
     admin = _require_admin(request)
@@ -1940,7 +2005,7 @@ _SEARCH_TOOL = {
 }
 
 _SEARCH_SYSTEM = (
-    "You are Artik Broker AI Search, a stock discovery engine. Convert the user's "
+    "You are ArtikFinance AI Search, a stock discovery engine. Convert the user's "
     "natural-language query into (1) a one-line intent summary, (2) optional hard filters, "
     "and (3) 12-25 candidate US-listed operating-company tickers most relevant to the intent. "
     "Use correct, real ticker symbols. Prefer liquid, well-known names with strong exposure to "
@@ -2112,8 +2177,8 @@ def api_search(
 # ──────────────────────────────────────────────────────────────────────────────
 _COPILOT_MODES = ["research", "analysis", "discovery", "comparison", "screening"]
 
-_COPILOT_SYSTEM = """You are Artik Broker AI — the research, analysis, discovery, comparison and screening
-copilot for Artik Broker. You operate on top of the Artik Scoring Engine and help users understand stocks,
+_COPILOT_SYSTEM = """You are ArtikFinance AI — the research, analysis, discovery, comparison and screening
+copilot for ArtikFinance. You operate on top of the Artik Scoring Engine and help users understand stocks,
 industries, investment themes and Artik ratings. You are an equity-research and stock-discovery platform,
 NOT a generic financial chatbot and NOT a personal investment advisor. You are NOT limited to BUY/HOLD/SELL.
 
@@ -2197,7 +2262,7 @@ _COPILOT_TOOL_SCHEMA = {
     "required": ["mode", "confidence", "needs_clarification", "answer"],
 }
 _COPILOT_TOOL_NAME = "artik_response"
-_COPILOT_TOOL_DESC = ("Return the Artik Broker AI response together with routing metadata "
+_COPILOT_TOOL_DESC = ("Return the ArtikFinance AI response together with routing metadata "
                       "(mode, confidence, and an optional clarification request).")
 
 

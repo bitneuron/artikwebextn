@@ -39,6 +39,10 @@ RUN rm -rf /app/config /app/cache /app/search_history
 COPY artikAgents/agents/knowledge_bases/stock_analysis/skills /app/skills_library
 ENV SKILLS_DIR=/app/skills_library
 
+# ArtikFinance: bundled personal-financial-statement workbook (imported into the DB at startup;
+# the DB — Litestream-replicated — is the runtime source, the workbook is import-only).
+COPY ["artikAgents/agents/knowledge_bases/personal_financial_statement/Financial Statement.xlsx", "/app/finance_kb/Financial Statement.xlsx"]
+
 # LLM model versions — single source of truth (env vars can override at runtime).
 COPY artikAgents/agents/shared/models.json /app/models.json
 
