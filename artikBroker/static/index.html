@@ -2990,6 +2990,7 @@ const _idxLoaded = {};
 /* ═══════════ Autonomous Trading Desk ═══════════ */
 function tdEsc(s){ return escapeHtml(String(s==null?'':s)); }
 function tdMoney(v){ return v==null?'—':'$'+Number(v).toLocaleString(undefined,{maximumFractionDigits:2}); }
+function tdTime(iso){ if(!iso) return '—'; try{ return new Date(iso).toLocaleString('en-US',{timeZone:'America/Los_Angeles',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})+' PT'; }catch(e){ return String(iso).slice(0,19).replace('T',' '); } }
 function tdToast(msg){ let t=$('#td-toast'); if(!t){ t=document.createElement('div'); t.id='td-toast'; t.style.cssText='position:fixed;bottom:18px;right:18px;z-index:9999;background:var(--panel2,#161b22);border:1px solid var(--line);border-radius:10px;padding:10px 14px;box-shadow:0 8px 30px rgba(0,0,0,.4);max-width:340px'; document.body.appendChild(t);} t.textContent=msg; t.style.display='block'; clearTimeout(window._tdToastT); window._tdToastT=setTimeout(()=>t.style.display='none',3500); }
 window._tdSettings=null; window._tdOpps=null; window._tdTab='dashboard';
 function tradingInit(){
@@ -3112,7 +3113,7 @@ async function tdLoadOrders(){
       <td>${rc.entry?('~'+tdMoney(rc.entry)):'—'}<div class="pf-meta" style="font-size:11px">${rc.confidence?(rc.confidence+'% · '+tdEsc(rc.category||'')):''}</div></td>
       <td>${tdEsc(o.source||'')}</td>
       <td><span style="color:${col};font-weight:600">${label}</span></td>
-      <td class="pf-meta" style="font-size:11px">${tdEsc((o.ts||'').slice(0,16).replace('T',' '))}</td>
+      <td class="pf-meta" style="font-size:11px">${tdTime(o.ts)}</td>
       <td style="white-space:nowrap">
         ${o.status==='pending_approval'?`<button class="ex-btn" onclick="tdOrderAct('${o.id}','approve')">✅ Approve</button> `:''}
         ${(o.status==='pending_approval'||o.status==='approved')?`<button class="ghost" onclick="tdOrderAct('${o.id}','cancel')">✕ Cancel</button>`:''}
@@ -3138,7 +3139,7 @@ async function tdLoadDashboard(){
   const pane=$('#td-dashboard'); pane.innerHTML='<div class="spin">Loading…</div>';
   try{
     const d=await (await fetch('/api/trading/dashboard')).json();
-    const stat=(l,v,c)=>`<div class="card"><div class="pf-meta">${l}</div><div style="font-size:22px;font-weight:800${c?';color:'+c:''}">${v}</div></div>`;
+    const stat=(l,v,c)=>`<div class="card" style="min-width:0;overflow:hidden"><div class="pf-meta">${l}</div><div style="font-size:19px;font-weight:800;line-height:1.25;overflow-wrap:anywhere${c?';color:'+c:''}">${v}</div></div>`;
     pane.innerHTML=`
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px">
         ${stat('Trading Mode', tdEsc(d.mode))}
@@ -3153,10 +3154,10 @@ async function tdLoadDashboard(){
         ${stat('Profit Factor', d.profit_factor)}
         ${stat('Trades Today', d.trades_today)}
         ${stat('Live Trading', d.live_enabled?'ON':'OFF', d.live_enabled?'#f59e0b':'#94a3b8')}
-        ${stat('Last Auto Scan', d.state.last_auto_scan?tdEsc(d.state.last_auto_scan.slice(5,16).replace('T',' ')):'—')}
+        ${stat('Last Auto Scan', tdTime(d.state.last_auto_scan))}
       </div>
       <div class="pf-bar"><span class="up-label">🗒️ Recent decisions</span></div>
-      <div class="card">${(d.recent_decisions||[]).length? d.recent_decisions.map(x=>`<div class="pf-meta" style="padding:3px 0">${tdEsc((x.ts||'').slice(0,19).replace('T',' '))} — ${tdEsc(x.event)}${x.ticker?(' '+tdEsc(x.ticker)):''}${x.recommendations!=null?(' ('+x.recommendations+' recs)'):''}</div>`).join(''):'<span class="pf-meta">No activity yet. Run a scan.</span>'}</div>`;
+      <div class="card">${(d.recent_decisions||[]).length? d.recent_decisions.map(x=>`<div class="pf-meta" style="padding:3px 0">${tdTime(x.ts)} — ${tdEsc(x.event)}${x.ticker?(' '+tdEsc(x.ticker)):''}${x.recommendations!=null?(' ('+x.recommendations+' recs)'):''}</div>`).join(''):'<span class="pf-meta">No activity yet. Run a scan.</span>'}</div>`;
   }catch(e){ pane.innerHTML='<div class="card err">'+tdEsc(e)+'</div>'; }
 }
 async function tdLoadPaper(){
@@ -3233,7 +3234,7 @@ async function tdSaveSettings(){
 async function tdLoadLog(){
   const pane=$('#td-log'); pane.innerHTML='<div class="spin">Loading…</div>';
   try{ const d=await (await fetch('/api/trading/dashboard')).json(); const rows=d.recent_decisions||[];
-    pane.innerHTML='<div class="card">'+(rows.length?rows.map(x=>`<div class="pf-meta" style="padding:4px 0;border-bottom:1px solid var(--line)">${tdEsc((x.ts||'').slice(0,19).replace('T',' '))} — <b>${tdEsc(x.event)}</b> ${tdEsc(x.ticker||'')} ${x.scope?('scope='+tdEsc(x.scope)):''} ${x.recommendations!=null?(x.recommendations+' recs / '+ (x.rejected||0)+' filtered'):''} ${x.pl!=null?('P/L '+tdMoney(x.pl)):''}</div>`).join(''):'<span class="pf-meta">No decisions logged yet.</span>')+'</div>';
+    pane.innerHTML='<div class="card">'+(rows.length?rows.map(x=>`<div class="pf-meta" style="padding:4px 0;border-bottom:1px solid var(--line)">${tdTime(x.ts)} — <b>${tdEsc(x.event)}</b> ${tdEsc(x.ticker||'')} ${x.scope?('scope='+tdEsc(x.scope)):''} ${x.recommendations!=null?(x.recommendations+' recs / '+ (x.rejected||0)+' filtered'):''} ${x.pl!=null?('P/L '+tdMoney(x.pl)):''}</div>`).join(''):'<span class="pf-meta">No decisions logged yet.</span>')+'</div>';
   }catch(e){ pane.innerHTML='<div class="card err">'+tdEsc(e)+'</div>'; }
 }
 const _VIEWS = ['analyze','detail','portfolio','etrade','schwab','ibkr','favorites','sp500','dow','trading','history','agents','skills','users','settings'];
