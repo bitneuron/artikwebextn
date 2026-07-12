@@ -1153,12 +1153,14 @@
       <button class="ghost td-tab" data-tdtab="dashboard" onclick="tdTab('dashboard')">📊 Dashboard</button>
       <button class="ghost td-tab" data-tdtab="opps" onclick="tdTab('opps')">🎯 Opportunities</button>
       <button class="ghost td-tab" data-tdtab="paper" onclick="tdTab('paper')">📝 Paper Trading</button>
+      <button class="ghost td-tab" data-tdtab="orders" onclick="tdTab('orders')">📋 Orders <span id="td-ordcount" class="navcount"></span></button>
       <button class="ghost td-tab" data-tdtab="settings" onclick="tdTab('settings')">⚙️ Agent Settings</button>
       <button class="ghost td-tab" data-tdtab="log" onclick="tdTab('log')">🗒️ Decision Log</button>
     </div>
     <div id="td-dashboard" class="td-pane"><div class="spin">Loading…</div></div>
     <div id="td-opps" class="td-pane hidden"></div>
     <div id="td-paper" class="td-pane hidden"></div>
+    <div id="td-orders" class="td-pane hidden"></div>
     <div id="td-settings" class="td-pane hidden"></div>
     <div id="td-log" class="td-pane hidden"></div>
     <div class="pf-meta" style="margin-top:14px;font-size:11px;opacity:.7">Not investment advice. The desk flags high-probability ideas under risk limits — it never guarantees profit. Live trading is admin-only and disabled by default.</div>
@@ -2994,9 +2996,21 @@ function tradingInit(){
   fetch('/api/trading/settings').then(r=>r.json()).then(d=>{
     window._tdSettings=d.settings; window._tdState=d.state; window._tdModes=d.modes;
     const b=$('#td-mode'); if(b) b.textContent=d.settings.trading_mode;
-    const st=$('#td-agentstate'); if(st) st.textContent=d.state.killed?'🛑 killed':(d.state.paused?'⏸ paused':'● active');
+    tdAgentBadge(d.settings, d.state);
+    // Sync browser favorites → server so the autonomous loop can include them.
+    const favs=tdFavTickers();
+    if(favs.length) fetch('/api/trading/settings',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({favorite_tickers:favs})}).catch(()=>{});
   }).catch(()=>{});
+  tdRefreshOrderCount();
   tdTab(window._tdTab||'dashboard');
+}
+function tdAgentBadge(s, st){
+  const el=$('#td-agentstate'); if(!el) return;
+  el.textContent = st.killed?'🛑 killed':(st.paused?'⏸ paused':((s&&s.agent_enabled)?('🟢 agent ON · every '+(s.scan_interval_min||15)+'m'):'⚪ agent OFF (manual scans only)'));
+}
+async function tdRefreshOrderCount(){
+  try{ const d=await (await fetch('/api/trading/orders?status=pending_approval')).json();
+    const n=(d.orders||[]).length; const el=$('#td-ordcount'); if(el) el.textContent=n?String(n):''; }catch(e){}
 }
 function tdTab(name){
   window._tdTab=name;
@@ -3006,6 +3020,7 @@ function tdTab(name){
   if(name==='dashboard') tdLoadDashboard();
   else if(name==='opps'){ if(window._tdOpps) tdRenderOpps(window._tdOpps); else if(pane) pane.innerHTML='<div class="pf-meta" style="padding:8px">Click “⚡ Scan opportunities” to analyze your Portfolio + S&amp;P 500 + Favorites.</div>'; }
   else if(name==='paper') tdLoadPaper();
+  else if(name==='orders') tdLoadOrders();
   else if(name==='settings') tdLoadSettings();
   else if(name==='log') tdLoadLog();
 }
@@ -3077,11 +3092,43 @@ async function tdPaper(rec){
 async function tdSubmit(rec){
   const s=window._tdSettings||{};
   if(!(s.live_trading_enabled)){ tdToast('⛔ Live trading is disabled. An admin must enable it in Agent Settings. Use Paper Trade instead.'); return; }
-  if(!confirm('Submit a LIVE '+rec.side+' order for '+rec.suggested_shares+' '+rec.ticker+'? This uses REAL money via IBKR.')) return;
+  if(!confirm('Queue a LIVE '+rec.side+' order for '+rec.suggested_shares+' '+rec.ticker+'? This uses REAL money — the execution bridge on your Mac will submit it via IBKR.')) return;
   try{
-    const r=await fetch('/api/trading/live/order',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({account_id:s.ibkr_account||'',symbol:rec.ticker,side:rec.side,quantity:rec.suggested_shares,order_type:'MKT',sec_type:'STK',tif:'DAY'})});
-    const d=await r.json(); tdToast(r.ok?'🚀 Order sent — see the IBKR tab / Order History.':('⛔ '+(d.error||'blocked')));
+    const r=await fetch('/api/trading/orders',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({ticker:rec.ticker,company:rec.company,side:rec.side,qty:rec.suggested_shares,rec:{entry:rec.entry,target:rec.target,stop:rec.stop,confidence:rec.confidence,category:rec.category,reason:rec.reason,artik_score:rec.artik_score}})});
+    const d=await r.json(); tdToast(r.ok?'🚀 Order queued for the execution bridge — see 📋 Orders.':('⛔ '+(d.error||'blocked')));
+    if(r.ok) tdRefreshOrderCount();
   }catch(e){ tdToast(''+e); }
+}
+const TD_OSTATUS={pending_approval:['#f59e0b','⏳ awaiting approval'],approved:['#60a5fa','✅ approved — waiting for bridge'],submitted:['#34d399','🚀 submitted to IBKR'],filled:['#34d399','✅ filled'],failed:['#f87171','✕ failed'],rejected:['#f87171','✕ rejected'],cancelled:['#94a3b8','— cancelled']};
+async function tdLoadOrders(){
+  const pane=$('#td-orders'); pane.innerHTML='<div class="spin">Loading…</div>';
+  try{
+    const d=await (await fetch('/api/trading/orders')).json();
+    const rows=d.orders||[];
+    const row=o=>{ const [col,label]=TD_OSTATUS[o.status]||['#94a3b8',o.status]; const rc=o.rec||{};
+      return `<tr><td><b>${tdEsc(o.ticker)}</b><div class="pf-meta" style="font-size:11px">${tdEsc(o.company||'')}</div></td>
+      <td style="font-weight:700;color:${o.side==='BUY'?'#34d399':'#f87171'}">${tdEsc(o.side)}</td>
+      <td>${tdEsc(o.qty)}</td>
+      <td>${rc.entry?('~'+tdMoney(rc.entry)):'—'}<div class="pf-meta" style="font-size:11px">${rc.confidence?(rc.confidence+'% · '+tdEsc(rc.category||'')):''}</div></td>
+      <td>${tdEsc(o.source||'')}</td>
+      <td><span style="color:${col};font-weight:600">${label}</span></td>
+      <td class="pf-meta" style="font-size:11px">${tdEsc((o.ts||'').slice(0,16).replace('T',' '))}</td>
+      <td style="white-space:nowrap">
+        ${o.status==='pending_approval'?`<button class="ex-btn" onclick="tdOrderAct('${o.id}','approve')">✅ Approve</button> `:''}
+        ${(o.status==='pending_approval'||o.status==='approved')?`<button class="ghost" onclick="tdOrderAct('${o.id}','cancel')">✕ Cancel</button>`:''}
+      </td></tr>`; };
+    pane.innerHTML=`<div class="pf-bar" style="margin-bottom:8px"><span class="up-label">📋 Live order queue</span>
+        <span class="pf-meta">agent orders wait for your approval → the Mac bridge executes approved orders via the local IBKR gateway</span>
+        <span style="flex:1"></span><button class="ghost" onclick="tdLoadOrders()">🔄 Refresh</button></div>`
+      +(rows.length?`<table class="mini" style="width:100%"><tr><th>Ticker</th><th>Side</th><th>Qty</th><th>Rec</th><th>Source</th><th>Status</th><th>Queued</th><th></th></tr>${rows.map(row).join('')}</table>`
+        :'<div class="card pf-meta">No live orders yet. In LIVE_TRADING_WITH_APPROVAL mode the agent queues orders here for your approval; “Submit Order” on a recommendation also lands here.</div>');
+    tdRefreshOrderCount();
+  }catch(e){ pane.innerHTML='<div class="card err">'+tdEsc(e)+'</div>'; }
+}
+async function tdOrderAct(id, act){
+  if(act==='approve' && !confirm('Approve this LIVE order? The Mac execution bridge will submit it to IBKR with REAL money.')) return;
+  try{ const r=await fetch('/api/trading/orders/'+id+'/'+act,{method:'POST'}); const d=await r.json();
+    tdToast(r.ok?('Order '+act+'d ✓'):(d.error||'failed')); if(r.ok) tdLoadOrders(); }catch(e){ tdToast(''+e); }
 }
 async function tradingAgentCtl(action){
   if(action==='kill' && !confirm('Activate the KILL SWITCH? This pauses the agent and forces SCAN_ONLY + live-off.')) return;
@@ -3106,6 +3153,7 @@ async function tdLoadDashboard(){
         ${stat('Profit Factor', d.profit_factor)}
         ${stat('Trades Today', d.trades_today)}
         ${stat('Live Trading', d.live_enabled?'ON':'OFF', d.live_enabled?'#f59e0b':'#94a3b8')}
+        ${stat('Last Auto Scan', d.state.last_auto_scan?tdEsc(d.state.last_auto_scan.slice(5,16).replace('T',' ')):'—')}
       </div>
       <div class="pf-bar"><span class="up-label">🗒️ Recent decisions</span></div>
       <div class="card">${(d.recent_decisions||[]).length? d.recent_decisions.map(x=>`<div class="pf-meta" style="padding:3px 0">${tdEsc((x.ts||'').slice(0,19).replace('T',' '))} — ${tdEsc(x.event)}${x.ticker?(' '+tdEsc(x.ticker)):''}${x.recommendations!=null?(' ('+x.recommendations+' recs)'):''}</div>`).join(''):'<span class="pf-meta">No activity yet. Run a scan.</span>'}</div>`;
@@ -3134,7 +3182,15 @@ function tdLoadSettings(){
   const admin=window._isAdmin;
   const modes=(window._tdModes||['SCAN_ONLY','PAPER_TRADING','LIVE_TRADING_WITH_APPROVAL','LIVE_TRADING_AUTO']);
   const num=(k,l,step)=>`<label class="td-f"><span>${l}</span><input type="number" step="${step||'any'}" id="tdf-${k}" value="${s[k]}"></label>`;
-  pane.innerHTML=`<div class="card">
+  pane.innerHTML=`<div class="card" style="margin-bottom:10px">
+    <div class="up-label" style="margin-bottom:8px">🤖 Autonomy</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+      <label class="td-f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="tdf-agent_enabled" ${s.agent_enabled?'checked':''}><span><b>Enable autonomous agent</b> — scan every interval; auto-execute per mode</span></label>
+      <label class="td-f"><span>Agent portfolio (source of truth)</span><select id="tdf-portfolio_key"><option value="">Latest broker snapshot</option></select></label>
+    </div>
+    <div class="pf-meta" style="margin-top:6px;font-size:11px">SCAN_ONLY = analyze + notify only · PAPER_TRADING = auto paper trades + stop/target exits · LIVE modes queue orders for the Mac execution bridge (admin).</div>
+  </div>
+  <div class="card">
     <div class="up-label" style="margin-bottom:8px">⚙️ Agent Settings</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">
       <label class="td-f"><span>Trading Mode ${admin?'':'(admin-only)'}</span><select id="tdf-trading_mode" ${admin?'':'disabled'}>${modes.map(m=>`<option value="${m}" ${s.trading_mode===m?'selected':''}>${m}</option>`).join('')}</select></label>
@@ -3157,12 +3213,22 @@ function tdLoadSettings(){
     <div style="margin-top:12px"><button class="ex-btn" onclick="tdSaveSettings()">Save settings</button>
       ${admin?'':'<span class="pf-meta" style="margin-left:8px">Mode / live-trading / risk limits are admin-only.</span>'}</div>
   </div>`;
+  // Populate the agent-portfolio selector from the same snapshot list the Portfolio page uses.
+  fetch('/api/portfolio/dates').then(r=>r.json()).then(d=>{
+    const sel=$('#tdf-portfolio_key'); if(!sel) return;
+    (d.snapshots||[]).slice(0,25).forEach(sn=>{
+      const o=document.createElement('option'); o.value=sn.key||''; o.textContent=(sn.source||'')+' — '+(sn.label||sn.date||sn.key);
+      sel.appendChild(o);
+    });
+    sel.value=s.portfolio_key||'';
+    if(sel.value!==(s.portfolio_key||'')) sel.value='';
+  }).catch(()=>{});
 }
 async function tdSaveSettings(){
   const g=id=>{ const el=$('#tdf-'+id); return el?(el.type==='checkbox'?el.checked:(el.type==='number'?parseFloat(el.value):el.value)):undefined; };
-  const keys=['trading_mode','scan_interval_min','max_trades_per_day','max_open_positions','max_position_size_pct','max_risk_per_trade_pct','max_daily_loss_pct','min_confidence','min_artik_score','default_stop_loss_pct','default_profit_target_pct','trailing_stop_pct','paper_account_size','ibkr_account','live_trading_enabled','allow_swing_trades'];
+  const keys=['trading_mode','scan_interval_min','max_trades_per_day','max_open_positions','max_position_size_pct','max_risk_per_trade_pct','max_daily_loss_pct','min_confidence','min_artik_score','default_stop_loss_pct','default_profit_target_pct','trailing_stop_pct','paper_account_size','ibkr_account','live_trading_enabled','allow_swing_trades','agent_enabled','portfolio_key'];
   const body={}; keys.forEach(k=>{ const el=$('#tdf-'+k); if(el&&!el.disabled){ const v=g(k); if(v!==undefined&&!(typeof v==='number'&&isNaN(v))) body[k]=v; } });
-  try{ const r=await fetch('/api/trading/settings',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(body)}); const d=await r.json(); if(r.ok){ window._tdSettings=d.settings; const b=$('#td-mode'); if(b) b.textContent=d.settings.trading_mode; tdToast('Settings saved ✓'); } else tdToast(d.error||'save failed'); }catch(e){ tdToast(''+e); }
+  try{ const r=await fetch('/api/trading/settings',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(body)}); const d=await r.json(); if(r.ok){ window._tdSettings=d.settings; const b=$('#td-mode'); if(b) b.textContent=d.settings.trading_mode; tdAgentBadge(d.settings, window._tdState||{}); tdToast('Settings saved ✓'); } else tdToast(d.error||'save failed'); }catch(e){ tdToast(''+e); }
 }
 async function tdLoadLog(){
   const pane=$('#td-log'); pane.innerHTML='<div class="spin">Loading…</div>';

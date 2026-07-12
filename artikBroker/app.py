@@ -231,6 +231,11 @@ async def _auth_gate(request: Request, call_next):
             or path == "/api/schwab/callback"
             or path.startswith("/static") or path == "/favicon.ico"):
         return await call_next(request)
+    # Trading Desk execution bridge (headless Mac poller): authenticates with its own shared
+    # key (X-Bridge-Key vs TRADING_BRIDGE_KEY env), not a session cookie. Only these two
+    # endpoints, and only with a valid key — otherwise fall through to the normal 401.
+    if path.startswith("/api/trading/bridge/") and _bridge_auth(request):
+        return await call_next(request)
     user = _current_user(request)
     if not user:
         if path.startswith("/api/"):
@@ -1054,24 +1059,32 @@ async def trading_put_settings(request: Request):
     return {"settings": trading_store.save_settings(patch)}
 
 
-@app.post("/api/trading/scan")
-async def trading_scan(request: Request):
-    """Scan the combined universe (Portfolio + S&P 500 + Favorites) and return risk-checked
-    recommendations. Portfolio holdings + favorites are supplied by the client (Portfolio page is
-    the source of truth); the server adds the S&P 500 list and scores anything missing."""
+def _trading_portfolio(key: str = "") -> list[dict]:
+    """Server-side portfolio for the autonomous loop — live-scored rows from the SAME snapshots
+    the Portfolio page uses (never IBKR). key: "pf:<id>" | "xl:<file>" | "" = newest broker
+    snapshot, else newest Excel snapshot."""
     try:
-        b = await request.json()
-    except Exception:  # noqa: BLE001
-        b = {}
-    portfolio = b.get("portfolio") or []
-    if not portfolio and b.get("scope", "all") in ("all", "portfolio"):
-        return JSONResponse({"error": "Please load or select a portfolio before starting the Trading Agent.",
-                             "need_portfolio": True}, status_code=400)
-    favorites = b.get("favorites") or []
-    scope = b.get("scope", "all")
+        if not key:
+            snaps = portfolio_store.list_snapshots()
+            if snaps:
+                key = f"pf:{snaps[0]['id']}"
+        if _is_stored_key(key):
+            resp = _stored_portfolio_response(key)
+            if isinstance(resp, dict):
+                return [r for r in (resp.get("rows") or []) if r.get("ticker") and not r.get("error")]
+            return []
+        resp = api_portfolio_refresh(key=key or None)   # excel path, re-scored live
+        if isinstance(resp, dict):
+            return [r for r in (resp.get("rows") or []) if r.get("ticker") and not r.get("error")]
+    except Exception as e:  # noqa: BLE001
+        print(f"[trading] server portfolio load failed: {e}")
+    return []
+
+
+def _trading_scan_core(portfolio: list, favorites: list, scope: str = "all") -> dict:
+    """Shared scan pipeline — used by the API endpoint AND the autonomous scheduler."""
     settings = trading_store.get_settings()
     ctx = trading_desk.portfolio_context(portfolio)
-
     universe = trading_desk.build_universe(portfolio, favorites, INDEX_TICKERS["sp500"], scope)[:60]
     held = {(h.get("ticker") or "").upper(): h for h in portfolio}
     # Reuse scores already carried by portfolio rows; score the rest concurrently (no LLM).
@@ -1102,6 +1115,29 @@ async def trading_scan(request: Request):
                                 "recommendations": len(recs), "rejected": len(rejected)})
     return {"as_of": trading_store._now(), "mode": settings["trading_mode"],
             "context": ctx, "recommendations": recs, "rejected": rejected[:40]}
+
+
+@app.post("/api/trading/scan")
+async def trading_scan(request: Request):
+    """Scan the combined universe (Portfolio + S&P 500 + Favorites) and return risk-checked
+    recommendations. Portfolio holdings + favorites come from the client (Portfolio page is the
+    source of truth); if the client sends none, the server falls back to the latest stored
+    snapshot — the same source the autonomous scheduler uses."""
+    try:
+        b = await request.json()
+    except Exception:  # noqa: BLE001
+        b = {}
+    portfolio = b.get("portfolio") or []
+    scope = b.get("scope", "all")
+    if not portfolio and scope in ("all", "portfolio"):
+        portfolio = _trading_portfolio(trading_store.get_settings().get("portfolio_key") or "")
+    if not portfolio and scope in ("all", "portfolio"):
+        return JSONResponse({"error": "Please load or select a portfolio before starting the Trading Agent.",
+                             "need_portfolio": True}, status_code=400)
+    favorites = b.get("favorites") or []
+    if favorites:   # keep the server copy fresh so the autonomous loop can include Favorites
+        trading_store.save_settings({"favorite_tickers": [str(t).upper() for t in favorites][:50]})
+    return _trading_scan_core(portfolio, favorites, scope)
 
 
 @app.get("/api/trading/dashboard")
@@ -1211,6 +1247,119 @@ async def trading_live_order(request: Request):
     trading_store.set_state({"trades_today": (st.get("trades_today") or 0) + 1})
     trading_store.log_decision({"event": "live_order", "ticker": b.get("symbol"), "side": b.get("side")})
     return await ibkr_order(request)   # reuse the vetted IBKR order handler (admin RBAC also applies)
+
+
+# ── Phase 2: live order approval queue + Mac execution bridge ────────────────
+@app.get("/api/trading/orders")
+def trading_orders(status: str = Query(None)):
+    return {"orders": trading_store.list_orders(status)}
+
+
+@app.post("/api/trading/orders")
+async def trading_orders_create(request: Request):
+    """Manual 'Submit Order' from a recommendation card → enqueue for the bridge. A human click
+    IS the approval, so it enters as `approved` (still gated: admin + live enabled + not killed)."""
+    if not _is_admin(request):
+        return JSONResponse({"error": "Live trading is admin-only."}, status_code=403)
+    s = trading_store.get_settings()
+    if trading_store.get_state().get("killed"):
+        return JSONResponse({"error": "Kill switch active."}, status_code=423)
+    if not s.get("live_trading_enabled"):
+        return JSONResponse({"error": "Live trading is disabled. Enable it in Agent Settings (admin)."},
+                            status_code=409)
+    try:
+        b = await request.json()
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"error": "invalid JSON"}, status_code=400)
+    qty = _num(b.get("qty"))
+    if not (b.get("ticker") and b.get("side") in ("BUY", "SELL") and qty and qty > 0):
+        return JSONResponse({"error": "ticker, side (BUY/SELL) and qty are required"}, status_code=400)
+    order = trading_store.add_order({
+        "ticker": (b.get("ticker") or "").upper(), "company": b.get("company"),
+        "side": b.get("side"), "qty": qty,
+        "account_id": (b.get("account_id") or s.get("ibkr_account") or "").strip(),
+        "status": "approved", "source": "manual", "rec": b.get("rec") or {}})
+    trading_store.log_decision({"event": "order_queued", "ticker": order["ticker"],
+                                "side": order["side"], "source": "manual"})
+    return {"order": order}
+
+
+@app.post("/api/trading/orders/{order_id}/approve")
+def trading_order_approve(order_id: str, request: Request):
+    if not _is_admin(request):
+        return JSONResponse({"error": "admin only"}, status_code=403)
+    o = trading_store.get_order(order_id)
+    if not o:
+        return JSONResponse({"error": "order not found"}, status_code=404)
+    if o.get("status") != "pending_approval":
+        return JSONResponse({"error": f"order is {o.get('status')}, not pending_approval"}, status_code=409)
+    o = trading_store.update_order(order_id, {"status": "approved", "approved_at": trading_store._now()})
+    trading_store.log_decision({"event": "order_approved", "ticker": o["ticker"], "side": o["side"]})
+    return {"order": o}
+
+
+@app.post("/api/trading/orders/{order_id}/cancel")
+def trading_order_cancel(order_id: str, request: Request):
+    if not _is_admin(request):
+        return JSONResponse({"error": "admin only"}, status_code=403)
+    o = trading_store.get_order(order_id)
+    if not o:
+        return JSONResponse({"error": "order not found"}, status_code=404)
+    if o.get("status") not in ("pending_approval", "approved"):
+        return JSONResponse({"error": f"cannot cancel a {o.get('status')} order"}, status_code=409)
+    o = trading_store.update_order(order_id, {"status": "cancelled"})
+    trading_store.log_decision({"event": "order_cancelled", "ticker": o["ticker"]})
+    return {"order": o}
+
+
+def _bridge_auth(request: Request) -> bool:
+    """The Mac execution bridge authenticates with a shared key (TRADING_BRIDGE_KEY env).
+    Endpoints stay disabled (403) until the key is configured — never open by default."""
+    key = os.environ.get("TRADING_BRIDGE_KEY", "")
+    got = request.headers.get("X-Bridge-Key", "")
+    return bool(key) and hmac.compare_digest(got, key)
+
+
+@app.get("/api/trading/bridge/orders")
+def trading_bridge_orders(request: Request):
+    if not _bridge_auth(request):
+        return JSONResponse({"error": "bridge key missing/invalid (set TRADING_BRIDGE_KEY)"}, status_code=403)
+    if trading_store.get_state().get("killed"):
+        return {"orders": []}   # kill switch also starves the bridge
+    return {"orders": trading_store.list_orders("approved")}
+
+
+@app.post("/api/trading/bridge/result")
+async def trading_bridge_result(request: Request):
+    if not _bridge_auth(request):
+        return JSONResponse({"error": "bridge key missing/invalid"}, status_code=403)
+    try:
+        b = await request.json()
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"error": "invalid JSON"}, status_code=400)
+    status = b.get("status")
+    if status not in ("submitted", "filled", "failed", "rejected"):
+        return JSONResponse({"error": "status must be submitted|filled|failed|rejected"}, status_code=400)
+    o = trading_store.update_order(b.get("id") or "", {
+        "status": status, "result": b.get("result"), "executed_at": trading_store._now()})
+    if not o:
+        return JSONResponse({"error": "order not found"}, status_code=404)
+    trading_store.log_decision({"event": f"order_{status}", "ticker": o.get("ticker")})
+    try:
+        from notifications import notify_agent_terminal
+        notify_agent_terminal(agent_name="Trading Desk", status="completed" if status != "failed" else "failed",
+                              task_name=f"Bridge {status}: {o.get('side')} {o.get('qty')} {o.get('ticker')}",
+                              error_message=(str(b.get('result'))[:300] if status in ("failed", "rejected") else None))
+    except Exception:  # noqa: BLE001
+        pass
+    return {"order": o}
+
+
+@app.on_event("startup")
+def _start_trading_scheduler():
+    """Phase 1 autonomy: background loop (agent_enabled + not paused/killed gate every cycle)."""
+    import trading_scheduler
+    trading_scheduler.start(scan_core=_trading_scan_core, load_portfolio=_trading_portfolio)
 
 
 @app.post("/api/users")

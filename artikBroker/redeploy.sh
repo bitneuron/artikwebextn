@@ -70,6 +70,7 @@ for _k in ("NOTIFICATIONS_ENABLED", "ARTIK_NOTIFY_API_URL", "ARTIK_NOTIFY_API_KE
            "IBKR_OAUTH_DH_GENERATOR", "IBKR_OAUTH_REALM", "IBKR_OAUTH_BASE_URL",
            "FMP_API_KEY", "FMP_BASE_URL",
            "FINNHUB_API_KEY", "FINNHUB_BASE_URL", "FINNHUB_CACHE_TTL",
+           "TRADING_BRIDGE_KEY",
            "ADMIN_PASSWORD_RESET"):
     if os.environ.get(_k):
         envv[_k] = os.environ[_k]

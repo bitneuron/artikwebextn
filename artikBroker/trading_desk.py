@@ -17,6 +17,10 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "live_trading_enabled": False,
     "live_auto_trading_enabled": False,
     "require_order_approval": True,
+    # autonomy (Phase 1): the server-side scheduler only runs when agent_enabled.
+    "agent_enabled": False,
+    "portfolio_key": "",           # server-side portfolio selection ("pf:<id>" / "xl:<file>" / "" = latest)
+    "favorite_tickers": [],        # synced from the browser so the scheduler can include Favorites
     # cadence / caps
     "scan_interval_min": 15,
     "max_trades_per_day": 5,
@@ -216,6 +220,33 @@ def _reason(category: str, row: dict, held: dict | None) -> str:
     if category == "Portfolio Improvement":
         return f"{t} is a hold; monitor — no edge to add or trim right now."
     return f"{t} scores {sc} ({st}) and is not yet held; a new position diversifies toward quality."
+
+
+def check_exit(pos: dict, price: float, trailing_pct: float | None = None) -> tuple[str | None, dict]:
+    """Exit engine (pure): given an open paper position and a live price, decide whether to close.
+
+    Returns (action, updates): action is 'stop' | 'target' | 'trailing' | None; updates carries
+    the new high-water mark to persist. Long (BUY) positions only — shorts are disabled by default.
+    """
+    if not price or pos.get("status") != "open":
+        return (None, {})
+    side = (pos.get("side") or "BUY").upper()
+    stop, target = _num(pos.get("stop")), _num(pos.get("target"))
+    hw = max(_num(pos.get("high_water")) or 0, _num(pos.get("entry")) or 0, price)
+    updates = {"high_water": hw}
+    if side == "BUY":
+        if stop and price <= stop:
+            return ("stop", updates)
+        if target and price >= target:
+            return ("target", updates)
+        if trailing_pct and hw and price <= hw * (1 - trailing_pct / 100) and price > (stop or 0):
+            return ("trailing", updates)
+    else:  # defensive: short positions mirror the checks
+        if stop and price >= stop:
+            return ("stop", updates)
+        if target and price <= target:
+            return ("target", updates)
+    return (None, updates)
 
 
 def risk_check(rec: dict, settings: dict, ctx: dict, state: dict) -> tuple[bool, list[str]]:

@@ -49,3 +49,50 @@ def test_defaults_are_safe():
     assert td.DEFAULT_SETTINGS["trading_mode"] == "SCAN_ONLY"
     assert td.DEFAULT_SETTINGS["live_trading_enabled"] is False
     assert td.DEFAULT_SETTINGS["require_order_approval"] is True
+    assert td.DEFAULT_SETTINGS["agent_enabled"] is False   # autonomy is opt-in
+
+
+# ── exit engine (Phase 1) ─────────────────────────────────────────────────────
+def _pos(**kw):
+    return {"status": "open", "side": "BUY", "entry": 100.0, "stop": 92.0,
+            "target": 115.0, "qty": 10, **kw}
+
+
+def test_exit_stop_hit():
+    action, _ = td.check_exit(_pos(), 91.5)
+    assert action == "stop"
+
+
+def test_exit_target_hit():
+    action, _ = td.check_exit(_pos(), 115.2)
+    assert action == "target"
+
+
+def test_exit_holds_between_stop_and_target():
+    action, upd = td.check_exit(_pos(), 105.0)
+    assert action is None and upd["high_water"] == 105.0
+
+
+def test_exit_trailing_stop_from_high_water():
+    pos = _pos(high_water=112.0)
+    action, _ = td.check_exit(pos, 104.0, trailing_pct=6.0)   # 112 * 0.94 = 105.28 > 104
+    assert action == "trailing"
+
+
+def test_exit_ignores_closed_positions():
+    action, upd = td.check_exit(_pos(status="closed"), 50.0)
+    assert action is None and upd == {}
+
+
+# ── order queue (Phase 2) ─────────────────────────────────────────────────────
+def test_order_queue_lifecycle(tmp_path):
+    import trading_store as ts
+    ts._DB_PATH = tmp_path / "users.db"   # isolate from the real DB
+    o = ts.add_order({"ticker": "AAPL", "side": "BUY", "qty": 5, "source": "agent"})
+    assert o["status"] == "pending_approval" and o["id"]
+    ts.update_order(o["id"], {"status": "approved"})
+    assert [x["id"] for x in ts.list_orders("approved")] == [o["id"]]
+    ts.update_order(o["id"], {"status": "submitted", "result": {"ok": True}})
+    got = ts.get_order(o["id"])
+    assert got["status"] == "submitted" and got["result"] == {"ok": True}
+    assert ts.list_orders("approved") == []

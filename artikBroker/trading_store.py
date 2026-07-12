@@ -99,6 +99,17 @@ def add_paper(pos: dict) -> dict:
         return pos
 
 
+def update_paper(pos_id: str, patch: dict) -> dict | None:
+    with _lock:
+        rows = kv_get("paper", []) or []
+        for r in rows:
+            if r.get("id") == pos_id:
+                r.update(patch or {})
+                kv_set("paper", rows)
+                return r
+        return None
+
+
 def close_paper(pos_id: str, exit_price: float) -> dict | None:
     with _lock:
         rows = kv_get("paper", []) or []
@@ -112,6 +123,52 @@ def close_paper(pos_id: str, exit_price: float) -> dict | None:
                 kv_set("paper", rows)
                 return r
         return None
+
+
+# ── live order queue (Phase 2: approval → Mac execution bridge) ──
+# statuses: pending_approval → approved → submitted → filled | failed | cancelled | rejected
+def list_orders(status: str | None = None, limit: int = 100) -> list[dict]:
+    rows = kv_get("orders", []) or []
+    if status:
+        rows = [r for r in rows if r.get("status") == status]
+    return rows[:limit]
+
+
+def get_order(order_id: str) -> dict | None:
+    return next((r for r in (kv_get("orders", []) or []) if r.get("id") == order_id), None)
+
+
+def add_order(order: dict) -> dict:
+    with _lock:
+        rows = kv_get("orders", []) or []
+        order = {"id": uuid.uuid4().hex[:12], "ts": _now(), "status": "pending_approval",
+                 "order_type": "MKT", "tif": "DAY", "sec_type": "STK", "result": None, **order}
+        rows.insert(0, order)
+        kv_set("orders", rows[:300])
+        return order
+
+
+def update_order(order_id: str, patch: dict) -> dict | None:
+    with _lock:
+        rows = kv_get("orders", []) or []
+        for r in rows:
+            if r.get("id") == order_id:
+                r.update(patch or {})
+                r["updated_at"] = _now()
+                kv_set("orders", rows)
+                return r
+        return None
+
+
+def rollover_day() -> dict:
+    """Reset trades_today when the (UTC) day changes. Called by the scheduler each tick."""
+    with _lock:
+        st = get_state()
+        today = _now()[:10]
+        if st.get("trades_day") != today:
+            st.update(trades_day=today, trades_today=0)
+            kv_set("state", st)
+        return st
 
 
 # ── decision log (bounded ring) ──
