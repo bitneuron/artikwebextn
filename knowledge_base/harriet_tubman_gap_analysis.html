@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harriet Tubman Knowledge Base — Independent Review &amp; Gap Analysis — Harriet Tubman Research Knowledge Base</title>
+<style>
+:root {
+  --ink:#1a2230; --accent:#1a365d; --rule:#d7d2c4; --paper:#fbf9f4; --card:#ffffff;
+  --high:#1b7f4b; --high-bg:#e3f3ea; --med:#9a6b00; --med-bg:#fbf0d6; --low:#9b2226; --low-bg:#f6e0e0;
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body {
+  max-width:1100px; margin:auto; padding:40px;
+  font-family:Georgia, 'Times New Roman', serif; line-height:1.7; color:var(--ink); background:var(--paper);
+}
+.skip-link { position:absolute; left:-999px; top:0; background:var(--accent); color:#fff; padding:8px 14px; z-index:100; }
+.skip-link:focus { left:8px; }
+a { color:var(--accent); }
+h1, h2, h3, h4 { color:var(--accent); line-height:1.25; }
+h1 { font-size:2rem; border-bottom:3px double var(--rule); padding-bottom:.3em; }
+h2 { font-size:1.35rem; border-bottom:1px solid var(--rule); padding-bottom:.2em; margin-top:2em; }
+h3 { font-size:1.08rem; }
+.anchor { opacity:0; text-decoration:none; margin-left:.4em; font-weight:normal; color:var(--rule); }
+h1:hover .anchor, h2:hover .anchor, h3:hover .anchor { opacity:1; }
+.masthead { text-align:center; padding:24px 0 8px; border-bottom:3px double var(--rule); margin-bottom:24px; }
+.masthead .eyebrow { text-transform:uppercase; letter-spacing:.28em; font-size:.7rem; color:var(--med); font-family:Helvetica,Arial,sans-serif; }
+.masthead h1 { border:none; margin:.2em 0; }
+.masthead .subtitle { font-style:italic; color:#5c5747; margin:0; }
+.meta-panel { background:var(--card); border:1px solid var(--rule); border-radius:8px; padding:14px 20px; margin:20px 0; }
+.meta-panel h2 { margin:.2em 0 .6em; border:none; font-size:1rem; text-transform:uppercase; letter-spacing:.12em; }
+.meta-table { width:100%; } .meta-table th { text-align:left; width:45%; background:none; border:none; padding:4px 8px; }
+.meta-table td { border:none; padding:4px 8px; }
+.meta-table tr { border-bottom:1px solid #eee; }
+.legend { margin:.6em 0 0; font-size:.85rem; }
+.toc { background:var(--card); border:1px solid var(--rule); border-left:5px solid var(--accent); border-radius:6px; padding:10px 22px; margin:20px 0; }
+.toc h2 { border:none; margin:.3em 0; font-size:1rem; text-transform:uppercase; letter-spacing:.12em; }
+.toc ul { list-style:none; padding-left:0; columns:2; column-gap:32px; }
+.toc li { margin:3px 0; break-inside:avoid; }
+.toc-h1 a { font-weight:bold; } .toc-h2 { padding-left:14px; font-size:.95rem; }
+.timeline-nav { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:16px 0 8px; padding:10px; background:#f0ece1; border-radius:6px; }
+.timeline-nav .tl-label { font-weight:bold; font-family:Helvetica,Arial,sans-serif; font-size:.8rem; text-transform:uppercase; letter-spacing:.1em; margin-right:6px; }
+.timeline-nav a { background:#fff; border:1px solid var(--rule); border-radius:20px; padding:3px 12px; font-size:.82rem; text-decoration:none; font-family:Helvetica,Arial,sans-serif; }
+.timeline-nav a:hover { background:var(--accent); color:#fff; }
+blockquote { border-left:4px solid #c9bfa3; background:#f3eede; padding:12px 18px; margin:14px 0; border-radius:0 4px 4px 0; }
+.cite { font-size:.82rem; color:#6a6452; margin:-8px 0 14px 22px; font-style:italic; }
+.cite a { color:#6a6452; }
+article.source-card { background:var(--card); border:1px solid var(--rule); border-radius:8px; padding:6px 22px 16px; margin:18px 0; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+article.source-card h3 { margin-top:.7em; }
+.source-links { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0 4px; font-family:Helvetica,Arial,sans-serif; font-size:.78rem; }
+.source-links a { text-decoration:none; border:1px solid var(--rule); border-radius:16px; padding:3px 12px; background:#fff; color:var(--accent); }
+.source-links a:hover { background:var(--accent); color:#fff; }
+.table-wrap { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; margin:12px 0; font-size:.92rem; }
+th, td { border:1px solid #ddd; padding:9px 10px; text-align:left; vertical-align:top; }
+th { background:#f0ece1; }
+code { background:#f0ece1; padding:2px 5px; border-radius:3px; }
+.badge { display:inline-block; padding:1px 8px; border-radius:12px; font-family:Helvetica,Arial,sans-serif; font-size:.75rem; font-weight:bold; }
+.badge-high { background:var(--high-bg); color:var(--high); }
+.badge-medium { background:var(--med-bg); color:var(--med); }
+.badge-low { background:var(--low-bg); color:var(--low); }
+.visuals { margin-top:2.5em; }
+.figgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:18px; }
+figure { margin:0; border:1px solid var(--rule); border-radius:8px; overflow:hidden; background:var(--card); }
+.figph { height:150px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; background:repeating-linear-gradient(45deg,#efeadd,#efeadd 12px,#e7e1d2 12px,#e7e1d2 24px); color:#6a6452; }
+.figph span { font-weight:bold; } .figph em { font-size:.78rem; }
+figcaption { padding:10px 12px; font-size:.85rem; } .attr { color:#6a6452; font-size:.78rem; }
+footer { margin-top:3em; padding-top:14px; border-top:1px solid var(--rule); font-size:.82rem; color:#6a6452; text-align:center; font-family:Helvetica,Arial,sans-serif; }
+:focus-visible { outline:3px solid #2b6cb0; outline-offset:2px; }
+@media (max-width:640px) { body { padding:18px; } .toc ul { columns:1; } }
+@media print {
+  body { max-width:none; padding:0; font-size:11pt; background:#fff; }
+  .skip-link, .toc, .timeline-nav, .anchor { display:none !important; }
+  h1 { page-break-before:always; } .masthead h1, body > main > h1:first-of-type { page-break-before:avoid; }
+  h2, h3 { page-break-after:avoid; }
+  article.source-card, table, figure, blockquote { page-break-inside:avoid; }
+  a { color:#000; text-decoration:none; }
+}
+</style>
+</head>
+<body id="top">
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="masthead">
+  <div class="eyebrow">Harriet Tubman Research Knowledge Base</div>
+  <h1>Harriet Tubman Knowledge Base — Independent Review &amp; Gap Analysis</h1>
+  <p class="subtitle">Independent Review &amp; Gap Analysis</p>
+</header>
+<section class="meta-panel" aria-label="Research metadata"><h2>Research Metadata</h2><table class="meta-table"><tbody><tr><th scope='row'>Audit tables</th><td>7</td></tr><tr><th scope='row'>Topics reviewed</th><td>25+</td></tr><tr><th scope='row'>Quality score</th><td>~8.9 / 10</td></tr></tbody></table><p class="legend">Confidence: <span class="badge badge-high">High</span> <span class="badge badge-medium">Medium</span> <span class="badge badge-low">Low</span></p></section>
+<nav class="toc" aria-label="Table of contents"><h2>Contents</h2><ul>
+<li class="toc-h2"><a href="#reviewer-roles">Reviewer Roles</a></li>
+<li class="toc-h2"><a href="#review-method">Review Method</a></li>
+<li class="toc-h1"><a href="#1-missing-topics-analysis">1. Missing Topics Analysis</a></li>
+<li class="toc-h1"><a href="#2-missing-primary-sources-analysis">2. Missing Primary Sources Analysis</a></li>
+<li class="toc-h1"><a href="#3-missing-secondary-sources-analysis">3. Missing Secondary Sources Analysis</a></li>
+<li class="toc-h1"><a href="#4-fact-verification-audit-evidence-confidence-matrix">4. Fact Verification Audit (Evidence Confidence Matrix)</a></li>
+<li class="toc-h1"><a href="#5-historical-context-audit">5. Historical Context Audit</a></li>
+<li class="toc-h1"><a href="#6-chronology-audit">6. Chronology Audit</a></li>
+<li class="toc-h1"><a href="#7-research-quality-audit-110">7. Research Quality Audit (1–10)</a></li>
+<li class="toc-h1"><a href="#8-national-history-day-ap-history-evaluation">8. National History Day / AP History Evaluation</a></li>
+<li class="toc-h1"><a href="#9-enhancement-log-changes-applied">9. Enhancement Log (Changes Applied)</a></li>
+<li class="toc-h1"><a href="#10-unresolved-items-no-reliable-source-confirmed">10. Unresolved Items (No Reliable Source Confirmed)</a></li>
+</ul></nav>
+
+<main id="main">
+<h2 id="reviewer-roles">Reviewer Roles<a class="anchor" href="#reviewer-roles" aria-label="Permalink">#</a></h2>
+<p>This review was conducted from five perspectives: <strong>Senior Historian</strong>, <strong>Academic Peer Reviewer</strong>,<br><strong>National History Day Judge</strong>, <strong>AP U.S. History Reader</strong>, and <strong>Historical Archivist</strong>. It audits the completed knowledge base (<code>harriet_tubman_primary_sources.md</code> and <code>harriet_tubman_research.md</code>), documents every omission and correction, and records the enhancements applied.</p>
+<h2 id="review-method">Review Method<a class="anchor" href="#review-method" aria-label="Permalink">#</a></h2>
+<p>Each topic, source, and claim in the existing files was checked against the standard of primary-source verifiability. Where reliable evidence existed, the gap was <strong>filled</strong> and the source files updated; where no reliable source exists, the gap is <strong>flagged as unresolved</strong>. A claim-by-claim confidence audit follows.</p>
+<hr>
+<h1 id="1-missing-topics-analysis">1. Missing Topics Analysis<a class="anchor" href="#1-missing-topics-analysis" aria-label="Permalink">#</a></h1>
+<div class="table-wrap"><table>
+<thead><tr><th>Topic</th><th>Status before review</th><th>Action taken</th></tr></thead>
+<tbody>
+<tr><td>Birth &amp; ancestry</td><td>Present</td><td>Kept; African-ancestry tradition noted</td></tr>
+<tr><td>Family genealogy / siblings</td><td>Thin (brothers only)</td><td><strong>Added</strong> — Bradford "sisters sold south" (primary) + Larson roster (secondary)</td></tr>
+<tr><td>Parents</td><td>Present</td><td>Kept</td></tr>
+<tr><td>Childhood</td><td>Present</td><td>Kept</td></tr>
+<tr><td>Religion</td><td>Partial</td><td><strong>Expanded</strong> + explicit "no confirmed primary source" for formal church membership</td></tr>
+<tr><td>Literacy</td><td>Present</td><td>Kept</td></tr>
+<tr><td>Name change</td><td>Present</td><td>Kept</td></tr>
+<tr><td>Marriage</td><td>Present (John Tubman)</td><td><strong>Added</strong> second marriage (Nelson Davis)</td></tr>
+<tr><td>Escape</td><td>Present</td><td>Kept</td></tr>
+<tr><td>Underground Railroad</td><td>Present</td><td><strong>Added</strong> Cheney 1865 source</td></tr>
+<tr><td><strong>Fugitive Slave Law impact</strong></td><td><strong>Missing</strong></td><td><strong>Added</strong> new section + Canada/St. Catharines</td></tr>
+<tr><td>Civil War service</td><td>Present</td><td>Kept</td></tr>
+<tr><td>Combahee River Raid</td><td>Present</td><td>Kept</td></tr>
+<tr><td><strong>Reconstruction</strong></td><td><strong>Missing</strong></td><td><strong>Added</strong> (folded into Reconstruction/Later Life)</td></tr>
+<tr><td>Women's suffrage</td><td>Thin</td><td><strong>Expanded</strong> (Anthony, 1896 NACW)</td></tr>
+<tr><td><strong>Property ownership</strong></td><td><strong>Missing</strong></td><td><strong>Added</strong> 1859 Seward deed + 1896/1903 deeds</td></tr>
+<tr><td><strong>Financial challenges</strong></td><td><strong>Missing</strong></td><td><strong>Added</strong> 1873 gold swindle + poverty</td></tr>
+<tr><td><strong>Caregiving work</strong></td><td><strong>Missing</strong></td><td><strong>Added</strong> (Tubman Home for the Aged)</td></tr>
+<tr><td>Tubman Home</td><td>Partial</td><td><strong>Expanded</strong> with dates/deeds</td></tr>
+<tr><td>Church involvement</td><td>Partial</td><td><strong>Expanded</strong> (AME Zion 1903)</td></tr>
+<tr><td>Death</td><td>Present</td><td>Kept</td></tr>
+<tr><td><strong>Legacy / historical memory</strong></td><td><strong>Missing</strong></td><td><strong>Added</strong> via Sernett (Part II)</td></tr>
+<tr><td><strong>Modern interpretations</strong></td><td><strong>Missing</strong></td><td><strong>Added</strong> (Larson numbers, TLE diagnosis, memory studies)</td></tr>
+</tbody></table></div>
+<p><strong>Verdict:</strong> All major topics from a complete Tubman life are now represented. Eight previously missing topics were added with sourcing.</p>
+<hr>
+<h1 id="2-missing-primary-sources-analysis">2. Missing Primary Sources Analysis<a class="anchor" href="#2-missing-primary-sources-analysis" aria-label="Permalink">#</a></h1>
+<div class="table-wrap"><table>
+<thead><tr><th>Primary source</th><th>Importance</th><th>Action</th></tr></thead>
+<tbody>
+<tr><td><strong>Ednah Dow Cheney, <em>Freedmen's Record</em> (1865)</strong></td><td>Earliest independent sketch; pre-Bradford; eyewitness</td><td><strong>Added</strong> ("most remarkable woman of this age")</td></tr>
+<tr><td><strong>1859 Seward property deed</strong></td><td>Hard documentary proof of property ownership by a Black fugitive woman</td><td><strong>Added</strong> (Cayuga Co. land record)</td></tr>
+<tr><td><strong>Census records (Canadian 1850s; U.S. 1870–1910)</strong></td><td>Establish residence (St. Catharines, Auburn) and household</td><td><strong>Added</strong> to bibliography</td></tr>
+<tr><td><strong>Emma Telford interview MS (c. 1905)</strong></td><td>Late-life testimony in her own recollection</td><td><strong>Added</strong> with reliability caveat</td></tr>
+<tr><td><strong>Pension file (full)</strong></td><td>Sworn service record + supporting affidavits</td><td>Already present; affirmed</td></tr>
+<tr><td><strong>Combahee press (Wisconsin State Journal)</strong></td><td>Contemporary confirmation of the raid</td><td>Already present; affirmed</td></tr>
+<tr><td>Court records of the 1873 swindle</td><td>Would firm up financial-fraud detail</td><td><strong>Flagged</strong> — relied on newspaper reports; court file not located</td></tr>
+<tr><td>John Brown correspondence mentioning "General Tubman"</td><td>Would document the Brown connection from a primary hand</td><td><strong>Flagged as unresolved</strong> — not verified in this review</td></tr>
+<tr><td>Tubman's AME Zion church membership records</td><td>Would confirm formal church affiliation</td><td><strong>Flagged</strong> — institutional records cited generally, specific membership doc not located</td></tr>
+</tbody></table></div>
+<p><strong>Verdict:</strong> Five significant primary sources added; three gaps flagged where no reliable document was confirmed during this review.</p>
+<hr>
+<h1 id="3-missing-secondary-sources-analysis">3. Missing Secondary Sources Analysis<a class="anchor" href="#3-missing-secondary-sources-analysis" aria-label="Permalink">#</a></h1>
+<div class="table-wrap"><table>
+<thead><tr><th>Historian / Institution</th><th>Before</th><th>Action</th></tr></thead>
+<tbody>
+<tr><td>Kate Clifford Larson</td><td>Present</td><td>Kept</td></tr>
+<tr><td>Catherine Clinton</td><td>Present</td><td>Kept</td></tr>
+<tr><td>Beverly Lowry</td><td>Present</td><td>Kept</td></tr>
+<tr><td>Jean Humez</td><td>Present</td><td>Kept</td></tr>
+<tr><td><strong>Milton C. Sernett</strong></td><td><strong>Missing</strong></td><td><strong>Added</strong> — <em>Myth, Memory, and History</em> (2007)</td></tr>
+<tr><td><strong>Earl Conrad</strong></td><td><strong>Missing</strong></td><td><strong>Added</strong> — first modern biography (1943)</td></tr>
+<tr><td>National Park Service</td><td>Present</td><td>Kept</td></tr>
+<tr><td>Library of Congress</td><td>Present</td><td>Kept</td></tr>
+<tr><td>National Archives</td><td>Present</td><td>Kept</td></tr>
+</tbody></table></div>
+<p><strong>Verdict:</strong> The two most significant omissions — Sernett (memory/historiography) and Conrad (the foundational 1943 biography) — are now included, completing the standard scholarly apparatus.</p>
+<hr>
+<h1 id="4-fact-verification-audit-evidence-confidence-matrix">4. Fact Verification Audit (Evidence Confidence Matrix)<a class="anchor" href="#4-fact-verification-audit-evidence-confidence-matrix" aria-label="Permalink">#</a></h1>
+<blockquote>Classification key: <strong>Confirmed (primary)</strong> · <strong>Supported (secondary)</strong> · <strong>Consensus</strong> · <strong>Probable</strong> · <strong>Uncertain</strong> · <strong>Disputed</strong>.</blockquote>
+<div class="table-wrap"><table>
+<thead><tr><th>Claim</th><th>Evidence Type</th><th>Classification</th><th>Confidence</th></tr></thead>
+<tbody>
+<tr><td>Birth name Araminta "Minty" Ross</td><td>Primary</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Birthplace Dorchester Co., Md.</td><td>Primary</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Birth year c. 1822</td><td>Mixed</td><td>Probable but not proven</td><td><span class="badge badge-medium">Medium</span></td></tr>
+<tr><td>Parents Ben Ross &amp; Rit Greene</td><td>Primary</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Sibling full roster (9, named)</td><td>Secondary</td><td>Supported by secondary source</td><td><span class="badge badge-medium">Medium</span></td></tr>
+<tr><td>Father a timber inspector</td><td>Primary</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Hired out / separated at six</td><td>Primary</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Childhood physical abuse</td><td>Primary</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Illiterate</td><td>Primary (form)</td><td>Strong scholarly consensus</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Head injury (iron weight)</td><td>Primary</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Sleeping spells</td><td>Primary</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Visions = TLE/narcolepsy</td><td>Secondary</td><td>Probable but not proven</td><td><span class="badge badge-medium">Medium</span></td></tr>
+<tr><td>Married John Tubman c. 1844</td><td>Primary</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Adopted name Harriet Tubman</td><td>Primary</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Escaped Sept 1849</td><td>Primary</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Routes extended to Canada (post-1850)</td><td>Primary</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>St. Catharines residence 1851–61</td><td>Primary (census)</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>~13 trips, ~70 freed</td><td>Secondary</td><td>Supported by secondary source</td><td><span class="badge badge-medium">Medium</span></td></tr>
+<tr><td>"Freed 300 / 19 trips"</td><td>None</td><td>Disputed / inflated legend</td><td><span class="badge badge-low">Low</span></td></tr>
+<tr><td>UGRR conductor</td><td>Primary</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Civil War nurse/cook/scout/spy</td><td>Primary</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Combahee Raid (June 2, 1863)</td><td>Primary</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Bought Auburn property 1859</td><td>Primary (deed)</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>1873 gold swindle</td><td>Primary (press)</td><td>Probable (figures vary)</td><td><span class="badge badge-medium">Medium</span></td></tr>
+<tr><td>Pension raised to $20 (1899)</td><td>Primary</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Founded Tubman Home (1908)</td><td>Primary (deeds)</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Women's suffrage activism</td><td>Primary</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Died March 10, 1913</td><td>Primary</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Death-certificate birth year 1815</td><td>Primary but erroneous</td><td>Disputed</td><td><span class="badge badge-low">Low</span></td></tr>
+</tbody></table></div>
+<hr>
+<h1 id="5-historical-context-audit">5. Historical Context Audit<a class="anchor" href="#5-historical-context-audit" aria-label="Permalink">#</a></h1>
+<div class="table-wrap"><table>
+<thead><tr><th>Context area</th><th>Adequately explained before?</th><th>Action</th></tr></thead>
+<tbody>
+<tr><td>Slavery in Maryland</td><td>No</td><td><strong>Added</strong> (Part VI)</td></tr>
+<tr><td>Eastern Shore culture</td><td>No</td><td><strong>Added</strong> (mixed agriculture, hiring-out)</td></tr>
+<tr><td>Free Black communities</td><td>No</td><td><strong>Added</strong></td></tr>
+<tr><td>Fugitive Slave Law</td><td>No</td><td><strong>Added</strong> (Compromise of 1850, Canada terminus)</td></tr>
+<tr><td>Underground Railroad networks</td><td>Partial</td><td><strong>Added</strong> (decentralized web, coded spirituals)</td></tr>
+<tr><td>Civil War military operations</td><td>No</td><td><strong>Added</strong> (Port Royal, Combahee tactics)</td></tr>
+<tr><td>Women's suffrage movement</td><td>No</td><td><strong>Added</strong></td></tr>
+</tbody></table></div>
+<p><strong>Verdict:</strong> A dedicated <strong>Part VI – Historical Context</strong> was added to <code>harriet_tubman_research.md</code> covering all seven required areas.</p>
+<hr>
+<h1 id="6-chronology-audit">6. Chronology Audit<a class="anchor" href="#6-chronology-audit" aria-label="Permalink">#</a></h1>
+<p><strong>Gaps found and corrected:</strong></p>
+<ul>
+<li><strong>1850 Fugitive Slave Act</strong> — missing; <strong>added</strong>.</li>
+<li><strong>1851–1861 St. Catharines, Canada</strong> — missing; <strong>added</strong>.</li>
+<li><strong>1859 property purchase</strong> — missing; <strong>added</strong>.</li>
+<li><strong>1861 Fugitive Aid Society</strong> — missing; <strong>added</strong>.</li>
+<li><strong>1865 Cheney sketch</strong> — missing; <strong>added</strong>.</li>
+<li><strong>1873 gold swindle</strong> — missing; <strong>added</strong>.</li>
+<li><strong>1886 Bradford second edition</strong> — missing from timeline; <strong>added</strong>.</li>
+<li><strong>1896 land purchase / NACW</strong> — partially missing; <strong>added</strong>.</li>
+<li><strong>1903 deed to AME Zion / 1908 Home opening</strong> — missing; <strong>added</strong>.</li>
+</ul>
+<p><strong>Inconsistencies checked:</strong> Birth-year conflict (1815 death cert / 1820 gravestone / 1820–21 her account / 1822 Larson / 1825 her later statement) is now explicitly reconciled as <strong>Medium confidence, c. 1822</strong>, rather than silently asserting one date. No remaining internal contradictions found.</p>
+<hr>
+<h1 id="7-research-quality-audit-110">7. Research Quality Audit (1–10)<a class="anchor" href="#7-research-quality-audit-110" aria-label="Permalink">#</a></h1>
+<div class="table-wrap"><table>
+<thead><tr><th>Section</th><th>Score</th><th>Reason</th></tr></thead>
+<tbody>
+<tr><td>Primary Sources</td><td>9</td><td>Broad, verbatim, multi-source (Bradford, Sanborn, Cheney, Still, Garrett, Douglass, deeds, pension, press); a few quotes from reputable transcriptions not page-verified</td></tr>
+<tr><td>Secondary Sources</td><td>9</td><td>All major scholars now present (Larson, Clinton, Humez, Lowry, Sernett, Conrad) + institutions</td></tr>
+<tr><td>Timeline</td><td>9</td><td>Birth-to-death, dual primary/secondary support, confidence per row</td></tr>
+<tr><td>Bibliography</td><td>9</td><td>Chicago-style, archives &amp; URLs, reliability ratings; some archival call numbers unspecified</td></tr>
+<tr><td>Historical Accuracy</td><td>9</td><td>Claims tracked to sources; myths flagged (300/19 trips); uncertainty labeled</td></tr>
+<tr><td>Source Quality</td><td>9</td><td>Strong primary base incl. hostile-witness ad and federal records</td></tr>
+<tr><td>Citation Quality</td><td>8</td><td>Consistent format; a few page numbers/repository IDs still approximate</td></tr>
+<tr><td>Completeness</td><td>9</td><td>All major topics + context now covered; minor gaps flagged</td></tr>
+</tbody></table></div>
+<p><strong>Average: ~8.9 / 10.</strong></p>
+<hr>
+<h1 id="8-national-history-day-ap-history-evaluation">8. National History Day / AP History Evaluation<a class="anchor" href="#8-national-history-day-ap-history-evaluation" aria-label="Permalink">#</a></h1>
+<div class="table-wrap"><table>
+<thead><tr><th>Level</th><th>Meets?</th><th>Justification</th></tr></thead>
+<tbody>
+<tr><td><span class="badge badge-high">High</span> School</td><td>✅ Exceeds</td><td>Far beyond typical scope</td></tr>
+<tr><td>AP U.S. History</td><td>✅ Exceeds</td><td>Sophisticated primary/secondary separation; DBQ-ready</td></tr>
+<tr><td>NHD Regional</td><td>✅</td><td>Strong thesis support and source variety</td></tr>
+<tr><td>NHD State</td><td>✅</td><td>Annotated bibliography + primary/secondary balance meet state rubric</td></tr>
+<tr><td>NHD National Finalist</td><td>⚠️ Borderline–Yes</td><td>Competitive; to fully secure, page-verify the few transcribed quotes and add 1–2 manuscript call numbers</td></tr>
+<tr><td>Introductory College</td><td>✅</td><td>Suitable as a research foundation</td></tr>
+<tr><td>Advanced Undergraduate</td><td>⚠️ Mostly</td><td>Meets most criteria; for a seminar paper, consult the original pension file pages and Maryland deed/estate records directly</td></tr>
+</tbody></table></div>
+<p><strong>Overall:</strong> The knowledge base sits at the <strong>AP / National-History-Day-State to early-college</strong> level, approaching <strong>NHD National-finalist</strong> quality. The remaining step to top-tier is direct verification of a handful of widely-transcribed quotes against original page images and adding archival identifiers.</p>
+<hr>
+<h1 id="9-enhancement-log-changes-applied">9. Enhancement Log (Changes Applied)<a class="anchor" href="#9-enhancement-log-changes-applied" aria-label="Permalink">#</a></h1>
+<p><strong>Added to <code>harriet_tubman_primary_sources.md</code>:</strong></p>
+<ul>
+<li>New sections: <em>Fugitive Slave Law and Refuge in Canada</em>; <em>Property Ownership and Financial Life</em>.</li>
+<li>New primary sources: Cheney (1865); 1859 Seward deed; census records; Emma Telford MS.</li>
+<li>Expanded: siblings (sisters sold south), second marriage, suffrage, Tubman Home/AME Zion.</li>
+<li>Timeline rows for 1850, 1851, 1859, 1861, 1865, 1873, 1896, 1903, 1908.</li>
+</ul>
+<p><strong>Added to <code>harriet_tubman_research.md</code>:</strong></p>
+<ul>
+<li>Part I sections for Fugitive Slave Law/Canada and Reconstruction/Later Life (property, finances, caregiving, suffrage).</li>
+<li>Part II secondary sources: <strong>Sernett</strong> and <strong>Conrad</strong>; family-genealogy and memory/legacy analyses.</li>
+<li>New <strong>Part VI – Historical Context</strong> (seven context areas).</li>
+<li>New <strong>Part VII – Evidence Confidence Matrix</strong>.</li>
+<li>Expanded Source-Comparison and Timeline tables.</li>
+</ul>
+<p><strong>Created:</strong> <code>harriet_tubman_gap_analysis.md</code> (this file) and its HTML.</p>
+<hr>
+<h1 id="10-unresolved-items-no-reliable-source-confirmed">10. Unresolved Items (No Reliable Source Confirmed)<a class="anchor" href="#10-unresolved-items-no-reliable-source-confirmed" aria-label="Permalink">#</a></h1>
+<ul>
+<li><strong>Formal childhood church membership</strong> — faith is well attested; a specific membership document is not.</li>
+<li><strong>Court file for the 1873 swindle</strong> — relied on contemporary newspaper reports; the docket was not located.</li>
+<li><strong>Primary John Brown correspondence naming Tubman</strong> — the Brown relationship is well attested in secondary work, but a primary letter was not verified in this review.</li>
+<li><strong>Page-image verification</strong> of two widely-circulated quotes (the 1896 "never lost a passenger" remark and the exact Combahee newspaper wording) — reproduced from reputable transcriptions, not yet checked against original scans.</li>
+</ul>
+<p>These are labeled in the source files rather than asserted as confirmed.</p>
+
+</main>
+<footer>
+  Historian-grade digital research archive · Primary evidence and secondary interpretation kept
+  separate · Quotations reproduced verbatim with source citations · For AP History, National History
+  Day, and undergraduate research.
+</footer>
+</body>
+</html>

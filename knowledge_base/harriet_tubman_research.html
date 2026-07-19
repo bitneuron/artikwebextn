@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harriet Tubman Research Knowledge Base — Harriet Tubman Research Knowledge Base</title>
+<style>
+:root {
+  --ink:#1a2230; --accent:#1a365d; --rule:#d7d2c4; --paper:#fbf9f4; --card:#ffffff;
+  --high:#1b7f4b; --high-bg:#e3f3ea; --med:#9a6b00; --med-bg:#fbf0d6; --low:#9b2226; --low-bg:#f6e0e0;
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body {
+  max-width:1100px; margin:auto; padding:40px;
+  font-family:Georgia, 'Times New Roman', serif; line-height:1.7; color:var(--ink); background:var(--paper);
+}
+.skip-link { position:absolute; left:-999px; top:0; background:var(--accent); color:#fff; padding:8px 14px; z-index:100; }
+.skip-link:focus { left:8px; }
+a { color:var(--accent); }
+h1, h2, h3, h4 { color:var(--accent); line-height:1.25; }
+h1 { font-size:2rem; border-bottom:3px double var(--rule); padding-bottom:.3em; }
+h2 { font-size:1.35rem; border-bottom:1px solid var(--rule); padding-bottom:.2em; margin-top:2em; }
+h3 { font-size:1.08rem; }
+.anchor { opacity:0; text-decoration:none; margin-left:.4em; font-weight:normal; color:var(--rule); }
+h1:hover .anchor, h2:hover .anchor, h3:hover .anchor { opacity:1; }
+.masthead { text-align:center; padding:24px 0 8px; border-bottom:3px double var(--rule); margin-bottom:24px; }
+.masthead .eyebrow { text-transform:uppercase; letter-spacing:.28em; font-size:.7rem; color:var(--med); font-family:Helvetica,Arial,sans-serif; }
+.masthead h1 { border:none; margin:.2em 0; }
+.masthead .subtitle { font-style:italic; color:#5c5747; margin:0; }
+.meta-panel { background:var(--card); border:1px solid var(--rule); border-radius:8px; padding:14px 20px; margin:20px 0; }
+.meta-panel h2 { margin:.2em 0 .6em; border:none; font-size:1rem; text-transform:uppercase; letter-spacing:.12em; }
+.meta-table { width:100%; } .meta-table th { text-align:left; width:45%; background:none; border:none; padding:4px 8px; }
+.meta-table td { border:none; padding:4px 8px; }
+.meta-table tr { border-bottom:1px solid #eee; }
+.legend { margin:.6em 0 0; font-size:.85rem; }
+.toc { background:var(--card); border:1px solid var(--rule); border-left:5px solid var(--accent); border-radius:6px; padding:10px 22px; margin:20px 0; }
+.toc h2 { border:none; margin:.3em 0; font-size:1rem; text-transform:uppercase; letter-spacing:.12em; }
+.toc ul { list-style:none; padding-left:0; columns:2; column-gap:32px; }
+.toc li { margin:3px 0; break-inside:avoid; }
+.toc-h1 a { font-weight:bold; } .toc-h2 { padding-left:14px; font-size:.95rem; }
+.timeline-nav { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:16px 0 8px; padding:10px; background:#f0ece1; border-radius:6px; }
+.timeline-nav .tl-label { font-weight:bold; font-family:Helvetica,Arial,sans-serif; font-size:.8rem; text-transform:uppercase; letter-spacing:.1em; margin-right:6px; }
+.timeline-nav a { background:#fff; border:1px solid var(--rule); border-radius:20px; padding:3px 12px; font-size:.82rem; text-decoration:none; font-family:Helvetica,Arial,sans-serif; }
+.timeline-nav a:hover { background:var(--accent); color:#fff; }
+blockquote { border-left:4px solid #c9bfa3; background:#f3eede; padding:12px 18px; margin:14px 0; border-radius:0 4px 4px 0; }
+.cite { font-size:.82rem; color:#6a6452; margin:-8px 0 14px 22px; font-style:italic; }
+.cite a { color:#6a6452; }
+article.source-card { background:var(--card); border:1px solid var(--rule); border-radius:8px; padding:6px 22px 16px; margin:18px 0; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+article.source-card h3 { margin-top:.7em; }
+.source-links { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0 4px; font-family:Helvetica,Arial,sans-serif; font-size:.78rem; }
+.source-links a { text-decoration:none; border:1px solid var(--rule); border-radius:16px; padding:3px 12px; background:#fff; color:var(--accent); }
+.source-links a:hover { background:var(--accent); color:#fff; }
+.table-wrap { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; margin:12px 0; font-size:.92rem; }
+th, td { border:1px solid #ddd; padding:9px 10px; text-align:left; vertical-align:top; }
+th { background:#f0ece1; }
+code { background:#f0ece1; padding:2px 5px; border-radius:3px; }
+.badge { display:inline-block; padding:1px 8px; border-radius:12px; font-family:Helvetica,Arial,sans-serif; font-size:.75rem; font-weight:bold; }
+.badge-high { background:var(--high-bg); color:var(--high); }
+.badge-medium { background:var(--med-bg); color:var(--med); }
+.badge-low { background:var(--low-bg); color:var(--low); }
+.visuals { margin-top:2.5em; }
+.figgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:18px; }
+figure { margin:0; border:1px solid var(--rule); border-radius:8px; overflow:hidden; background:var(--card); }
+.figph { height:150px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; background:repeating-linear-gradient(45deg,#efeadd,#efeadd 12px,#e7e1d2 12px,#e7e1d2 24px); color:#6a6452; }
+.figph span { font-weight:bold; } .figph em { font-size:.78rem; }
+figcaption { padding:10px 12px; font-size:.85rem; } .attr { color:#6a6452; font-size:.78rem; }
+footer { margin-top:3em; padding-top:14px; border-top:1px solid var(--rule); font-size:.82rem; color:#6a6452; text-align:center; font-family:Helvetica,Arial,sans-serif; }
+:focus-visible { outline:3px solid #2b6cb0; outline-offset:2px; }
+@media (max-width:640px) { body { padding:18px; } .toc ul { columns:1; } }
+@media print {
+  body { max-width:none; padding:0; font-size:11pt; background:#fff; }
+  .skip-link, .toc, .timeline-nav, .anchor { display:none !important; }
+  h1 { page-break-before:always; } .masthead h1, body > main > h1:first-of-type { page-break-before:avoid; }
+  h2, h3 { page-break-after:avoid; }
+  article.source-card, table, figure, blockquote { page-break-inside:avoid; }
+  a { color:#000; text-decoration:none; }
+}
+</style>
+</head>
+<body id="top">
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="masthead">
+  <div class="eyebrow">Harriet Tubman Research Knowledge Base</div>
+  <h1>Harriet Tubman Research Knowledge Base</h1>
+  <p class="subtitle">Primary &amp; Secondary Source Research Knowledge Base</p>
+</header>
+<section class="meta-panel" aria-label="Research metadata"><h2>Research Metadata</h2><table class="meta-table"><tbody><tr><th scope='row'>Primary sources</th><td>15+</td></tr><tr><th scope='row'>Secondary sources</th><td>8</td></tr><tr><th scope='row'>Document parts</th><td>VII</td></tr><tr><th scope='row'>Contemporary witnesses</th><td>7</td></tr><tr><th scope='row'>Earliest source</th><td>1849</td></tr><tr><th scope='row'>Latest source</th><td>2007</td></tr></tbody></table><p class="legend">Confidence: <span class="badge badge-high">High</span> <span class="badge badge-medium">Medium</span> <span class="badge badge-low">Low</span></p></section>
+<nav class="toc" aria-label="Table of contents"><h2>Contents</h2><ul>
+<li class="toc-h2"><a href="#executive-summary">Executive Summary</a></li>
+<li class="toc-h1"><a href="#part-i-primary-sources">Part I – Primary Sources</a></li>
+<li class="toc-h2"><a href="#original-name">Original Name</a></li>
+<li class="toc-h2"><a href="#family-background">Family Background</a></li>
+<li class="toc-h2"><a href="#childhood">Childhood</a></li>
+<li class="toc-h2"><a href="#education-and-literacy">Education and Literacy</a></li>
+<li class="toc-h2"><a href="#head-injury">Head Injury</a></li>
+<li class="toc-h2"><a href="#marriage">Marriage</a></li>
+<li class="toc-h2"><a href="#escape-from-slavery">Escape from Slavery</a></li>
+<li class="toc-h2"><a href="#fugitive-slave-law-and-refuge-in-canada">Fugitive Slave Law and Refuge in Canada</a></li>
+<li class="toc-h2"><a href="#underground-railroad">Underground Railroad</a></li>
+<li class="toc-h2"><a href="#civil-war-service">Civil War Service</a></li>
+<li class="toc-h2"><a href="#reconstruction-and-later-life">Reconstruction and Later Life</a></li>
+<li class="toc-h1"><a href="#part-ii-secondary-sources">Part II – Secondary Sources</a></li>
+<li class="toc-h2"><a href="#original-name-birth-year">Original Name &amp; Birth Year</a></li>
+<li class="toc-h2"><a href="#family-genealogy-childhood">Family, Genealogy &amp; Childhood</a></li>
+<li class="toc-h2"><a href="#head-injury-visions-health">Head Injury, Visions &amp; Health</a></li>
+<li class="toc-h2"><a href="#underground-railroad-incl-numbers-myth">Underground Railroad (incl. numbers myth)</a></li>
+<li class="toc-h2"><a href="#civil-war-service-2">Civil War Service</a></li>
+<li class="toc-h2"><a href="#later-life-memory-legacy">Later Life, Memory &amp; Legacy</a></li>
+<li class="toc-h1"><a href="#part-iii-source-comparison">Part III – Source Comparison</a></li>
+<li class="toc-h1"><a href="#part-iv-historical-timeline">Part IV – Historical Timeline</a></li>
+<li class="toc-h1"><a href="#part-v-annotated-bibliography">Part V – Annotated Bibliography</a></li>
+<li class="toc-h2"><a href="#primary-sources">Primary Sources</a></li>
+<li class="toc-h2"><a href="#secondary-sources">Secondary Sources</a></li>
+<li class="toc-h1"><a href="#part-vi-historical-context">Part VI – Historical Context</a></li>
+<li class="toc-h2"><a href="#slavery-on-marylands-eastern-shore">Slavery on Maryland's Eastern Shore</a></li>
+<li class="toc-h2"><a href="#free-black-communities-and-mixed-families">Free Black Communities and Mixed Families</a></li>
+<li class="toc-h2"><a href="#the-fugitive-slave-act-of-1850">The Fugitive Slave Act of 1850</a></li>
+<li class="toc-h2"><a href="#underground-railroad-networks">Underground Railroad Networks</a></li>
+<li class="toc-h2"><a href="#civil-war-military-operations-in-the-low-country">Civil War Military Operations in the Low Country</a></li>
+<li class="toc-h2"><a href="#the-womens-suffrage-movement">The Women's Suffrage Movement</a></li>
+<li class="toc-h1"><a href="#part-vii-evidence-confidence-matrix">Part VII – Evidence Confidence Matrix</a></li>
+</ul></nav>
+<nav class="timeline-nav" aria-label="Life timeline"><span class="tl-label">Timeline:</span><a href="#childhood">Birth</a><a href="#escape-from-slavery">Escape 1849</a><a href="#fugitive-slave-law-and-refuge-in-canada">Canada</a><a href="#underground-railroad">Underground RR</a><a href="#civil-war-service">Civil War</a><a href="#reconstruction-and-later-life">Reconstruction</a><a href="#reconstruction-and-later-life">Suffrage</a><a href="#reconstruction-and-later-life">Death 1913</a></nav>
+<main id="main">
+<h2 id="executive-summary">Executive Summary<a class="anchor" href="#executive-summary" aria-label="Permalink">#</a></h2>
+<p>Harriet Tubman (born <strong>Araminta "Minty" Ross</strong>, c. 1820–1822 – died March 10, 1913) was an enslaved woman from Maryland's Eastern Shore who escaped to freedom in 1849 and became the most famous conductor of the Underground Railroad, the first woman to guide a U.S. armed military raid, and a lifelong activist for emancipation, the aged poor, and women's suffrage. Born into slavery in Dorchester County to <strong>Benjamin Ross</strong> and <strong>Harriet "Rit" Greene</strong>, she endured childhood separation, hired-out labor, physical abuse, and a traumatic head injury that produced lifelong "sleeping spells" and the religious visions she regarded as divine guidance. After her own escape, she returned to the Eastern Shore roughly thirteen times, personally leading some <strong>70 people</strong> to freedom and instructing dozens more — by her own account never losing a passenger. The <strong>Fugitive Slave Act of 1850</strong> pushed her routes all the way to <strong>Canada (St. Catharines, Ontario)</strong>, where she based herself for a decade. During the Civil War she served the Union Army as nurse, cook, scout, and spy, and <strong>guided the Combahee River Raid of June 2, 1863</strong>, which freed roughly 700–800 enslaved people. She spent her later decades in <strong>Auburn, New York</strong> — where she had purchased property from the Sewards in 1859 — founding the Harriet Tubman Home for the Aged, working with the AME Zion Church, supporting women's suffrage, and enduring chronic poverty until her death.</p>
+<p><strong>This document separates evidence by type.</strong> Part I presents <strong>primary-source</strong> evidence; Part II presents <strong>secondary-source</strong> scholarly interpretation; Part III compares them; Part IV is the timeline; Part V is the annotated bibliography; Part VI supplies <strong>historical context</strong>; and Part VII is the <strong>evidence confidence matrix</strong>. For every historical claim, primary evidence is shown first and secondary interpretation second, and the two are never blended. Where no confirmed primary source exists, this is stated explicitly. See <code>harriet_tubman_gap_analysis.md</code> for the full review.</p>
+<hr>
+<h1 id="part-i-primary-sources">Part I – Primary Sources<a class="anchor" href="#part-i-primary-sources" aria-label="Permalink">#</a></h1>
+<blockquote>Primary source = Tubman's own dictated words; lifetime interviews, speeches, and letters; government records; contemporary newspapers; and documents by people who knew her in her lifetime. <strong>Citation key:</strong> each quote is attributed to its source and year; page numbers for Bradford 1869 (verified against Project Gutenberg #57821) appear in the companion file <code>harriet_tubman_primary_sources.md</code>, which is the canonical, fully-cited quote archive.</blockquote>
+<h2 id="original-name">Original Name<a class="anchor" href="#original-name" aria-label="Permalink">#</a></h2>
+<p><strong>Araminta Ross · "Minty" · Harriet Tubman · name-change evidence</strong></p>
+<p><strong>Source:</strong> Sarah H. Bradford, <em>Scenes in the Life of Harriet Tubman</em> — <strong>Date:</strong> 1869 — <strong>Type:</strong> Dictated testimony<br><strong>Quote:</strong> "Then came the call for 'Minty'—Harriet's name was Araminta at the South."<br><strong>Analysis:</strong> Birth name <strong>Araminta</strong>, called <strong>Minty</strong>. She later took <strong>Harriet</strong> (her mother's name) and <strong>Tubman</strong> (her 1844 marriage). Surname Ross from her father.<br><strong>Reliability:</strong> First-hand.</p>
+<p><strong>Source:</strong> Franklin B. Sanborn, <em>The Commonwealth</em> — <strong>Date:</strong> July 17, 1863 — <strong>Type:</strong> Newspaper<br><strong>Quote:</strong> "Araminta Ross, now known by her married name of Tubman..."<br><strong>Reliability:</strong> Contemporary witness.</p>
+<p><strong>Source:</strong> Eliza Ann Brodess, <em>Cambridge Democrat</em> — <strong>Date:</strong> Oct. 3, 1849 — <strong>Type:</strong> Slaveholder's ad<br><strong>Quote:</strong> "Minty, aged about 27 years, is of a chestnut color, fine looking, and about 5 feet high."<br><strong>Reliability:</strong> Contemporary document, hostile-witness corroboration.</p>
+<hr>
+<h2 id="family-background">Family Background<a class="anchor" href="#family-background" aria-label="Permalink">#</a></h2>
+<p><strong>Benjamin Ross · Harriet "Rit" Greene · siblings · extended family · African ancestry</strong></p>
+<p><strong>Source:</strong> Bradford 1869 — <strong>Type:</strong> Dictated testimony<br><strong>Quote:</strong> "Her parents were Benjamin Ross and Harriet Greene, both slaves, but married and faithful to each other."<br><strong>Quote:</strong> "Frequently Harriet worked for her father, who was a timber inspector..."<br><strong>Quote:</strong> "She had seen two older sisters carried off in a chain-gang to the far South."<br><strong>Analysis:</strong> Parents named and confirmed enslaved; father a skilled timber inspector; older sisters sold south — a trauma that shaped her rescues.<br><strong>Reliability:</strong> First-hand.</p>
+<p><strong>Source:</strong> Brodess ad (1849) — names brothers "Harry" and "Ben." <strong>Reliability:</strong> Contemporary document.</p>
+<p><strong>Source:</strong> Sanborn 1863 — "the grand-daughter of a slave imported from Africa..." (oral tradition of African descent). <strong>Reliability:</strong> Contemporary witness reporting tradition.</p>
+<hr>
+<h2 id="childhood">Childhood<a class="anchor" href="#childhood" aria-label="Permalink">#</a></h2>
+<p><strong>Birthplace · living conditions · childhood labor · separation · abuse · religion · resistance</strong></p>
+<p><strong>Source:</strong> Bradford 1869 — <strong>Type:</strong> Dictated testimony<br><strong>Quote:</strong> "She was born, as near as she can remember, in 1820 or in 1821, in Dorchester County, on the Eastern shore of Maryland, and not far from the town of Cambridge."<br><strong>Quote:</strong> "When Harriet was six years old, she was taken from her mother and carried ten miles to live with James Cook... Cook set her to watching his musk-rat traps, which compelled her to wade through the water."<br><strong>Quote:</strong> "...down would come the whip upon the neck and face of the poor weary creature."<br><strong>Analysis:</strong> Birthplace Dorchester Co.; separation at six; hired-out child labor; physical abuse; lifelong scars. Earliest resistance = refusing to bind a fleeing enslaved man.<br><strong>Religion/community:</strong> Faith attested via later visions/prayer testimony. <strong>No confirmed primary source describing formal childhood church membership has been located.</strong><br><strong>Reliability:</strong> First-hand.</p>
+<hr>
+<h2 id="education-and-literacy">Education and Literacy<a class="anchor" href="#education-and-literacy" aria-label="Permalink">#</a></h2>
+<ul>
+<li><strong>Could she read?</strong> Primary evidence indicates <strong>no.</strong> Every record of her words is <strong>dictated</strong>; she used an "X" mark; no document in her handwriting exists.</li>
+<li><strong>Could she write?</strong> <strong>No</strong> confirmed primary evidence; <strong>no autograph document found.</strong></li>
+<li><strong>How she learned/communicated:</strong> Orally and from memory — the <strong>North Star</strong>, terrain, spirituals used as coded signals, and a trusted human network.</li>
+<li><strong>Primary support (Bradford 1869):</strong> "She had no knowledge of geography... but she got her directions from the North Star, and from friends met on the way."</li>
+<li><strong>Reliability:</strong> Strong documentary inference; <strong>No confirmed primary source shows Tubman reading or writing.</strong></li>
+</ul>
+<hr>
+<h2 id="head-injury">Head Injury<a class="anchor" href="#head-injury" aria-label="Permalink">#</a></h2>
+<p><strong>Source:</strong> Bradford 1869 — <strong>Type:</strong> Dictated testimony<br><strong>Quote:</strong> "The overseer caught up a two-pound weight from the counter and threw it at the fugitive, but it fell short and struck Harriet a stunning blow on the head."<br><strong>Quote:</strong> "From that time she was subject to a sort of stupor or lethargy at times... throwing her into a deep sleep, from which she would presently rouse herself."<br><strong>Quote:</strong> "She seemed to have visions of the future, and would tell of various peculiar and prophetic dreams."<br><strong>Analysis:</strong> Iron-weight injury in adolescence → lifelong <strong>sleeping spells</strong> and <strong>religious visions</strong> she read as divine guidance.<br><strong>Reliability:</strong> First-hand; corroborated by contemporaries.</p>
+<hr>
+<h2 id="marriage">Marriage<a class="anchor" href="#marriage" aria-label="Permalink">#</a></h2>
+<p><strong>Source:</strong> Bradford 1869 — <strong>Quote:</strong> "In the year 1844 she was married to a free negro named John Tubman."<br><strong>Analysis:</strong> Marriage to free Black man <strong>John Tubman</strong> (~1844); origin of surname <strong>Tubman</strong>; combined with adopting her mother's name <strong>Harriet</strong> = change from <strong>Araminta Ross</strong> to <strong>Harriet Tubman</strong>.<br><strong>Source:</strong> Pension file (NARA) — Married <strong>Nelson Davis</strong> (1869), a USCT veteran; basis of widow's pension.<br><strong>Reliability:</strong> First-hand / federal record.</p>
+<hr>
+<h2 id="escape-from-slavery">Escape from Slavery<a class="anchor" href="#escape-from-slavery" aria-label="Permalink">#</a></h2>
+<p><strong>Why:</strong> Threat of being sold south after her enslaver's death.<br><strong>Source:</strong> Bradford 1886 — <strong>Quote:</strong> "there was one of two things I had a right to, liberty or death; if I could not have one, I would have the other."<br><strong>Timeline:</strong> Brodess ad (<em>Cambridge Democrat</em>, Oct 3, 1849) dates flight to <strong>Sept 17, 1849</strong>.<br><strong>Arrival:</strong> Bradford 1869 — "When I found I had crossed that line... There was such a glory over everything... I felt like I was in Heaven." (Pennsylvania, 1849.)<br><strong>Reliability:</strong> First-hand + hostile-witness corroboration.</p>
+<hr>
+<h2 id="fugitive-slave-law-and-refuge-in-canada">Fugitive Slave Law and Refuge in Canada<a class="anchor" href="#fugitive-slave-law-and-refuge-in-canada" aria-label="Permalink">#</a></h2>
+<p><strong>Source:</strong> Bradford 1869 — <strong>Type:</strong> Dictated testimony<br><strong>Quote:</strong> "I wouldn't trust Uncle Sam with my people no longer; I brought 'em all clar off to Canada."<br><strong>Analysis:</strong> The <strong>Fugitive Slave Act of 1850</strong> made free-state capture possible, so Tubman extended routes to <strong>Canada West (Ontario)</strong>. She based herself at <strong>St. Catharines</strong> (North Street) from December 1851 to ~1861 and co-founded the <strong>Fugitive Aid Society</strong> there (1861) with her brother William Henry.<br><strong>Source:</strong> Canadian census / St. Catharines records — <strong>Reliability:</strong> Contemporary records, high.</p>
+<hr>
+<h2 id="underground-railroad">Underground Railroad<a class="anchor" href="#underground-railroad" aria-label="Permalink">#</a></h2>
+<p><strong>Source:</strong> William Still, <em>The Underground Railroad</em> (1872) — <strong>Type:</strong> Eyewitness records<br><strong>Quote:</strong> "Harriet Tubman had been their 'Moses,'... She had faithfully gone down into Egypt, and had delivered these... by her own heroism."<br><strong>Source:</strong> Thomas Garrett (in Bradford 1869) — <strong>Quote:</strong> "I never met with any person of any color who had more confidence in the voice of God, as spoken direct to her soul."<br><strong>Source:</strong> Frederick Douglass, letter Aug 29, 1868 (in Bradford 1869) — <strong>Quote:</strong> "Excepting John Brown—of sacred memory—I know of no one who has willingly encountered more perils and hardships to serve our enslaved people than you have."<br><strong>Source:</strong> Ednah Dow Cheney, <em>The Freedmen's Record</em> (March 1865) — <strong>Quote:</strong> "She is probably the most remarkable woman of this age."<br><strong>Her own summary (1896):</strong> "I never ran my train off the track and I never lost a passenger."<br><strong>Reliability:</strong> Multiple independent contemporary witnesses — very high.</p>
+<hr>
+<h2 id="civil-war-service">Civil War Service<a class="anchor" href="#civil-war-service" aria-label="Permalink">#</a></h2>
+<p><strong>Source:</strong> Affidavit of Harriet Tubman (Davis), pension/claim file, NARA — <strong>Date:</strong> ca. 1898<br><strong>Quote:</strong> "My claim against the U.S. is for three years' services as nurse and cook in hospitals, and as commander of several men (eight or nine) as scouts during the late war of the Rebellion."<br><strong>Source:</strong> <em>Wisconsin State Journal</em> / <em>The Commonwealth</em> (July 1863) — <strong>Quote:</strong> "...under the guidance of a black woman... brought off near 800 slaves... without losing a man or receiving a scratch."<br><strong>Analysis:</strong> Sworn record of nursing, cooking, scouting, and commanding scouts; contemporary press confirms the <strong>Combahee River Raid (June 2, 1863)</strong> she guided.<br><strong>Source:</strong> U.S. pension records (1899) — widow's pension raised <strong>$8 → $20/month</strong>; no separate pension for her own service.<br><strong>Reliability:</strong> Sworn federal record + contemporary press — very high.</p>
+<hr>
+<h2 id="reconstruction-and-later-life">Reconstruction and Later Life<a class="anchor" href="#reconstruction-and-later-life" aria-label="Permalink">#</a></h2>
+<p><strong>Auburn property · financial hardship · Tubman Home · church · suffrage · death</strong></p>
+<p><strong>Source:</strong> Bradford 1869 + 1859 Seward deed — Tubman bought <strong>7 acres in Fleming/Auburn from Frances Seward for $1,200</strong> (1859), her lifelong base. Seward: "I have known her long, and a nobler, higher spirit... seldom dwells in the human form."<br><strong>Financial hardship:</strong> Defrauded in an <strong>1873 "gold swindle"</strong> (contemporary press); lived near poverty supporting many dependents.<br><strong>Caregiving / Tubman Home:</strong> Bought 25 adjoining acres (1896); founded the <strong>Harriet Tubman Home for the Aged</strong>; deeded it to the <strong>AME Zion Church</strong> (1903); Home opened 1908.<br><strong>Suffrage/activism:</strong> Spoke at women's suffrage gatherings (with Susan B. Anthony) and the 1896 NACW founding meeting.<br><strong>Death/burial:</strong> Died of pneumonia <strong>March 10, 1913</strong>, Auburn; buried with semi-military honors at<br><strong>Fort Hill Cemetery</strong>. (Death certificate's 1815 and gravestone's 1820 birth years are unreliable.)<br><strong>Reliability:</strong> Deeds/vital records high; swindle figures medium.</p>
+<hr>
+<h1 id="part-ii-secondary-sources">Part II – Secondary Sources<a class="anchor" href="#part-ii-secondary-sources" aria-label="Permalink">#</a></h1>
+<blockquote>Secondary source = analysis by modern historians and institutions. Presented <strong>after</strong> the primary evidence above and kept separate from it.</blockquote>
+<h2 id="original-name-birth-year">Original Name &amp; Birth Year<a class="anchor" href="#original-name-birth-year" aria-label="Permalink">#</a></h2>
+<p><strong>Citation:</strong> Kate Clifford Larson, <em>Bound for the Promised Land: Harriet Tubman, Portrait of an American Hero</em> (New York: Ballantine Books, 2004).<br><strong>Key Argument:</strong> Tubman was born <strong>Araminta Ross in early 1822</strong> (Feb–Mar), not 1820/21.<br><strong>Evidence Used:</strong> A <strong>midwife/doctor payment recorded in Edward Brodess's accounts</strong> (a primary record Larson located), plus the 1849 runaway ad and other documents.<br><strong>Strengths:</strong> Anchors the birth year to a contemporaneous financial record rather than memory.<br><strong>Limitations:</strong> The payment infers, rather than states, the birth; competing records (1815, 1820, 1825) remain.</p>
+<p><strong>Citation:</strong> Catherine Clinton, <em>Harriet Tubman: The Road to Freedom</em> (New York: Little, Brown, 2004).<br><strong>Key Argument:</strong> Weighs multiple candidate birth dates; emphasizes documentary uncertainty.<br><strong>Evidence Used:</strong> Census, estate, and pension records; Bradford read critically.<br><strong>Strengths:</strong> Transparent about conflicting evidence.<br><strong>Limitations:</strong> Less decisive on a single date than Larson.</p>
+<h2 id="family-genealogy-childhood">Family, Genealogy &amp; Childhood<a class="anchor" href="#family-genealogy-childhood" aria-label="Permalink">#</a></h2>
+<p><strong>Citation:</strong> Larson, <em>Bound for the Promised Land</em> (2004).<br><strong>Key Argument:</strong> Reconstructs the Ross family under the Brodess/Thompson households near the Blackwater River; identifies <strong>nine children</strong> of Ben and Rit, including sisters <strong>Linah, Mariah Ritty, and Soph</strong> (sold south) and brothers <strong>Robert, Ben, Henry, Moses, and William Henry</strong>.<br><strong>Evidence Used:</strong> Maryland land, estate, tax, and probate records.<br><strong>Strengths:</strong> Deep archival grounding; recovers a family tree absent from the primary narratives.<br><strong>Limitations:</strong> Some kinship links inferential given gaps in slaveholder records.</p>
+<p><strong>Citation:</strong> National Park Service, <em>Harriet Tubman Underground Railroad National Historical Park</em>.<br><strong>Key Argument:</strong> Synthesizes the documented arc of her Eastern Shore childhood and rescues.<br><strong>Strengths:</strong> Authoritative, vetted public history. <strong>Limitations:</strong> Summary level.</p>
+<h2 id="head-injury-visions-health">Head Injury, Visions &amp; Health<a class="anchor" href="#head-injury-visions-health" aria-label="Permalink">#</a></h2>
+<p><strong>Citation:</strong> Larson (2004); Clinton (2004).<br><strong>Key Argument:</strong> The skull injury likely caused <strong>temporal lobe epilepsy / narcolepsy</strong>, explaining the sleeping spells and the visions she experienced as religious revelation.<br><strong>Evidence Used:</strong> Bradford's symptom descriptions read against modern neurology.<br><strong>Strengths:</strong> Plausible framing consistent with primary symptoms. <strong>Limitations:</strong> Retrospective; unprovable.</p>
+<h2 id="underground-railroad-incl-numbers-myth">Underground Railroad (incl. numbers myth)<a class="anchor" href="#underground-railroad-incl-numbers-myth" aria-label="Permalink">#</a></h2>
+<p><strong>Citation:</strong> Larson, <em>Bound for the Promised Land</em> (2004).<br><strong>Key Argument:</strong> Tubman made roughly <strong>13 rescue missions</strong> and personally freed about <strong>70 people</strong>, instructing ~70 more — far below the legendary "300+."<br><strong>Evidence Used:</strong> Still's records, Garrett's letters, network testimony, dated escapes.<br><strong>Strengths:</strong> Corrects mythologized numbers. <strong>Limitations:</strong> Some missions sparsely documented.</p>
+<p><strong>Citation:</strong> Jean M. Humez, <em>Harriet Tubman: The Life and the Life Stories</em> (Madison: Univ. of Wisconsin Press, 2003).<br><strong>Key Argument:</strong> Analyzes how Tubman's story was shaped by Bradford and other transcribers; distinguishes Tubman's voice from her editors'.<br><strong>Strengths:</strong> Essential source-criticism; compiles printed primary recollections.<br><strong>Limitations:</strong> Interpretive/literary rather than new archival discovery.</p>
+<h2 id="civil-war-service-2">Civil War Service<a class="anchor" href="#civil-war-service-2" aria-label="Permalink">#</a></h2>
+<p><strong>Citation:</strong> Clinton (2004); Library of Congress and National Archives educational materials.<br><strong>Key Argument:</strong> Her wartime nursing, scouting, and spying were real and significant, yet the federal government under-recognized and under-compensated her for decades.<br><strong>Evidence Used:</strong> NARA pension/claim file, congressional records, Combahee press.<br><strong>Strengths:</strong> Ties primary documents to the politics of recognition. <strong>Limitations:</strong> Spying details thin.</p>
+<h2 id="later-life-memory-legacy">Later Life, Memory &amp; Legacy<a class="anchor" href="#later-life-memory-legacy" aria-label="Permalink">#</a></h2>
+<p><strong>Citation:</strong> Beverly Lowry, <em>Harriet Tubman: Imagining a Life</em> (New York: Doubleday, 2007).<br><strong>Key Argument:</strong> Narrative treatment of her later activism, the Auburn home, and symbolic legacy.<br><strong>Strengths:</strong> Accessible; attentive to memory-making. <strong>Limitations:</strong> More literary reconstruction.</p>
+<p><strong>Citation:</strong> Milton C. Sernett, <em>Harriet Tubman: Myth, Memory, and History</em> (Durham: Duke Univ. Press, 2007).<br><strong>Key Argument:</strong> Distinguishes the <strong>symbolic "Tubman" of memory</strong> from the historical figure; traces how Bradford, Conrad, and later writers shaped (and exaggerated) the legend.<br><strong>Evidence Used:</strong> Historiographical analysis of all major biographies and commemorations.<br><strong>Strengths:</strong> The definitive study of Tubman's memory and myth-making.<br><strong>Limitations:</strong> Historiography, not a life narrative; assumes familiarity with the basic story.</p>
+<p><strong>Citation:</strong> Earl Conrad, <em>Harriet Tubman</em> (Washington, D.C.: Associated Publishers, 1943).<br><strong>Key Argument:</strong> First modern, research-based biography; recovered documents and contemporaries' testimony decades after Bradford.<br><strong>Strengths:</strong> Pioneering archival recovery; bridged the 19th-century sources to modern scholarship.<br><strong>Limitations:</strong> Shaped by the author's politics; superseded on details by Larson/Clinton.</p>
+<hr>
+<h1 id="part-iii-source-comparison">Part III – Source Comparison<a class="anchor" href="#part-iii-source-comparison" aria-label="Permalink">#</a></h1>
+<div class="table-wrap"><table>
+<thead><tr><th>Topic</th><th>Primary Source Evidence</th><th>Secondary Source Interpretation</th><th>Confidence</th></tr></thead>
+<tbody>
+<tr><td>Birth year</td><td>Bradford 1869 "1820 or 1821"; Sanborn 1863; Brodess midwife payment</td><td>Larson: early <strong>1822</strong>; Clinton: range debated</td><td><span class="badge badge-medium">Medium</span></td></tr>
+<tr><td>Birth name</td><td>Bradford 1869 "Araminta... Minty"; Sanborn 1863; Brodess ad "Minty"</td><td>Larson/Clinton: born Araminta Ross</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Parents</td><td>Bradford 1869 "Benjamin Ross and Harriet Greene"</td><td>Larson: Ben Ross &amp; Rit, enslaved by Thompson/Brodess</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Siblings</td><td>Brodess ad "Harry," "Ben"; Bradford (sisters sold south)</td><td>Larson: 9 children; names Linah, Mariah Ritty, Soph, Robert, Henry, Moses, William Henry</td><td><span class="badge badge-high">High</span> (existence) / <span class="badge badge-medium">Medium</span> (full roster)</td></tr>
+<tr><td>Childhood</td><td>Bradford 1869 (hired out at six, muskrat traps, abuse)</td><td>Larson/NPS: typical brutal Eastern Shore enslaved childhood</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Education/literacy</td><td>Dictated narratives; "X" mark; no autograph; North Star navigation</td><td>Scholars concur she was illiterate</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Religious belief</td><td>Bradford visions; Garrett testimony</td><td>Larson/Clinton: faith central; possible TLE-linked visions</td><td><span class="badge badge-high">High</span> (faith) / <span class="badge badge-medium">Medium</span> (medical)</td></tr>
+<tr><td>Head injury</td><td>Bradford 1869 (two-pound weight; sleeping spells; visions)</td><td>Larson/Clinton: TBI → epilepsy/narcolepsy</td><td><span class="badge badge-high">High</span> (event) / <span class="badge badge-medium">Medium</span> (diagnosis)</td></tr>
+<tr><td>Marriage</td><td>Bradford 1869 "1844... John Tubman"; pension (Nelson Davis 1869)</td><td>Scholars concur</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Escape</td><td>Bradford 1869/1886; Brodess ad (Sept 17, 1849)</td><td>Larson: escaped fall 1849</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Fugitive Slave Law / Canada</td><td>Bradford 1869 ("clar off to Canada"); Canadian census</td><td>Larson/Canada's History: St. Catharines 1851–61</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Underground Railroad</td><td>Still 1872; Garrett; Douglass; Cheney 1865; 1896 speech</td><td>Larson: ~13 trips, ~70 freed (not 300)</td><td><span class="badge badge-high">High</span> (activity) / <span class="badge badge-medium">Medium</span> (totals)</td></tr>
+<tr><td>Civil War service</td><td>Tubman pension affidavit; Combahee press</td><td>Clinton/LOC/NARA: real, under-compensated</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Property ownership</td><td>1859 Seward deed; 1896 &amp; 1903 deeds</td><td>Larson/NPS: Auburn landowner</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Financial hardship</td><td>1873 swindle press; pension delay</td><td>Larson/Clinton: chronic poverty</td><td><span class="badge badge-high">High</span> (poverty) / <span class="badge badge-medium">Medium</span> (swindle detail)</td></tr>
+<tr><td>Later life / memory</td><td>Bradford/Seward; Home &amp; AME Zion records; 1913 death record</td><td>Lowry/Sernett/NPS: Auburn activism &amp; legacy/myth</td><td><span class="badge badge-high">High</span></td></tr>
+</tbody></table></div>
+<hr>
+<h1 id="part-iv-historical-timeline">Part IV – Historical Timeline<a class="anchor" href="#part-iv-historical-timeline" aria-label="Permalink">#</a></h1>
+<div class="table-wrap"><table>
+<thead><tr><th>Date</th><th>Event</th><th>Primary Support</th><th>Secondary Support</th><th>Confidence</th></tr></thead>
+<tbody>
+<tr><td>c. 1820–1822</td><td>Born Araminta "Minty" Ross, Dorchester Co., Md.</td><td>Bradford 1869; Sanborn 1863; Brodess midwife payment</td><td>Larson (1822); Clinton (range)</td><td><span class="badge badge-medium">Medium</span> (year) / <span class="badge badge-high">High</span> (place)</td></tr>
+<tr><td>c. 1826</td><td>Hired out at age six to James Cook</td><td>Bradford 1869</td><td>Larson; NPS</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>childhood/teens</td><td>Nursemaid abuse; field labor; sisters sold south</td><td>Bradford 1869</td><td>Larson</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>adolescence</td><td>Iron-weight head injury; sleeping spells begin</td><td>Bradford 1869</td><td>Larson/Clinton (TBI→epilepsy)</td><td><span class="badge badge-high">High</span> (event)</td></tr>
+<tr><td>c. 1844</td><td>Marries John Tubman; becomes "Harriet Tubman"</td><td>Bradford 1869</td><td>Larson/Clinton</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Sept 17, 1849</td><td>Escapes Dorchester Co. with two brothers</td><td>Brodess ad, Oct 3, 1849</td><td>Larson</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>1849</td><td>Reaches Pennsylvania ("glory over everything")</td><td>Bradford 1869</td><td>Larson</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>1850</td><td>Fugitive Slave Act passed</td><td>Federal statute</td><td>Larson/Clinton</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Dec 1851–1861</td><td>Based at St. Catharines, Canada West</td><td>Canadian census; local records</td><td>Larson; Canada's History</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>1850–1860</td><td>~13 Underground Railroad missions; ~70 freed</td><td>Still 1872; Garrett; Douglass; Cheney 1865</td><td>Larson</td><td><span class="badge badge-high">High</span> (activity) / <span class="badge badge-medium">Medium</span> (count)</td></tr>
+<tr><td>1859</td><td>Buys 7 acres in Fleming/Auburn from F. Seward, $1,200</td><td>Recorded deed</td><td>Larson; NPS</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>1861</td><td>Co-founds Fugitive Aid Society, St. Catharines</td><td>Local records</td><td>Canada's History</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>June 2, 1863</td><td>Guides Combahee River Raid; ~700–800 freed</td><td><em>Wisconsin State Journal</em>/<em>Commonwealth</em></td><td>Clinton; NPS</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>1861–1865</td><td>Union nurse, cook, scout, spy</td><td>Pension affidavit (NARA)</td><td>Clinton; LOC/NARA</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Mar 1865</td><td>Cheney's "Moses" sketch published</td><td><em>The Freedmen's Record</em></td><td>Humez; Sernett</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Aug 29, 1868</td><td>Douglass tribute letter</td><td>Douglass letter (Bradford 1869)</td><td>—</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>1869</td><td>Marries Nelson Davis; Bradford's <em>Scenes</em> published</td><td>Pension file; Bradford 1869</td><td>Larson; Humez</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>1873</td><td>Defrauded in "gold swindle"</td><td>Contemporary newspapers</td><td>Larson; Clinton</td><td><span class="badge badge-medium">Medium</span></td></tr>
+<tr><td>1886</td><td>Bradford's <em>Harriet, the Moses of Her People</em></td><td>Bradford 1886</td><td>Humez; Sernett</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>1896</td><td>Buys 25 acres; "never lost a passenger" remarks; NACW</td><td>Deed; reported speech</td><td>Larson</td><td><span class="badge badge-high">High</span> / <span class="badge badge-medium">Medium-High</span></td></tr>
+<tr><td>1899</td><td>Widow's pension raised to $20/month</td><td>U.S. pension records</td><td>Clinton; NARA</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>1903</td><td>Deeds Home property to AME Zion Church</td><td>Deed / church records</td><td>Larson; NPS</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>1908</td><td>Harriet Tubman Home for the Aged opens</td><td>Home/AME Zion records</td><td>Lowry; NPS</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Mar 10, 1913</td><td>Dies, Auburn, N.Y.; buried Fort Hill Cemetery</td><td>Death certificate; obituaries</td><td>Lowry; NPS</td><td><span class="badge badge-high">High</span></td></tr>
+</tbody></table></div>
+<hr>
+<h1 id="part-v-annotated-bibliography">Part V – Annotated Bibliography<a class="anchor" href="#part-v-annotated-bibliography" aria-label="Permalink">#</a></h1>
+<h2 id="primary-sources">Primary Sources<a class="anchor" href="#primary-sources" aria-label="Permalink">#</a></h2>
+<p><strong>Bradford, Sarah H. <em>Scenes in the Life of Harriet Tubman.</em> Auburn, N.Y.: W. J. Moses, 1869.</strong> Fullest record of her dictated early life; source of the Douglass, Seward, and Garrett tributes. Reliability: high (her words, via Bradford's editing).</p>
+<div class="source-links"><a href="https://docsouth.unc.edu/neh/bradford/bradford.html" target="_blank" rel="noopener noreferrer">DocSouth</a> | <a href="https://www.gutenberg.org/files/57821/57821-h/57821-h.htm" target="_blank" rel="noopener noreferrer">Project Gutenberg #57821</a> | <a href="https://archive.org/details/scenesinlifeofha00brad" target="_blank" rel="noopener noreferrer">Internet Archive</a> | <a href="https://catalog.hathitrust.org/Record/008686541" target="_blank" rel="noopener noreferrer">HathiTrust</a></div>
+<p><strong>Bradford, Sarah H. <em>Harriet, the Moses of Her People.</em> New York: Geo. R. Lockwood &amp; Son, 1886.</strong> Expanded dictated account; source of "liberty or death." Same caveats. Reliability: high.</p>
+<div class="source-links"><a href="https://docsouth.unc.edu/neh/harriet/harriet.html" target="_blank" rel="noopener noreferrer">DocSouth</a></div>
+<p><strong>Brodess, Eliza Ann. "Three Hundred Dollars Reward." <em>Cambridge Democrat</em>, Oct. 3, 1849.</strong> Hostile-witness proof of "Minty," her brothers, and the escape date. Reliability: very high.</p>
+<div class="source-links"><a href="https://www.harriettubmanmonuments.slaverymonuments.org/items/show/76" target="_blank" rel="noopener noreferrer">Reproduction (Tubman Monuments)</a> | Repository: Maryland State Archives</div>
+<p><strong>Cheney, Ednah Dow. "Moses." <em>The Freedmen's Record</em> 1, no. 3 (March 1865): 34–38.</strong> Earliest Boston sketch by an abolitionist who knew her; independent of Bradford. Reliability: high.</p>
+<div class="source-links"><a href="https://catalog.hathitrust.org/Record/006784897" target="_blank" rel="noopener noreferrer">HathiTrust</a> | <a href="https://archive.org/details/sim_freedmens-record_1865-01_1_1" target="_blank" rel="noopener noreferrer">Internet Archive (serial)</a></div>
+<p><strong>Deed, Frances A. Seward to Harriet Tubman, 1859.</strong> Cayuga County land records, Auburn, N.Y. Recorded proof of property ownership. Reliability: very high.</p>
+<div class="source-links">Repository: Cayuga County Clerk — offline. | <a href="https://www.nps.gov/hart/index.htm" target="_blank" rel="noopener noreferrer">NPS context</a></div>
+<p><strong>Douglass, Frederick. Letter to Harriet Tubman, Aug. 29, 1868</strong> (in Bradford 1869, p. 6). Peer testimony. High.</p>
+<div class="source-links"><a href="https://www.gutenberg.org/files/57821/57821-h/57821-h.htm" target="_blank" rel="noopener noreferrer">Project Gutenberg</a></div>
+<p><strong>Garrett, Thomas. Letters/statements on Tubman, 1860s</strong> (in Bradford 1869). Eyewitness who funded her parties. High.</p>
+<div class="source-links"><a href="https://docsouth.unc.edu/neh/bradford/bradford.html" target="_blank" rel="noopener noreferrer">DocSouth</a></div>
+<p><strong>Sanborn, Franklin B. "Harriet Tubman." <em>The Commonwealth</em>, July 17, 1863.</strong> Sanborn Papers, American Antiquarian Society. Earliest printed biography; first to name her. High.</p>
+<div class="source-links">Repository: American Antiquarian Society — no verified public full-text URL located.</div>
+<p><strong>Seward, William H. Testimonial</strong> (in Bradford 1869). Confirms the Auburn property relationship. High.</p>
+<div class="source-links"><a href="https://www.gutenberg.org/files/57821/57821-h/57821-h.htm" target="_blank" rel="noopener noreferrer">Project Gutenberg</a></div>
+<p><strong>Still, William. <em>The Underground Railroad.</em> Philadelphia: Porter &amp; Coates, 1872.</strong> Independent eyewitness ledger including Tubman's parties. Very high.</p>
+<div class="source-links"><a href="https://archive.org/details/undergroundrailr00stil" target="_blank" rel="noopener noreferrer">Internet Archive</a> | <a href="https://www.gutenberg.org/ebooks/15263" target="_blank" rel="noopener noreferrer">Project Gutenberg #15263</a></div>
+<p><strong>Telford, Emma P. "Harriet: The Modern Moses..." MS, ca. 1905.</strong> Cayuga County Museum, Auburn. Late-life interview notes. Reliability: moderate (unpublished, late).</p>
+<div class="source-links">Repository: Cayuga County Museum — offline.</div>
+<p><strong>Tubman (Davis), Harriet. Pension/claim affidavit and file, ca. 1890s–1898.</strong> Records of the U.S. House of Representatives and Veterans Administration, NARA. Her own sworn account of Civil War service. Very high.</p>
+<div class="source-links"><a href="https://www.docsteach.org/documents/document/harriet-tubman-affidavit" target="_blank" rel="noopener noreferrer">NARA DocsTeach</a> | <a href="https://www.archives.gov/legislative/features/claim-of-harriet-tubman" target="_blank" rel="noopener noreferrer">NARA feature</a></div>
+<p><strong>Contemporary press on Combahee — <em>Wisconsin State Journal</em> and <em>The Commonwealth</em>, July 1863.</strong> High.</p>
+<div class="source-links">Repository: contemporary newspapers — no verified free full-text URL located. | <a href="https://www.nps.gov/articles/harriet-tubman-and-the-54th-massachusetts.htm" target="_blank" rel="noopener noreferrer">NPS context</a></div>
+<h2 id="secondary-sources">Secondary Sources<a class="anchor" href="#secondary-sources" aria-label="Permalink">#</a></h2>
+<p><strong>Larson, Kate Clifford. <em>Bound for the Promised Land: Harriet Tubman, Portrait of an American Hero.</em> New York: Ballantine, 2004.</strong> The leading archival biography; establishes the 1822 birth year and corrects mythic numbers. Strengths: exhaustive Maryland research. Limitations: some details inferential.</p>
+<div class="source-links"><a href="https://archive.org/details/boundforpromised0000lars_j2u4" target="_blank" rel="noopener noreferrer">Internet Archive</a> | <a href="http://www.katecliffordlarson.com/harriet-tubman.html" target="_blank" rel="noopener noreferrer">Author site</a></div>
+<p><strong>Clinton, Catherine. <em>Harriet Tubman: The Road to Freedom.</em> New York: Little, Brown, 2004.</strong> Major biography emphasizing context and documentary uncertainty; strong on the war years. Limitations: less decisive on birth date.</p>
+<div class="source-links"><a href="https://search.worldcat.org/search?q=Harriet+Tubman+Road+to+Freedom+Catherine+Clinton" target="_blank" rel="noopener noreferrer">Find in libraries (WorldCat)</a></div>
+<p><strong>Humez, Jean M. <em>Harriet Tubman: The Life and the Life Stories.</em> Madison: Univ. of Wisconsin Press, 2003.</strong> Source-critical study of how the narratives were produced; compiles printed primary recollections. Limitations: interpretive, not new archival discovery.</p>
+<div class="source-links"><a href="https://search.worldcat.org/search?q=Harriet+Tubman+Life+and+Life+Stories+Humez" target="_blank" rel="noopener noreferrer">Find in libraries (WorldCat)</a></div>
+<p><strong>Lowry, Beverly. <em>Harriet Tubman: Imagining a Life.</em> New York: Doubleday, 2007.</strong> Accessible narrative biography attentive to memory. Limitations: imaginative reconstruction over new evidence.</p>
+<div class="source-links"><a href="https://search.worldcat.org/search?q=Harriet+Tubman+Imagining+a+Life+Lowry" target="_blank" rel="noopener noreferrer">Find in libraries (WorldCat)</a></div>
+<p><strong>Sernett, Milton C. <em>Harriet Tubman: Myth, Memory, and History.</em> Durham: Duke Univ. Press, 2007.</strong> The definitive study of Tubman's myth and memory; analyzes how the legend (and inflated numbers) formed. Limitations: historiography, not a life narrative.</p>
+<div class="source-links"><a href="https://www.dukeupress.edu/harriet-tubman" target="_blank" rel="noopener noreferrer">Duke University Press</a></div>
+<p><strong>Conrad, Earl. <em>Harriet Tubman.</em> Washington, D.C.: Associated Publishers, 1943.</strong> First modern research-based biography; recovered documents and testimony. Limitations: dated; politically shaped; superseded on details.</p>
+<div class="source-links"><a href="https://search.worldcat.org/search?q=Earl+Conrad+Harriet+Tubman+1943" target="_blank" rel="noopener noreferrer">Find in libraries (WorldCat)</a></div>
+<p><strong>National Park Service</strong> (Harriet Tubman Underground Railroad NHP &amp; Harriet Tubman NHP, Auburn). Vetted public-history synthesis tied to the landscape. Limitations: summary level.</p>
+<div class="source-links"><a href="https://www.nps.gov/people/harriet-tubman.htm" target="_blank" rel="noopener noreferrer">NPS biography</a> | <a href="https://www.nps.gov/hart/index.htm" target="_blank" rel="noopener noreferrer">Harriet Tubman NHP</a></div>
+<p><strong>Library of Congress &amp; National Archives educational resources.</strong> Curated guides to the primary documents (pension file, census, deeds, press). Limitations: finding aids, not analysis.</p>
+<div class="source-links"><a href="https://guides.loc.gov/harriet-tubman" target="_blank" rel="noopener noreferrer">LOC research guide</a> | <a href="https://www.archives.gov/" target="_blank" rel="noopener noreferrer">National Archives</a></div>
+<hr>
+<h1 id="part-vi-historical-context">Part VI – Historical Context<a class="anchor" href="#part-vi-historical-context" aria-label="Permalink">#</a></h1>
+<blockquote>Background syntheses (drawn from the secondary literature and institutional sources) that situate the primary evidence. These are interpretive context, not primary testimony.</blockquote>
+<h2 id="slavery-on-marylands-eastern-shore">Slavery on Maryland's Eastern Shore<a class="anchor" href="#slavery-on-marylands-eastern-shore" aria-label="Permalink">#</a></h2>
+<p>Dorchester County was a tidewater region of mixed agriculture (grain, not just tobacco) and extensive timbering and waterway work. Enslaved people were frequently <strong>hired out</strong> to other farms, and labor needs created a distinctive pattern of family separation across plantations — exactly the world the primary sources show for the Ross family.</p>
+<h2 id="free-black-communities-and-mixed-families">Free Black Communities and Mixed Families<a class="anchor" href="#free-black-communities-and-mixed-families" aria-label="Permalink">#</a></h2>
+<p>The Eastern Shore had an unusually large <strong>free Black population</strong> living alongside the enslaved; marriages like Rit (enslaved) and arrangements like Ben Ross's later manumission, plus Harriet's marriage to the free John Tubman, were common. This proximity of slavery and freedom shaped escape networks and kin ties.</p>
+<h2 id="the-fugitive-slave-act-of-1850">The Fugitive Slave Act of 1850<a class="anchor" href="#the-fugitive-slave-act-of-1850" aria-label="Permalink">#</a></h2>
+<p>Part of the Compromise of 1850, the law compelled Northern officials and citizens to assist in recapturing escapees and stripped the accused of due process. It made the free North unsafe, <strong>pushing the Underground Railroad's terminus to Canada</strong> — the direct cause of Tubman's St. Catharines years.</p>
+<h2 id="underground-railroad-networks">Underground Railroad Networks<a class="anchor" href="#underground-railroad-networks" aria-label="Permalink">#</a></h2>
+<p>Not a single organization but a decentralized web of safe houses and agents (Quakers like Thomas Garrett, vigilance committees like William Still's in Philadelphia, Black churches, and Canadian aid societies). Tubman operated within and helped knit this network, using spirituals as coded signals.</p>
+<h2 id="civil-war-military-operations-in-the-low-country">Civil War Military Operations in the Low Country<a class="anchor" href="#civil-war-military-operations-in-the-low-country" aria-label="Permalink">#</a></h2>
+<p>The Union's 1862–63 occupation of the South Carolina Sea Islands (the "Port Royal Experiment") created conditions for Black enlistment and operations like the <strong>Combahee River Raid</strong>, in which gunboats ascended a tidal river to destroy plantations and liberate the enslaved — Tubman providing intelligence.</p>
+<h2 id="the-womens-suffrage-movement">The Women's Suffrage Movement<a class="anchor" href="#the-womens-suffrage-movement" aria-label="Permalink">#</a></h2>
+<p>In her later decades Tubman lent her prestige to the <strong>woman-suffrage</strong> cause, appearing with figures like Susan B. Anthony and at the 1896 founding of the <strong>National Association of Colored Women</strong>, linking abolition's legacy to the next generation's struggle for rights.</p>
+<hr>
+<h1 id="part-vii-evidence-confidence-matrix">Part VII – Evidence Confidence Matrix<a class="anchor" href="#part-vii-evidence-confidence-matrix" aria-label="Permalink">#</a></h1>
+<blockquote>Each major claim classified by evidence type and confidence. <strong>Confidence scale:</strong> High = confirmed by primary source or strong scholarly consensus; Medium = supported but contested or inferential; Low = probable/uncertain/disputed.</blockquote>
+<div class="table-wrap"><table>
+<thead><tr><th>Claim</th><th>Evidence Type</th><th>Classification</th><th>Confidence</th></tr></thead>
+<tbody>
+<tr><td>Birth name was Araminta "Minty" Ross</td><td>Primary (Bradford, Sanborn, Brodess ad)</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Born in Dorchester County, Md.</td><td>Primary (Bradford, Sanborn)</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Born c. 1822 (vs. 1820/1825)</td><td>Mixed (Brodess midwife payment; Larson)</td><td>Probable but not proven</td><td><span class="badge badge-medium">Medium</span></td></tr>
+<tr><td>Parents Ben Ross &amp; Harriet "Rit" Greene</td><td>Primary (Bradford)</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Full sibling roster (9 children, named)</td><td>Secondary (Larson, from estate records)</td><td>Supported by secondary source</td><td><span class="badge badge-medium">Medium</span></td></tr>
+<tr><td>Father was a timber inspector</td><td>Primary (Bradford)</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Separated from mother / hired out at six</td><td>Primary (Bradford)</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Suffered childhood physical abuse</td><td>Primary (Bradford)</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Was illiterate (could not read/write)</td><td>Primary (documentary form)</td><td>Strong scholarly consensus</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Head injury from thrown iron weight</td><td>Primary (Bradford)</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Sleeping spells / lifelong disability</td><td>Primary (Bradford; witnesses)</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Visions diagnosed as TLE/narcolepsy</td><td>Secondary (Larson, Clinton)</td><td>Probable but not proven</td><td><span class="badge badge-medium">Medium</span></td></tr>
+<tr><td>Married John Tubman c. 1844</td><td>Primary (Bradford)</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Took name "Harriet Tubman"</td><td>Primary (Bradford)</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Escaped September 1849</td><td>Primary (Brodess ad; Bradford)</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Extended routes to Canada after 1850</td><td>Primary (Bradford); census</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>~13 missions, ~70 people freed</td><td>Secondary (Larson)</td><td>Supported by secondary source</td><td><span class="badge badge-medium">Medium</span></td></tr>
+<tr><td>"Freed 300 / 19 trips" legend</td><td>— (no primary support)</td><td>Disputed / inflated</td><td><span class="badge badge-low">Low</span></td></tr>
+<tr><td>Underground Railroad conductor</td><td>Primary (Still, Garrett, Douglass, Cheney)</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Civil War nurse, cook, scout, spy</td><td>Primary (pension affidavit)</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Guided Combahee River Raid (1863)</td><td>Primary (press); affidavit</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Bought Auburn property 1859</td><td>Primary (deed)</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Defrauded in 1873 gold swindle</td><td>Primary (press), figures vary</td><td>Supported / probable</td><td><span class="badge badge-medium">Medium</span></td></tr>
+<tr><td>Pension raised to $20/month (1899)</td><td>Primary (federal record)</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Founded Tubman Home; AME Zion (1903/1908)</td><td>Primary (deeds/church records)</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Supported women's suffrage</td><td>Primary (reported speeches)</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Died March 10, 1913, Auburn</td><td>Primary (death record; obituaries)</td><td>Confirmed by primary source</td><td><span class="badge badge-high">High</span></td></tr>
+<tr><td>Death-certificate birth year (1815)</td><td>Primary but late/erroneous</td><td>Disputed</td><td><span class="badge badge-low">Low</span></td></tr>
+</tbody></table></div>
+<section id="visual-references" class="visuals"><h1 id="visual-references-h">Visual Reference Gallery</h1><p>Placeholders for public-domain images to be inserted by an editor; replace each box with a properly licensed image and verify attribution.</p><div class="figgrid"><figure><div class="figph" role="img" aria-label="Harriet Tubman — portrait"><span>Harriet Tubman — portrait</span><em>image placeholder</em></div><figcaption><strong>Harriet Tubman — portrait.</strong> Photographic portrait of Harriet Tubman.<br><span class="attr">Source: Library of Congress, Prints &amp; Photographs Division.</span></figcaption></figure><figure><div class="figph" role="img" aria-label="Dorchester County, Maryland"><span>Dorchester County, Maryland</span><em>image placeholder</em></div><figcaption><strong>Dorchester County, Maryland.</strong> Birthplace region on Maryland's Eastern Shore.<br><span class="attr">Source: Place a public-domain county map (e.g., Library of Congress).</span></figcaption></figure><figure><div class="figph" role="img" aria-label="Eastern Shore of Maryland"><span>Eastern Shore of Maryland</span><em>image placeholder</em></div><figcaption><strong>Eastern Shore of Maryland.</strong> Tidewater landscape of farms, timber, and waterways.<br><span class="attr">Source: NPS / public-domain regional map.</span></figcaption></figure><figure><div class="figph" role="img" aria-label="Underground Railroad routes"><span>Underground Railroad routes</span><em>image placeholder</em></div><figcaption><strong>Underground Railroad routes.</strong> Escape routes from Maryland to Pennsylvania and Canada.<br><span class="attr">Source: National Park Service route maps.</span></figcaption></figure><figure><div class="figph" role="img" aria-label="Auburn home, New York"><span>Auburn home, New York</span><em>image placeholder</em></div><figcaption><strong>Auburn home, New York.</strong> Tubman's house and the Home for the Aged, Auburn, N.Y.<br><span class="attr">Source: Harriet Tubman National Historical Park (NPS).</span></figcaption></figure><figure><div class="figph" role="img" aria-label="Combahee River Raid"><span>Combahee River Raid</span><em>image placeholder</em></div><figcaption><strong>Combahee River Raid.</strong> June 2, 1863 gunboat raid on the Combahee, South Carolina.<br><span class="attr">Source: Public-domain Civil War operations map.</span></figcaption></figure></div></section>
+</main>
+<footer>
+  Historian-grade digital research archive · Primary evidence and secondary interpretation kept
+  separate · Quotations reproduced verbatim with source citations · For AP History, National History
+  Day, and undergraduate research.
+</footer>
+</body>
+</html>
