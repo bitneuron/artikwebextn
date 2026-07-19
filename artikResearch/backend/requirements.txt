@@ -1,0 +1,11 @@
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.9
+pydantic>=2
+anthropic>=0.40
+openai>=1.40
+pymupdf>=1.24
+pypdf>=4
+python-docx>=1.1
+# optional: google-generativeai  (Gemini)
+# production swap-ins (deferred in iter1): psycopg2-binary, chromadb, pgvector, celery, redis

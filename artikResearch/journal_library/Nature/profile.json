@@ -1,0 +1,16 @@
+{
+  "journal_name": "Nature",
+  "scope": "Multidisciplinary high-impact primary research.",
+  "required_sections": ["Title", "Abstract", "Introduction", "Results", "Discussion", "Methods", "References"],
+  "word_limits": {"abstract": 150, "manuscript": 5000, "introduction": null},
+  "abstract_rules": "Unstructured, up to ~150 words, no references or figures.",
+  "reference_style": "Nature",
+  "max_references": 50,
+  "figure_rules": "Max ~6 display items; 300–600 DPI; RGB; each with a legend.",
+  "table_rules": "Numbered; title above; SI units; footnotes below.",
+  "formatting": {"font": "any (double-spaced on submission)", "font_size": "12pt", "line_spacing": "double", "margins": "standard", "columns": "1", "page_limit": null},
+  "ethics_requirements": ["Ethics approval for human/animal studies", "Reporting standards checklist"],
+  "required_statements": ["Data Availability", "Code Availability", "Competing Interests", "Author Contributions", "Funding"],
+  "submission_rules": ["Cover letter", "Reporting summary", "Author contributions statement"],
+  "supplementary_rules": "Supplementary Information as a single PDF plus source data."
+}

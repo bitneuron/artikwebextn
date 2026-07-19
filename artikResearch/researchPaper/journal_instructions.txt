@@ -1,0 +1,11 @@
+Emerging Investigators — Author Instructions
+Manuscripts must include: Title, Abstract, Introduction, Methods, Results, Discussion,
+Conclusion, References, and an Ethics Statement.
+Abstract: maximum 250 words, unstructured.
+Word limit: 5000 words for the main text.
+References: Vancouver style, numbered in order of appearance, maximum 40 references.
+Figures: minimum 300 DPI, each with a numbered caption below the figure.
+Tables: numbered with a title above the table; include units in column headers.
+Required declarations: Funding Statement, Conflict of Interest, Data Availability, Author Contributions.
+Formatting: 12pt Times New Roman, double-spaced, 1-inch margins, single column.
+Submission: include a cover letter and a completed submission checklist.

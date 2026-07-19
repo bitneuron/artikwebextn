@@ -1,0 +1,15 @@
+data/*.db
+data/*.db-*
+frontend/node_modules/
+frontend/dist/
+uploads/**/*
+generated/**/*
+!**/.gitkeep
+vector_db/*
+!vector_db/.gitkeep
+__pycache__/
+*.pyc
+.env
+frontend/*.tsbuildinfo
+frontend/tsconfig.tsbuildinfo
+**/.DS_Store

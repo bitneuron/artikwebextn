@@ -1,0 +1,16 @@
+{
+  "journal_name": "arXiv",
+  "scope": "Open-access preprint repository across physics, CS, math, and quantitative fields.",
+  "required_sections": ["Title", "Abstract", "Introduction", "Methods", "Results", "Conclusion", "References"],
+  "word_limits": {"abstract": 1920, "manuscript": null, "introduction": null},
+  "abstract_rules": "Plain text, no LaTeX macros; 1920 character limit.",
+  "reference_style": "Any consistent style (commonly IEEE or a numeric style).",
+  "max_references": null,
+  "figure_rules": "PDF/PNG/JPEG; vector figures preferred; no strict DPI floor.",
+  "table_rules": "Standard LaTeX/tabular; numbered with captions.",
+  "formatting": {"font": "any", "font_size": "any", "line_spacing": "any", "margins": "any", "columns": "1 or 2", "page_limit": null},
+  "ethics_requirements": [],
+  "required_statements": ["Optional: funding/acknowledgements"],
+  "submission_rules": ["Submit LaTeX source or PDF", "Choose a primary subject category"],
+  "supplementary_rules": "Ancillary files allowed alongside the source."
+}
