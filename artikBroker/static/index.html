@@ -940,6 +940,8 @@
         <button class="nav-item fin-sub" onclick="showFinance('tax')"><span class="ic">🧾</span><span>Tax &amp; Income</span></button>
         <button class="nav-item fin-sub" onclick="showFinance('ccinterest')"><span class="ic">💳</span><span>Card Interest</span></button>
         <button class="nav-item fin-sub" onclick="showFinance('expenses')"><span class="ic">📅</span><span>Monthly Expenses</span></button>
+        <button class="nav-item fin-sub" onclick="showFinance('apps')"><span class="ic">🌐</span><span>Payment Apps</span></button>
+        <button class="nav-item fin-sub" onclick="showFinance('alerts')"><span class="ic">🔔</span><span>Alerts</span></button>
       </div>
       <div class="nav-sec">Administration</div>
       <button class="nav-item hidden" id="tab-agents" onclick="showTab('agents')"><span class="ic">🤖</span><span>Agents</span></button>
@@ -1194,7 +1196,7 @@
       <span style="flex:1"></span>
       <select id="fin-year" onchange="finRender()" style="display:none"><option value="">All years</option></select>
       <button class="ex-btn" onclick="finCopilot()">🤖 Analyze with Artik Copilot</button>
-      <button class="ghost" onclick="finReimport()" title="Re-import the bundled workbook">↻ Re-import</button>
+      <button class="ghost" id="fin-reimport" onclick="finReimport()" title="Re-import the bundled workbook">↻ Re-import</button>
     </div>
     <div id="fin-out" style="margin-top:12px"><div class="spin">Loading…</div></div>
   </section>
@@ -2405,7 +2407,7 @@ async function loadDetailNews(r, mode){
   const list = sigs.slice(0, mode==='signals'?30:5).map(s=>{
     const sg = s.sentiment==='positive'?'▲':s.sentiment==='negative'?'▼':'•';
     const cls = s.sentiment==='positive'?'good':s.sentiment==='negative'?'bad':'';
-    return `<div class="litem ${cls}"><span>${sg} <b>${escapeHtml(s.signal_type||'signal')}</b> · impact ${s.impact_score} · conf ${Math.round((s.confidence||0)*100)}%<br><span class="muted">${escapeHtml((s.headline||'').slice(0,120))}</span> ${s.url?`<a href="${s.url}" target="_blank" rel="noopener">↗</a>`:''}</span></div>`;
+    return `<div class="litem ${cls}"><span>${sg} <b>${escapeHtml(s.signal_type||'signal')}</b> · impact ${s.impact_score} · conf ${Math.round((s.confidence||0)*100)}%<br><span class="muted">${escapeHtml((s.headline||'').slice(0,120))}</span> ${safeUrl(s.url)?`<a href="${safeUrl(s.url)}" target="_blank" rel="noopener">↗</a>`:''}</span></div>`;
   }).join('');
   box.innerHTML = `
     <div class="nstat">
@@ -2480,7 +2482,7 @@ function renderIntel(d){
   const cards=[
     intelCard('ic-news','📰 News Intelligence',n,
       `Positive <b class="pos">${n.positive??'—'}</b> · Negative <b class="neg">${n.negative??'—'}</b> · Neutral <b>${n.neutral??'—'}</b>`,
-      src(n)+`<div style="margin-top:6px">${(n.topHeadlines||[]).slice(0,4).map(h=>`<div class="litem"><span class="muted">${escapeHtml(h.source||'')}</span> ${escapeHtml((h.headline||'').slice(0,110))} ${h.url?`<a href="${h.url}" target="_blank" rel="noopener">↗</a>`:''}</div>`).join('')||'<span class="muted">No recent headlines.</span>'}</div>`+impact('News sentiment signals near-term catalysts and momentum.')),
+      src(n)+`<div style="margin-top:6px">${(n.topHeadlines||[]).slice(0,4).map(h=>`<div class="litem"><span class="muted">${escapeHtml(h.source||'')}</span> ${escapeHtml((h.headline||'').slice(0,110))} ${safeUrl(h.url)?`<a href="${safeUrl(h.url)}" target="_blank" rel="noopener">↗</a>`:''}</div>`).join('')||'<span class="muted">No recent headlines.</span>'}</div>`+impact('News sentiment signals near-term catalysts and momentum.')),
     intelCard('ic-analyst','📈 Analyst Signals',an,
       an.available?`Strong Buy <b>${an.strongBuy}</b> · Buy <b>${an.buy}</b> · Hold <b>${an.hold}</b> · Sell <b>${an.sell}</b> · Strong Sell <b>${an.strongSell}</b>`:'<span class="muted">No analyst coverage.</span>',
       src(an)+(an.available&&an.momChanges?`<div class="pf-meta" style="margin-top:6px">Month-over-month — SB ${_fmtd(an.momChanges.strongBuy)} · B ${_fmtd(an.momChanges.buy)} · H ${_fmtd(an.momChanges.hold)} · S ${_fmtd(an.momChanges.sell)} · SS ${_fmtd(an.momChanges.strongSell)}</div>`:'')+impact('Rising analyst ratings often precede price appreciation.')),
@@ -2492,7 +2494,7 @@ function renderIntel(d){
       src(inst)+(inst.available?`<div style="margin-top:6px">${(inst.topChanges||[]).map(o=>`<div class="litem">${escapeHtml(o.name||'')}: <span class="${o.change>=0?'pos':'neg'}">${o.change>=0?'+':''}${(o.change||0).toLocaleString()}</span> sh</div>`).join('')}</div>`:'')+impact('Fund accumulation reflects smart-money conviction.')),
     intelCard('ic-sec','📄 SEC Filing Intelligence',sec,
       sec.available?`Latest: ${['10-K','10-Q','8-K','proxy'].filter(k=>sec.latest&&sec.latest[k]).join(' · ')||'—'}`:'<span class="muted">No filings.</span>',
-      src(sec)+(ai.sec_summary?`<p style="font-size:13px;margin:6px 0">${escapeHtml(ai.sec_summary)}</p>`:'')+`<div style="margin-top:6px">${(sec.recent||[]).filter(Boolean).map(f=>`<div class="litem">${escapeHtml(f.form||'')} · ${escapeHtml(f.filedDate||'')} ${f.url?`<a href="${f.url}" target="_blank" rel="noopener">↗</a>`:''}</div>`).join('')||''}</div>`+impact('Filings reveal guidance, buybacks, and risk changes early.')),
+      src(sec)+(ai.sec_summary?`<p style="font-size:13px;margin:6px 0">${escapeHtml(ai.sec_summary)}</p>`:'')+`<div style="margin-top:6px">${(sec.recent||[]).filter(Boolean).map(f=>`<div class="litem">${escapeHtml(f.form||'')} · ${escapeHtml(f.filedDate||'')} ${safeUrl(f.url)?`<a href="${safeUrl(f.url)}" target="_blank" rel="noopener">↗</a>`:''}</div>`).join('')||''}</div>`+impact('Filings reveal guidance, buybacks, and risk changes early.')),
     intelCard('ic-earn','🗓 Earnings Signals',ea,
       ea.available?`Next: <b>${escapeHtml(ea.nextDate||'—')}</b> · Beats <b class="pos">${ea.beats}</b> · Misses <b class="neg">${ea.misses}</b> · Avg surprise <b>${ea.avgSurprisePct!=null?ea.avgSurprisePct+'%':'—'}</b>`:'<span class="muted">No earnings history.</span>',
       src(ea)+(ea.available?`<div style="margin-top:6px">${(ea.recent||[]).map(x=>`<div class="litem">${escapeHtml(x.period||'')}: actual ${x.actual??'—'} vs est ${x.estimate??'—'} (${x.surprisePct!=null?(x.surprisePct>=0?'+':'')+x.surprisePct+'%':'—'})</div>`).join('')}</div>`:'')+impact('Consistent beats and rising estimates support upside.')),
@@ -2533,11 +2535,12 @@ function renderPortfolio(data){
     + '<th class="num">RSI</th><th>Status</th><th class="num">P/L</th><th></th>'
     + '</tr></thead><tbody>';
   rows.forEach((r,i) => {
-    const ex = r.error ? `<span class="err">${r.error}</span>`
-                       : `<button class="ex-btn" onclick="openStock('${r.ticker}','portfolio')">Explain →</button>`;
+    const tk = escapeHtml(r.ticker||'');
+    const ex = r.error ? `<span class="err">${escapeHtml(String(r.error))}</span>`
+                       : `<button class="ex-btn" onclick="openStock('${encodeURIComponent(r.ticker||'')}','portfolio')">Explain →</button>`;
     html += `<tr class="row">
       <td>${i+1}</td>
-      <td class="tick">${r.ticker}</td>
+      <td class="tick">${tk}</td>
       <td class="num">${r.qty}</td>
       <td class="num">${fmt(r.cost_basis)}</td>
       <td class="num">$${r.price!=null?r.price.toLocaleString():'—'}</td>
@@ -2566,7 +2569,7 @@ function newsOverlayBlock(r){
   const sigs = (ov.signals||[]).slice(0,5).map(s=>{
     const ssg = s.sentiment==='positive'?'▲':s.sentiment==='negative'?'▼':'•';
     const sd = s.recommended_score_delta||0, sds = sd>0?'+'+sd:(''+sd);
-    const url = s.url ? `<a href="${s.url}" target="_blank" rel="noopener">↗</a>` : '';
+    const url = safeUrl(s.url) ? `<a href="${safeUrl(s.url)}" target="_blank" rel="noopener">↗</a>` : '';
     return `<li class="${s.sentiment==='positive'?'s':s.sentiment==='negative'?'r':''}">${ssg} <b>${s.signal_type}</b>
       · impact ${s.impact_score} · conf ${Math.round((s.confidence||0)*100)}% · overlay ${sds}
       <span style="color:var(--mut)"> — ${escapeHtml((s.headline||'').slice(0,90))}</span> ${url}</li>`;
@@ -2615,6 +2618,13 @@ window._cop = { ctxType:'search', ctx:null, uiMode:'auto', msgs:[], busy:false, 
 const COP_MODES = [['auto','Auto'],['research','Research'],['analysis','Analysis'],
                    ['discovery','Discovery'],['comparison','Comparison'],['screening','Screening']];
 function escapeHtml(s){ return (s||'').replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+/* Only allow http(s) links from external (news/filings) data — blocks javascript:/data:
+   and other schemes, then HTML-escapes the URL for safe use inside href="...". */
+function safeUrl(u){
+  const s=String(u||'').trim();
+  if(!/^https?:\/\//i.test(s)) return '';
+  return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 function mdLite(s){            // tiny markdown: bold, code, bullets, line breaks
   let h = escapeHtml(s);
   h = h.replace(/`([^`]+)`/g, '<code>$1</code>')
@@ -2911,6 +2921,7 @@ function renderCopilot(){
 
   let msgs = c.msgs.map(m => {
     if(m.role!=='assistant') return `<div class="cop-msg user"><div class="cop-bubble">${escapeHtml(m.content)}</div></div>`;
+    if(m.alertCard) return alertConfirmCard(m.alertCard, m.cardIdx);
     let clar='';
     if(m.clar && m.clar.options && m.clar.options.length){
       clar = `<div class="cop-fups" style="padding:0 14px 12px">`+m.clar.options.map(o=>
@@ -2943,11 +2954,20 @@ function renderCopilot(){
   const inp = $('#cop-input'); if(inp && !c.busy) inp.focus();
   const body = $('#cop-body'); if(body) body.scrollTop = body.scrollHeight;
 }
+/* ── Alert intent: intercept alert-creation / management before normal Copilot ── */
+const _ALERT_RE = /\b(alert|notify|remind|warn)\b.*\b(me|us|slack|when|if|channel)\b|\bsend (a |me )?(slack )?(alert|notification|message)\b/i;
+const _ALERT_MANAGE_RE = /\b(show|list|pause|resume|disable|enable|delete|remove|run)\b.*\balert/i;
+function looksLikeAlert(q){ return _ALERT_RE.test(q) || _ALERT_MANAGE_RE.test(q); }
 async function copilotAsk(text){
   const c = window._cop; if(c.busy) return;
   const inp = $('#cop-input');
   const q = (text || (inp && inp.value) || '').trim();
   if(!q) return;
+  // Alerts are admin-only; only intercept when the user is admin and the phrasing matches.
+  if(window._isAdmin && looksLikeAlert(q)){
+    if(inp) inp.value='';
+    return copilotAlertFlow(q);
+  }
   c.msgs.push({role:'user', content:q});
   c.busy = true; renderCopilot();
   try {
@@ -2969,6 +2989,115 @@ async function copilotAsk(text){
   } catch(e){
     c.busy = false; c.msgs.push({role:'assistant', content:'⚠️ Request failed: '+e});
   }
+  renderCopilot();
+}
+
+async function copilotAlertFlow(q){
+  const c = window._cop;
+  c.msgs.push({role:'user', content:q});
+  c.busy = true; renderCopilot();
+  try{
+    const r = await fetch('/api/alerts/interpret',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({prompt:q})});
+    const d = await r.json();
+    c.busy = false;
+    if(!r.ok){ c.msgs.push({role:'assistant', content:'⚠️ '+(d.error||'Could not interpret that alert.')}); renderCopilot(); return; }
+    if(d.intent==='manage_alert'){
+      c.msgs.push({role:'assistant', content:`I understood a request to **${d.action}** the alert “${escapeHtml(d.target_name||'')}”.`});
+      if(d.requires_confirmation){
+        c.msgs.push({role:'assistant', alertCard:{manage:true, action:d.action, target_name:d.target_name}, cardIdx:c.msgs.length});
+      } else { await alertManageApply(d.action, d.target_name); }
+      renderCopilot(); return;
+    }
+    if(d.intent!=='create_alert'){
+      // not really an alert — fall back to normal copilot
+      c.msgs.pop();  // remove the user echo we added; copilotAsk re-adds it
+      return copilotAskNormal(q);
+    }
+    if(!d.requires_confirmation){
+      const opts = (d.clarification_options||[]).map(o=>({label:o}));
+      c.msgs.push({role:'assistant', mode:'clarification',
+        content: d.clarification || 'I need a bit more detail for that alert.',
+        clar:{options:opts}});
+      renderCopilot(); return;
+    }
+    c.msgs.push({role:'assistant', alertCard:{alert:d.alert}, cardIdx:c.msgs.length});
+    renderCopilot();
+  }catch(e){ c.busy=false; c.msgs.push({role:'assistant', content:'⚠️ Alert request failed: '+e}); renderCopilot(); }
+}
+async function copilotAskNormal(q){
+  const c = window._cop; c.msgs.push({role:'user', content:q}); c.busy=true; renderCopilot();
+  try{
+    const res = await fetch('/api/copilot',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({mode:c.uiMode, contextType:c.ctxType, context:c.ctx,
+        messages:c.msgs.map(m=>({role:m.role, content:m.content}))})});
+    const d = await res.json(); c.busy=false;
+    if(d.error) c.msgs.push({role:'assistant', content:'⚠️ '+d.error});
+    else c.msgs.push({role:'assistant', content:d.reply, mode:d.mode});
+  }catch(e){ c.busy=false; c.msgs.push({role:'assistant', content:'⚠️ Request failed: '+e}); }
+  renderCopilot();
+}
+function alertConfirmCard(card, idx){
+  if(card.manage){
+    return `<div class="cop-report"><div class="rep-body">
+      <div class="card" style="border-color:#f59e0b55">
+        <div class="up-label">Confirm: ${escapeHtml(card.action)} alert</div>
+        <div class="pf-meta" style="margin:6px 0">Alert: <b>${escapeHtml(card.target_name||'')}</b></div>
+        <div style="display:flex;gap:8px">
+          <button class="ex-btn" onclick="alertManageApply('${escapeHtml(card.action)}','${escapeHtml((card.target_name||'').replace(/'/g,"&#39;"))}',${idx})">Confirm</button>
+          <button class="ghost" onclick="alertCardCancel(${idx})">Cancel</button>
+        </div></div></div></div>`;
+  }
+  const a = card.alert||{};
+  const dest = (a.notification&&a.notification.destination) || 'Default channel';
+  const row=(l,v)=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-bottom:1px solid var(--line)"><span class="pf-meta">${l}</span><span style="text-align:right">${v}</span></div>`;
+  return `<div class="cop-report"><div class="rep-body">
+    <div class="card" style="border-color:#58a6ff55" id="alertcard-${idx}">
+      <div class="up-label" style="margin-bottom:6px">🔔 Create Alert</div>
+      ${row('Name', `<b>${escapeHtml(a.name||'')}</b>`)}
+      ${row('Condition', escapeHtml(a.condition_text||''))}
+      ${row('Check', escapeHtml(a.schedule_text||''))}
+      ${row('Timezone', escapeHtml((a.schedule&&a.schedule.timezone)||''))}
+      ${row('Notification', 'Slack · '+escapeHtml(dest))}
+      ${row('Repeat', escapeHtml(({state_change:'Notify when it becomes true again after clearing',notify_once:'Notify once',every_run:'Notify every matching run',once_per_day:'Once per day while active'})[a.trigger_mode]||a.trigger_mode||''))}
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="ex-btn" onclick="alertCardCreate(${idx})">Create Alert</button>
+        <button class="ghost" onclick="alertCardEdit(${idx})">Edit</button>
+        <button class="ghost" onclick="alertCardCancel(${idx})">Cancel</button>
+      </div>
+      <div class="pf-meta" id="alertcard-msg-${idx}" style="margin-top:6px"></div>
+    </div></div></div>`;
+}
+async function alertCardCreate(idx){
+  const c=window._cop, m=c.msgs[idx]; if(!m||!m.alertCard) return;
+  const msg=$('#alertcard-msg-'+idx); if(msg) msg.textContent='Creating…';
+  const r=await fetch('/api/alerts',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({confirmed:true, alert:m.alertCard.alert})});
+  const d=await r.json();
+  if(!r.ok){ if(msg){ msg.textContent='⚠️ '+(d.error||'Create failed'); } return; }
+  m.alertCard=null; m.content=`✅ Alert **${escapeHtml(d.name)}** created — checking ${escapeHtml(d.schedule_text||'')}, notifying Slack ${escapeHtml(d.destination_text||'')}. Next run ${escapeHtml((d.next_run_at||'').replace('T',' ').replace('Z',' UTC'))}.`;
+  renderCopilot();
+  if(window._finPage==='alerts'){ alertsLoad(); }
+}
+function alertCardEdit(idx){
+  const c=window._cop, m=c.msgs[idx]; if(!m||!m.alertCard) return;
+  showFinance('alerts');
+  setTimeout(()=>alertsOpenEditor(m.alertCard.alert), 300);
+}
+function alertCardCancel(idx){
+  const c=window._cop, m=c.msgs[idx]; if(!m) return;
+  m.alertCard=null; m.content='Okay, I won’t create that alert.'; renderCopilot();
+}
+async function alertManageApply(action, name, idx){
+  const c=window._cop;
+  const r=await fetch('/api/alerts/manage',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action, target_name:name})});
+  const d=await r.json();
+  if(idx!=null && c.msgs[idx]) c.msgs[idx].alertCard=null;
+  if(!r.ok){ c.msgs.push({role:'assistant', content:'⚠️ '+(d.error||'Action failed')}); }
+  else if(d.ambiguous){ c.msgs.push({role:'assistant', content:'Multiple alerts match — please be more specific: '+d.matches.map(x=>x.name).join(', ')}); }
+  else if(action==='list'){ c.msgs.push({role:'assistant', content:'Opening your alerts…'}); showFinance('alerts'); }
+  else { c.msgs.push({role:'assistant', content:`✅ Done — ${escapeHtml(action)} applied${d.deleted?(' to “'+escapeHtml(d.deleted)+'”'):''}.`}); if(window._finPage==='alerts') alertsLoad(); }
   renderCopilot();
 }
 
@@ -3022,7 +3151,8 @@ let _pfLoaded = false;
 const _idxLoaded = {};
 /* ═══════════ ArtikFinance — Personal Financial Statements ═══════════ */
 const FIN_TITLES = {overview:'📈 Net Worth', assets:'💰 Assets', liabilities:'💳 Liabilities',
-  cashflow:'💵 Cash Flow', tax:'🧾 Tax & Income', ccinterest:'💳 Credit Card Interest', expenses:'📅 Monthly Expenses'};
+  cashflow:'💵 Cash Flow', tax:'🧾 Tax & Income', ccinterest:'💳 Credit Card Interest', expenses:'📅 Monthly Expenses',
+  apps:'🌐 Payment Apps', alerts:'🔔 Alerts'};
 window._finPage='overview'; window._finData={};
 function finToggleTree(){ const t=$('#fin-tree'); t.classList.toggle('hidden'); const c=$('#fin-caret'); if(c) c.textContent=t.classList.contains('hidden')?'▸':'▾'; }
 function finMoney(v){ return v==null?'—':(v<0?'-':'')+'$'+Math.abs(Math.round(v)).toLocaleString(); }
@@ -3031,12 +3161,16 @@ function showFinance(page){
   const t=$('#fin-tree'); if(t&&t.classList.contains('hidden')) finToggleTree();
   showTab('finance','tab-finance');
   $('#fin-title').textContent = FIN_TITLES[page]||'📑 Financial Statements';
+  const ri=$('#fin-reimport'); if(ri) ri.style.display=(page==='apps')?'none':'';  // apps page: in ⋯ menu
   finLoad(page);
 }
 const FIN_EP = {overview:'/api/finance/networth', assets:'/api/finance/assets', liabilities:'/api/finance/liabilities',
-  cashflow:'/api/finance/cashflow', tax:'/api/finance/tax', ccinterest:'/api/finance/ccinterest', expenses:'/api/finance/expenses'};
+  cashflow:'/api/finance/cashflow', tax:'/api/finance/tax', ccinterest:'/api/finance/ccinterest', expenses:'/api/finance/expenses',
+  apps:'/api/finance/apps'};
 async function finLoad(page){
   const out=$('#fin-out'); out.innerHTML='<div class="spin">Loading…</div>';
+  if(page==='assets'||page==='liabilities'){ afInit(); return; }   // advanced-search flow (own fetch + render)
+  if(page==='alerts'){ alertsInit(); return; }
   try{
     if(!window._finData[page]){
       const r=await fetch(FIN_EP[page]); const d=await r.json();
@@ -3053,7 +3187,7 @@ function finYears(page){
   const sel=$('#fin-year'); const d=window._finData[page];
   const rows=(d&&(d.rows||d.points))||[];
   const ys=[...new Set(rows.map(r=>r.year).filter(Boolean))].sort();
-  sel.style.display = ys.length>1 && ['assets','liabilities','cashflow','tax'].includes(page) ? '' : 'none';
+  sel.style.display = ys.length>1 && ['cashflow','tax'].includes(page) ? '' : 'none';
   const cur=sel.value;
   sel.innerHTML='<option value="">All years</option>'+ys.map(y=>`<option value="${y}">${y}</option>`).join('');
   if(ys.map(String).includes(cur)) sel.value=cur;
@@ -3114,6 +3248,77 @@ function finTBody(id){
 }
 function finTQ(id,v){ window._finT[id].q=v; const el=$('#ft-'+id); if(el) el.innerHTML=finTBody(id); }
 function finTSort(id,k){ const t=window._finT[id]; t.dir=(t.k===k)?-t.dir:1; t.k=k; const el=$('#ft-'+id); if(el) el.innerHTML=finTBody(id); }
+/* Matrix|List table — workbook layout (rows × period columns) with a flat-list fallback.
+   cfg: {label, periods:[...], rows:[{item,category,period,value}], totals:{period:total}|null,
+         itemOrder:[...]|null, csvName, listCols, listRows} */
+window._finMx={}; window._finMxCfg={};
+function finMatrixTable(id, cfg){
+  window._finMx[id]=window._finMx[id]||{view:'matrix', q:''};
+  window._finMxCfg[id]=cfg;
+  return `<div id="fmx-${id}">${finMxBody(id)}</div>`;
+}
+function finMxView(id,v){ window._finMx[id].view=v; const el=$('#fmx-'+id); if(el) el.innerHTML=finMxBody(id); }
+function finMxQ(id,q){ window._finMx[id].q=q; const el=$('#fmx-'+id+' #fmxg-'+id) || $('#fmxg-'+id); if(el) el.innerHTML=finMxGrid(id); }
+function finMxBody(id){
+  const st=window._finMx[id], cfg=window._finMxCfg[id], view=st.view;
+  const head=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap">
+    <div style="display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden">
+      <button class="ghost" style="border:0;border-radius:0;${view==='matrix'?'background:var(--acc);color:#fff':''}" onclick="finMxView('${id}','matrix')" title="Rows × period columns (workbook layout)">Matrix</button>
+      <button class="ghost" style="border:0;border-radius:0;${view==='list'?'background:var(--acc);color:#fff':''}" onclick="finMxView('${id}','list')" title="Flat sortable list">List</button>
+    </div>
+    ${view==='matrix'?`<input placeholder="Filter rows…" value="${escapeHtml(st.q)}" oninput="finMxQ('${id}',this.value)" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px;font-size:13px;width:150px">`:''}
+    <span style="flex:1"></span>
+    ${view==='matrix'?`<button class="ghost" onclick="finMxCsv('${id}')" title="Download the matrix as CSV">Export CSV</button>`:''}
+  </div>`;
+  if(view==='list') return head+finDataTable(id+'_l', cfg.listCols, cfg.listRows);
+  return head+`<div id="fmxg-${id}">${finMxGrid(id)}</div>`;
+}
+function finMxItems(cfg, q){
+  const cell={}, meta={};
+  (cfg.rows||[]).forEach(r=>{ const c=cell[r.item]=cell[r.item]||{}; c[r.period]=(c[r.period]||0)+(r.value||0); meta[r.item]=r.category; });
+  let items=Object.keys(cell);
+  if(cfg.itemOrder) items=cfg.itemOrder.filter(i=>cell[i]).concat(items.filter(i=>!cfg.itemOrder.includes(i)));
+  else items.sort((a,b)=>(meta[a]||'').localeCompare(meta[b]||'')||a.localeCompare(b));
+  if(q){ const ql=q.toLowerCase(); items=items.filter(i=>i.toLowerCase().includes(ql)||(meta[i]||'').toLowerCase().includes(ql)); }
+  return {cell, meta, items};
+}
+function finMxGrid(id){
+  const st=window._finMx[id], cfg=window._finMxCfg[id];
+  const periods=cfg.periods||[];
+  const {cell, meta, items}=finMxItems(cfg, st.q);
+  if(!items.length) return '<div class="card pf-meta">No rows match the filter.</div>';
+  const n=v=>v==null?'<span class="muted">—</span>':`<span class="${v<0?'neg':''}">${Math.round(v).toLocaleString()}</span>`;
+  const stick1='position:sticky;left:0;background:var(--panel,#161b22);z-index:2';
+  const multiCat=new Set(items.map(i=>meta[i]).filter(Boolean)).size>1;
+  let body='', lastCat=null;
+  items.forEach(it=>{
+    if(multiCat&&meta[it]!==lastCat){ lastCat=meta[it];
+      body+=`<tr><td style="${stick1};color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.4px" colspan="${periods.length+1}">${escapeHtml(lastCat||'Other')}</td></tr>`; }
+    body+=`<tr><td style="${stick1};white-space:nowrap" title="${escapeHtml(meta[it]||'')}"><b>${escapeHtml(it)}</b></td>`
+      +periods.map(p=>`<td style="text-align:right;white-space:nowrap">${n((cell[it]||{})[p])}</td>`).join('')+'</tr>';
+  });
+  if(cfg.totals)
+    body+=`<tr style="border-top:2px solid var(--line)"><td style="${stick1}"><b>Total</b></td>`
+      +periods.map(p=>`<td style="text-align:right;white-space:nowrap"><b>${n(cfg.totals[p])}</b></td>`).join('')+'</tr>';
+  return `<div class="card" style="overflow-x:auto;max-height:560px;overflow-y:auto;padding-top:0">
+    <table class="mini" style="width:100%;border-collapse:separate;border-spacing:0">
+      <tr style="position:sticky;top:0;background:var(--panel,#161b22);z-index:3">
+        <th style="${stick1};z-index:4;text-align:left">${escapeHtml(cfg.label||'Item')}</th>
+        ${periods.map(p=>`<th style="text-align:right;white-space:nowrap">${escapeHtml(p)}</th>`).join('')}</tr>
+      ${body}</table>
+    <div class="pf-meta" style="margin-top:6px">${items.length} rows × ${periods.length} periods · values in $</div></div>`;
+}
+function finMxCsv(id){
+  const cfg=window._finMxCfg[id]; if(!cfg) return;
+  const periods=cfg.periods||[];
+  const {cell, meta, items}=finMxItems(cfg, '');
+  const esc=v=>{ v=String(v??''); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
+  const lines=[[cfg.label||'Item','Category',...periods].map(esc).join(',')];
+  items.forEach(it=>lines.push([it, meta[it]||'', ...periods.map(p=>(cell[it]||{})[p]??'')].map(esc).join(',')));
+  if(cfg.totals) lines.push(['Total','',...periods.map(p=>cfg.totals[p]??'')].map(esc).join(','));
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/csv'}));
+  a.download=cfg.csvName||'matrix.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
 function finBars(cats){
   const entries=Object.entries(cats||{}).filter(([,v])=>v>0);
   const max=Math.max(...entries.map(([,v])=>v),1);
@@ -3142,38 +3347,39 @@ function finRender(){
       </div>
       <div class="fin-chart"><div class="up-label" style="margin-bottom:8px">Net Worth Timeline (${(d.points||[]).length} periods)</div>${finLine(d.points||[],'net_worth',null,'Net Worth')}</div>
       ${(s.insights&&s.insights.length)?`<div class="card" style="margin-bottom:14px"><div class="up-label" style="margin-bottom:6px">💡 Insights</div>${s.insights.map(i=>'<div class="pf-meta" style="padding:2px 0">• '+escapeHtml(i)+'</div>').join('')}</div>`:''}
-      ${finDataTable('nw', [
-        {key:'_ps', label:'Period', render:r=>escapeHtml(r.period)},
-        {key:'assets', label:'Assets', money:1},
-        {key:'liabilities', label:'Liabilities', money:1},
-        {key:'net_worth', label:'Net Worth', money:1, render:r=>`<b class="${r.net_worth>=0?'pos':'neg'}">${finMoney(r.net_worth)}</b>`},
-      ], rows)}`;
-  } else if(page==='assets'||page==='liabilities'){
-    const lt=d.latest||{}, cats=lt.categories||{};
-    const rows=(d.rows||[]).filter(r=>!r.is_total&&(!yr||r.year===yr))
-      .map(r=>({item:r.item, category:r.category||'', _ps:ps(r), period:(r.quarter?('Q'+r.quarter+' '):'')+r.year, value:r.value})).reverse();
-    const cardset = page==='assets'
-      ? [['Total Assets',lt.total],['Brokerage',cats['Brokerage']],['401K',cats['401K']],['529',cats['529']],['Cash',cats['Cash']],['Crypto',cats['Crypto']],['Real Estate',cats['Real Estate']]]
-      : [['Total Debt',lt.total],['Mortgage',cats['Mortgage']],['Margin',cats['Margin']],['Credit Card',cats['Credit Card']],['Loan',cats['Loan']],['Other Debt',cats['Other Debt']]];
-    out.innerHTML = `<div class="fin-cards">${cardset.filter(([,v])=>v!=null).map(([l,v])=>finCard(l,finMoney(v))).join('')}</div>
-      <div class="fin-chart"><div class="up-label" style="margin-bottom:8px">${page==='assets'?'Asset':'Debt'} Trend</div>${finLine(d.timeline||[],'total', page==='assets'?'var(--acc)':'#f87171', page==='assets'?'Total Assets':'Total Debt')}</div>
-      <div class="fin-chart"><div class="up-label" style="margin-bottom:8px">${lt.period?('Composition · '+lt.period):'Composition'}</div>${finBars(cats)}</div>
-      ${finDataTable(page, [
-        {key:'item', label:'Item'},
-        {key:'category', label:'Category'},
-        {key:'_ps', label:'Period', render:r=>escapeHtml(r.period)},
-        {key:'value', label:'Value', money:1},
-      ], rows)}`;
+      ${finMatrixTable('nw', {
+        label:'Metric', csvName:'networth_matrix.csv', totals:null,
+        periods:(d.points||[]).map(p=>p.period),
+        itemOrder:['Assets','Liabilities','Net Worth'],
+        rows:(d.points||[]).flatMap(p=>[
+          {item:'Assets', category:null, period:p.period, value:p.assets},
+          {item:'Liabilities', category:null, period:p.period, value:p.liabilities},
+          {item:'Net Worth', category:null, period:p.period, value:p.net_worth}]),
+        listCols:[
+          {key:'_ps', label:'Period', render:r=>escapeHtml(r.period)},
+          {key:'assets', label:'Assets', money:1},
+          {key:'liabilities', label:'Liabilities', money:1},
+          {key:'net_worth', label:'Net Worth', money:1, render:r=>`<b class="${r.net_worth>=0?'pos':'neg'}">${finMoney(r.net_worth)}</b>`},
+        ], listRows:rows})}`;
   } else if(page==='cashflow'){
-    const items=[...new Set((d.rows||[]).map(r=>r.item))];
+    // Cashflow metrics are independent lines (Asset, Liability w/wo house, Totals) — never summed.
+    const inYr=p=>!yr||p.includes(String(yr));
+    const fSeries=(d.series||[]).map(s=>({name:s.name, category:null, points:s.points.filter(p=>inYr(p.period))}));
     const rows=(d.rows||[]).filter(r=>!yr||r.year===yr)
-      .map(r=>({item:r.item, _ps:ps(r), period:(r.quarter?('Q'+r.quarter+' '):'')+r.year, value:r.value})).reverse();
-    out.innerHTML = `<div class="fin-chart"><div class="up-label" style="margin-bottom:8px">Tracked metrics: ${items.map(escapeHtml).join(' · ')}</div>${finLine(d.timeline||[],'total','#22d3ee','Cashflow Total')}</div>
-      ${finDataTable('cf', [
-        {key:'item', label:'Metric'},
-        {key:'_ps', label:'Period', render:r=>escapeHtml(r.period)},
-        {key:'value', label:'Value', money:1},
-      ], rows)}`;
+      .map(r=>({item:r.item, _ps:ps(r), period:r.period, value:r.value})).reverse();
+    out.innerHTML = `<div class="fin-chart"><div class="up-label" style="margin-bottom:8px">Cashflow Metrics · ${yr||'All periods'}</div>${finMultiLine(fSeries,'cf')}</div>
+      ${finMatrixTable('cf', {
+        label:'Cashflow', csvName:'cashflow_matrix.csv',
+        periods:(d.periods||[]).filter(inYr),
+        totals:null,                       // 'Total' is a data row from the sheet, not a computed sum
+        itemOrder:d.items||[],
+        rows:(d.rows||[]).filter(r=>!yr||r.year===yr)
+          .map(r=>({item:r.item, category:null, period:r.period, value:r.value})),
+        listCols:[
+          {key:'item', label:'Metric'},
+          {key:'_ps', label:'Period', render:r=>escapeHtml(r.period)},
+          {key:'value', label:'Value', money:1},
+        ], listRows:rows})}`;
   } else if(page==='tax'){
     const rows=(d.rows||[]).filter(r=>!yr||r.year===yr).slice().reverse();
     const last=(d.rows||[])[d.rows.length-1]||{};
@@ -3206,7 +3412,14 @@ function finRender(){
       ], d.rows||[]);
   } else if(page==='expenses'){
     const save=(d.monthly_income&&d.monthly_spend)?((d.monthly_income-d.monthly_spend)/d.monthly_income*100):null;
-    out.innerHTML = `<div class="fin-cards">
+    const monthSel=(d.months&&d.months.length)?`<div class="card" style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="pf-meta">Viewing:</span>
+        <select onchange="finExpMonth(this.value)" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px">
+          <option value=""${!d.month?' selected':''}>Workbook baseline</option>
+          ${d.months.map(m=>`<option value="${escapeHtml(m)}"${d.month===m?' selected':''}>${escapeHtml(m)}</option>`).join('')}
+        </select>
+        <span class="pf-meta">Months imported from Payment App screenshots appear here.</span></div>`:'';
+    out.innerHTML = monthSel+`<div class="fin-cards">
         ${finCard('Monthly Income', finMoney(d.monthly_income), '#34d399')}
         ${finCard('Monthly Spend', finMoney(d.monthly_spend), '#f87171')}
         ${finCard('Savings Rate', save!=null?save.toFixed(0)+'%':'—', save>=0?'#34d399':'#f87171')}
@@ -3218,10 +3431,15 @@ function finRender(){
         {key:'category', label:'Category'},
         {key:'amount', label:'Amount', money:1, render:r=>`<span class="${r.amount>=0?'pos':'neg'}">${finMoney(r.amount)}</span>`},
       ], d.lines||[])}`;
+  } else if(page==='apps'){
+    out.innerHTML = finAppsHtml(d.apps||[]);
+    payRenderPTab(); payLoadAccounts();
   }
 }
 function finCopilot(){
   const page=window._finPage, d=window._finData[page]||{}, s=window._finData.summary||{};
+  if(page==='apps'){ payCopilot('portfolio'); return; }   // whole payment-portfolio analysis
+  if(page==='assets'||page==='liabilities'){ afCopilot(); return; }   // filtered context
   let ctx=`I'm looking at my ${FIN_TITLES[page]||page} page in ArtikFinance (personal financial statements, 2015→now).\n`;
   if(s.net_worth!=null) ctx+=`Snapshot: net worth ${finMoney(s.net_worth)}, assets ${finMoney(s.total_assets)}, liabilities ${finMoney(s.total_liabilities)}, debt/assets ${s.debt_to_asset_pct}%.\n`;
   if(page==='overview'&&d.points) ctx+=`Net worth timeline: `+d.points.map(p=>`${p.period}: ${finMoney(p.net_worth)}`).join('; ')+`.\n`;
@@ -3238,6 +3456,1843 @@ async function finReimport(){
   window._finData={};
   alert(r.ok&&d.ok?`Re-imported: ${d.records} records, ${d.tax_years} tax years, ${d.expense_lines} expense lines.`:(d.error||'import failed'));
   finLoad(window._finPage);
+}
+
+/* ── Payment Apps — site launchers + screenshot→expense imports ─────────────── */
+async function finExpMonth(m){
+  const r=await fetch('/api/finance/expenses'+(m?('?month='+encodeURIComponent(m)):''));
+  window._finData.expenses=await r.json(); finRender();
+}
+/* ═══════════ Assets — advanced search + dynamic charts ═══════════ */
+window._afAll={}; window._afDataAll={}; window._afSeq=0; window._afQ='';
+function afKey(){ return window._finPage==='liabilities'?'liabilities':'assets'; }
+function afS(){ const k=afKey(); return window._afAll[k]=window._afAll[k]||{ptype:'all', year:'', quarter:'Q1', from:'', to:'', cats:[], items:[], tview:'matrix'}; }
+function afD(){ return window._afDataAll[afKey()]; }
+function afSetD(d){ window._afDataAll[afKey()]=d; }
+function afCfg(){ return afKey()==='assets'
+  ?{ep:'/api/finance/assets', noun:'Asset', plural:'Assets', total:'Total Assets', hash:'assets', csv:'assets', chart:'af'}
+  :{ep:'/api/finance/liabilities', noun:'Liability', plural:'Liabilities', total:'Total Debt', hash:'liabilities', csv:'liabilities', chart:'afl'}; }
+function afHashWrite(){
+  const f=afS(), p=[];
+  if(f.ptype&&f.ptype!=='all') p.push('ptype='+f.ptype);
+  if(f.year&&(f.ptype==='year'||f.ptype==='quarter')) p.push('year='+f.year);
+  if(f.ptype==='quarter'&&f.quarter) p.push('quarter='+encodeURIComponent(f.quarter));
+  if(f.ptype==='custom'&&f.from) p.push('from='+encodeURIComponent(f.from));
+  if(f.ptype==='custom'&&f.to) p.push('to='+encodeURIComponent(f.to));
+  if(f.cats.length) p.push('categories='+encodeURIComponent(f.cats.join(',')));
+  if(f.items.length) p.push('items='+encodeURIComponent(f.items.join('|')));
+  try{ history.replaceState(null,'','#'+afCfg().hash+(p.length?('?'+p.join('&')):'')); }catch(e){}
+}
+function afHashRead(){
+  const m=location.hash.match(new RegExp('^#'+afCfg().hash+'\\?(.+)$')); if(!m) return;
+  const q=new URLSearchParams(m[1]), f=afS();
+  f.ptype=q.get('ptype')||'all'; f.year=q.get('year')||''; f.quarter=q.get('quarter')||'Q1';
+  f.from=q.get('from')||''; f.to=q.get('to')||'';
+  f.cats=(q.get('categories')||'').split(',').filter(Boolean);
+  f.items=(q.get('items')||'').split('|').filter(Boolean);
+}
+function afInit(){
+  const ys=$('#fin-year'); if(ys) ys.style.display='none';
+  if(location.hash.startsWith('#'+afCfg().hash)) afHashRead();
+  $('#fin-out').innerHTML=`
+    <div class="card" id="af-bar" style="margin-bottom:10px"></div>
+    <div id="af-chips" style="margin-bottom:10px"></div>
+    <div id="af-msg"></div>
+    <div id="af-cards"></div>
+    <div class="fin-chart"><div class="up-label" style="margin-bottom:8px" id="af-trend-title">Asset Trend</div><div id="af-trend"><div class="spin">Loading…</div></div></div>
+    <div class="fin-chart"><div class="up-label" style="margin-bottom:8px" id="af-comp-title">Composition</div><div id="af-comp"></div></div>
+    <div id="af-table"></div>
+    <div id="pay-modal"></div>`;
+  window._afEdit=null;                        // page switch drops any unsaved edit session
+  afRenderBar(); afLoad();
+}
+function afRenderBar(){
+  const el=$('#af-bar'); if(!el) return;
+  const f=afS(), d=afD();
+  const years=(d&&d.filters.available_years)||[];
+  const S='background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px;font-size:13px';
+  const yearOpts=(cur)=>years.map(y=>`<option${String(y)===String(cur)?' selected':''}>${y}</option>`).join('');
+  const pkOpts=(cur)=>{ // period keys for custom range, from available data
+    const pks=(d?d.timelineKeys:[])||[];
+    return pks.map(k=>`<option${k===cur?' selected':''}>${k}</option>`).join('');
+  };
+  let periodFields='';
+  if(f.ptype==='year') periodFields=`<label class="pf-meta">Year <select id="af-year" style="${S}">${yearOpts(f.year||years[years.length-1])}</select></label>`;
+  else if(f.ptype==='quarter') periodFields=`<label class="pf-meta">Year <select id="af-year" style="${S}">${yearOpts(f.year||years[years.length-1])}</select></label>
+    <label class="pf-meta">Quarter <select id="af-quarter" style="${S}">${['Q1','Q2','Q3','Q4'].map(q=>`<option${q===f.quarter?' selected':''}>${q}</option>`).join('')}</select></label>`;
+  else if(f.ptype==='custom') periodFields=`<label class="pf-meta">From <select id="af-from" style="${S}">${pkOpts(f.from)}</select></label>
+    <label class="pf-meta">To <select id="af-to" style="${S}">${pkOpts(f.to||undefined)}</select></label>`;
+  const cats=(d&&d.filters.available_categories)||[];
+  el.innerHTML=`<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <label class="pf-meta">Period <select id="af-ptype" style="${S}" onchange="afS().ptype=this.value;afRenderBar()">
+        ${[['all','All periods'],['year','Year'],['quarter','Quarter'],['custom','Custom range']].map(([k,l])=>`<option value="${k}"${f.ptype===k?' selected':''}>${l}</option>`).join('')}
+      </select></label>
+      ${periodFields}
+      <span class="pf-meta">Category:</span>
+      <span id="af-catbtns">${cats.map((c,i)=>`<button class="ghost" style="padding:4px 10px;font-size:12px;margin:1px;${f.cats.includes(c)?'background:var(--acc);color:#fff;border-color:var(--acc)':''}" onclick="afToggleCat(${i},true)" title="Toggle ${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}</span>
+      <span style="position:relative">
+        <input id="af-item" placeholder="Search items…" autocomplete="off" style="${S};width:160px"
+          oninput="afSuggest(this.value)" onfocus="afSuggest(this.value)" onblur="setTimeout(()=>{const s=$('#af-sug');if(s)s.style.display='none'},200)">
+        <div id="af-sug" style="display:none;position:absolute;top:34px;left:0;z-index:500;background:var(--panel,#161b22);border:1px solid var(--line);border-radius:8px;min-width:260px;max-height:220px;overflow-y:auto"></div>
+      </span>
+      <button class="ex-btn" id="af-apply" onclick="afApply()">Apply Search</button>
+      <button class="ghost" onclick="afReset()">Reset</button>
+    </div>`;
+}
+function afToggleCat(i,fromBar){
+  const d=afD(); if(!d) return;
+  const c=d.filters.available_categories[i]; if(!c) return;
+  const f=afS(), ix=f.cats.indexOf(c);
+  if(ix>=0) f.cats.splice(ix,1); else f.cats.push(c);
+  afRenderBar();
+  if(!fromBar) afLoad();       // card click applies immediately; bar buttons wait for Apply
+}
+function afSuggest(q){
+  window._afQ=q;
+  clearTimeout(window._afSugT);
+  window._afSugT=setTimeout(()=>{
+    const box=$('#af-sug'); const d=afD(); if(!box||!d) return;
+    const f=afS(), ql=(q||'').toLowerCase();
+    const m=(d.filters.available_items||[]).filter(it=>!f.items.includes(it.item)&&(!ql||it.item.toLowerCase().includes(ql))).slice(0,8);
+    if(!m.length){ box.style.display='none'; return; }
+    box.innerHTML=m.map(it=>`<div style="display:flex;justify-content:space-between;gap:14px;padding:7px 10px;cursor:pointer;font-size:13px"
+      onmousedown="afAddItem('${escapeHtml(it.item).replace(/'/g,"&#39;")}')"
+      onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+      <span>${escapeHtml(it.item)}</span><span class="pf-meta">${escapeHtml(it.category)}</span></div>`).join('');
+    box.style.display='';
+  },150);
+}
+function afAddItem(name){
+  const el=document.createElement('textarea'); el.innerHTML=name;   // decode entities
+  const item=el.value;
+  if(!afS().items.includes(item)) afS().items.push(item);
+  const inp=$('#af-item'); if(inp) inp.value='';
+  const s=$('#af-sug'); if(s) s.style.display='none';
+  afRenderChips();
+}
+function afDropItem(i){ afS().items.splice(i,1); afLoad(); }
+function afDropCat(i){ afS().cats.splice(i,1); afRenderBar(); afLoad(); }
+function afApply(){
+  const f=afS();
+  const g=id=>{ const e=$('#'+id); return e?e.value:''; };
+  if(f.ptype==='year'||f.ptype==='quarter') f.year=g('af-year');
+  if(f.ptype==='quarter') f.quarter=g('af-quarter');
+  if(f.ptype==='custom'){ f.from=g('af-from'); f.to=g('af-to'); }
+  afLoad();
+}
+function afReset(){
+  const tv=afS().tview; window._afAll[afKey()]={ptype:'all', year:'', quarter:'Q1', from:'', to:'', cats:[], items:[], tview:tv};
+  afRenderBar(); afLoad();
+}
+function afRenderChips(){
+  const el=$('#af-chips'); if(!el) return;
+  const f=afS(), chips=[];
+  const chip=(label,fn)=>`<span style="display:inline-flex;align-items:center;gap:6px;background:var(--panel2,#1c2430);border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12px;margin:2px">${label}
+    <a style="cursor:pointer;color:var(--mut)" onclick="${fn}" title="Remove filter" aria-label="Remove ${label}">×</a></span>`;
+  if(f.ptype==='year'&&f.year) chips.push(chip(escapeHtml(String(f.year)),"afS().ptype='all';afRenderBar();afLoad()"));
+  if(f.ptype==='quarter'&&f.year) chips.push(chip(escapeHtml(f.quarter+' '+f.year),"afS().ptype='all';afRenderBar();afLoad()"));
+  if(f.ptype==='custom'&&f.from) chips.push(chip(escapeHtml(f.from+' – '+f.to),"afS().ptype='all';afRenderBar();afLoad()"));
+  f.cats.forEach((c,i)=>chips.push(chip(escapeHtml(c),`afDropCat(${i})`)));
+  f.items.forEach((it,i)=>chips.push(chip(escapeHtml(it),`afDropItem(${i})`)));
+  el.innerHTML=chips.length?chips.join('')+`<a class="pf-meta" style="cursor:pointer;text-decoration:underline;margin-left:8px" onclick="afReset()">Clear All</a>`:'';
+}
+async function afLoad(){
+  const f=afS(), seq=++window._afSeq;
+  const btn=$('#af-apply'); if(btn){ btn.disabled=true; btn.textContent='Searching…'; }
+  ['af-trend','af-comp'].forEach(id=>{ const e=$('#'+id); if(e) e.innerHTML='<div class="spin">Loading…</div>'; });
+  const p=new URLSearchParams();
+  if(f.ptype!=='all') p.set('period_type',f.ptype);
+  if(f.ptype==='year'||f.ptype==='quarter'){ if(f.year) p.set('year',f.year); }
+  if(f.ptype==='quarter') p.set('quarter',f.quarter);
+  if(f.ptype==='custom'){ p.set('period_from',f.from); p.set('period_to',f.to); }
+  if(f.cats.length) p.set('categories',f.cats.join(','));
+  if(f.items.length) p.set('items',f.items.join('|'));
+  try{
+    const r=await fetch(afCfg().ep+'?'+p.toString());
+    const d=await r.json();
+    if(seq!==window._afSeq) return;                 // a newer search superseded this one
+    if(!r.ok){ $('#af-msg').innerHTML=`<div class="card" style="border-color:#f8717155;margin-bottom:10px">⚠ ${escapeHtml(d.error||'search failed')} <a style="cursor:pointer;text-decoration:underline" onclick="afReset()">Reset filters</a></div>`;
+      if(btn){ btn.disabled=false; btn.textContent='Apply Search'; } return; }
+    afSetD(d);
+    d.timelineKeys=(d.timeline||[]).map(t=>(t.quarter?`${t.year}-Q${t.quarter}`:String(t.year)));
+    if(!$('#af-year')&&!$('#af-from')) afRenderBar();  // populate selects on first load
+    afHashWrite(); afRender();
+  }catch(e){ if(seq===window._afSeq) $('#af-msg').innerHTML='<div class="card err">'+escapeHtml(String(e))+'</div>'; }
+  finally{ const b=$('#af-apply'); if(b){ b.disabled=false; b.textContent='Apply Search'; } }
+}
+function afRender(){
+  const d=afD(); if(!d) return;
+  afRenderBar(); afRenderChips();
+  const f=(d.filters||{}).applied||{};
+  $('#af-msg').innerHTML=(window._afNote||'')+(d.messages||[]).map(m=>`<div class="card" style="border-color:#f59e0b55;margin-bottom:10px">${escapeHtml(m)} <a style="cursor:pointer;text-decoration:underline" onclick="afReset()">Reset filters</a></div>`).join('');
+  window._afNote='';
+  $('#fin-asof').textContent=d.summary.period?('as of '+d.summary.period):'';
+  // cards: Total + selected categories (or all when none selected), period under value, click filters
+  const cats=Object.entries(d.summary.category_totals||{});
+  const catIdx=n=>(d.filters.available_categories||[]).indexOf(n);
+  $('#af-cards').innerHTML=d.rows.length?`<div class="fin-cards">
+    <div class="card"><div class="pf-meta">${afCfg().total}</div><div class="v" style="color:#34d399">${finMoney(d.summary.total_assets)}</div><div class="pf-meta">${escapeHtml(d.summary.period||'')}</div></div>
+    ${cats.map(([k,v])=>`<div class="card" style="cursor:pointer" title="Click to filter by ${escapeHtml(k)}" onclick="afToggleCat(${catIdx(k)},false)">
+      <div class="pf-meta">${escapeHtml(k)}</div><div class="v">${finMoney(v)}</div><div class="pf-meta">${escapeHtml(d.summary.period||'')}</div></div>`).join('')}
+  </div>`:'';
+  // trend
+  const fCats=f.categories||[], fItems=f.items||[];
+  const scope=fItems.length?fItems.join(' and '):(fCats.length?fCats.join(' and '):('All '+afCfg().plural));
+  $('#af-trend-title').textContent=`${afCfg().noun} Trend · ${scope} · ${d.trend.label}`;
+  $('#af-trend').innerHTML=finMultiLine(d.trend.series||[],afCfg().chart);
+  // composition
+  const compTitle=fItems.length?('Selected '+afCfg().plural+' Composition'):(fCats.length?(fCats.join(' + ')+' Composition'):'Composition');
+  $('#af-comp-title').textContent=`${compTitle} · ${d.summary.period||'—'}`;
+  const maxv=Math.max(...(d.composition||[]).map(c=>c.value),1);
+  $('#af-comp').innerHTML=(d.composition||[]).length?(d.composition||[]).map(c=>`<div class="fin-bar">
+      <span class="lbl" title="${escapeHtml(c.category||c.name)}">${escapeHtml(c.name)}</span>
+      <div class="track"><div class="fill" style="width:${(c.value/maxv*100).toFixed(1)}%"></div></div>
+      <span style="min-width:150px">${finMoney(c.value)} · ${c.pct}%</span></div>`).join('')
+    :'<div class="pf-meta">No data for the selected filters.</div>';
+  // table — Matrix (workbook-style: item rows × quarter columns) or flat List
+  $('#af-table').innerHTML=(d.rows||[]).length?afTableHtml()
+    :(d.messages||[]).length?'' :'<div class="card pf-meta">No ${afCfg().noun.toLowerCase()} records match the selected filters. <a style="cursor:pointer;text-decoration:underline" onclick="afReset()">Reset filters</a></div>';
+}
+function afSetTView(v){ afS().tview=v; const el=$('#af-table'); if(el) el.innerHTML=afTableHtml(); }
+function afMxFilter(q){ window._afMxQ=q; const el=$('#af-mx'); if(el) el.innerHTML=afMatrixHtml(); }
+function afTableHtml(){
+  const d=afD(), view=afS().tview||'matrix', ed=window._afEdit;
+  const nEd=ed?Object.keys(ed.changes).length:0;
+  const editCtl = view!=='matrix' ? ''
+    : ed ? `<button class="ghost" onclick="afAddQuarter()" title="Add a new quarter column">+ Add Quarter</button>
+        <button class="ghost" onclick="afAddItem()" title="Add a new ${afCfg().noun.toLowerCase()} row">+ Add Item</button>
+        <span class="pf-meta" id="af-edit-n" style="color:${nEd?'#f59e0b':'var(--mut)'}">${nEd} unsaved change${nEd===1?'':'s'}</span>
+        <button class="ex-btn" onclick="afEditSave()">Save Changes</button>
+        <button class="ghost" onclick="afEditCancel()">Cancel</button>`
+      : `<button class="ghost" onclick="afEditStart()" title="Edit values inline">✏️ Edit</button>
+        <button class="ghost" onclick="afEditStart();afAddQuarter()" title="Add a new quarter column">+ Add Quarter</button>`;
+  const head=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap">
+      <div style="display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden">
+        <button class="ghost" style="border:0;border-radius:0;${view==='matrix'?'background:var(--acc);color:#fff':''}" onclick="afSetTView('matrix')" title="Item rows × quarter columns (workbook layout)">Matrix</button>
+        <button class="ghost" style="border:0;border-radius:0;${view==='list'?'background:var(--acc);color:#fff':''}" onclick="afSetTView('list')" title="Flat sortable list">List</button>
+      </div>
+      ${view==='matrix'&&!ed?`<input placeholder="Filter items…" value="${escapeHtml(window._afMxQ||'')}" oninput="afMxFilter(this.value)" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px;font-size:13px;width:160px">`:''}
+      ${editCtl}
+      <span class="pf-meta">${view==='matrix'?'':(d.rows.length+' of '+d.total_rows_all+' rows')}</span>
+      <span style="flex:1"></span>
+      <button class="ghost" onclick="${view==='matrix'?'afExportMatrixCsv()':'afExportCsv()'}" title="Download the current table as CSV">Export CSV</button></div>`;
+  if(view==='list'){
+    const rows=(d.rows||[]).map(r=>({item:r.item, category:r.category, _ps:r.year+((r.quarter||4)/10), period:r.period, value:r.value})).reverse();
+    return head+finDataTable('af',[
+      {key:'item', label:'Item'},
+      {key:'category', label:'Category'},
+      {key:'_ps', label:'Period', render:r=>escapeHtml(r.period)},
+      {key:'value', label:'Value', money:1},
+    ], rows);
+  }
+  return head+`<div id="af-mx">${afMatrixHtml()}</div>`;
+}
+function escAttr(s){ return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function afMatrixCols(){
+  const d=afD(), ed=window._afEdit;
+  let cols=(d.timeline||[]).map(t=>({label:t.period, year:t.year, quarter:t.quarter, total:t.total}));
+  if(ed) ed.newPeriods.forEach(p=>{
+    if(!cols.some(c=>c.year===p.year&&c.quarter===p.quarter)) cols.push({label:p.label, year:p.year, quarter:p.quarter, total:null}); });
+  cols.sort((a,b)=>(a.year+((a.quarter||4)/10))-(b.year+((b.quarter||4)/10)));
+  return cols;
+}
+function afMatrixHtml(){
+  const d=afD(); if(!d) return '';
+  const ed=window._afEdit;
+  const cols=afMatrixCols();
+  const cell={}, meta={};
+  (d.rows||[]).forEach(r=>{ (cell[r.item]=cell[r.item]||{})[r.period]=r.value; meta[r.item]=r.category; });
+  if(ed) ed.newItems.forEach(nm=>{ if(!cell[nm]){ cell[nm]={}; meta[nm]='(new)'; } });
+  const q=(window._afMxQ||'').toLowerCase();
+  let items=Object.keys(cell).sort((a,b)=>(meta[a]||'').localeCompare(meta[b]||'')||a.localeCompare(b));
+  if(q&&!ed) items=items.filter(i=>i.toLowerCase().includes(q)||(meta[i]||'').toLowerCase().includes(q));
+  if(!items.length) return '<div class="card pf-meta">No items match the filter.</div>';
+  const n=v=>v==null?'<span class="muted">—</span>':`<span class="${v<0?'neg':''}">${Math.round(v).toLocaleString()}</span>`;
+  const stick1='position:sticky;left:0;background:var(--panel,#161b22);z-index:2';
+  const multiCat=new Set(items.map(i=>meta[i])).size>1;
+  let body='', lastCat=null;
+  items.forEach(it=>{
+    if(multiCat&&meta[it]!==lastCat){ lastCat=meta[it];
+      body+=`<tr><td style="${stick1};color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.4px" colspan="${cols.length+1}">${escapeHtml(lastCat||'Other')}</td></tr>`; }
+    const nameCell = ed
+      ? `<b>${escapeHtml(it)}</b> <a style="cursor:pointer" title="Rename item" aria-label="Rename ${escapeHtml(it)}" onclick="afItemRename('${escAttr(it)}')">✏️</a>${meta[it]!=='(new)'?` <a style="cursor:pointer" title="Delete item and all its values" aria-label="Delete ${escapeHtml(it)}" onclick="afItemDelete('${escAttr(it)}')">🗑</a>`:''}`
+      : `<b>${escapeHtml(it)}</b>`;
+    body+=`<tr><td style="${stick1};white-space:nowrap" title="${escapeHtml(meta[it]||'')}">${nameCell}</td>`
+      +cols.map(c=>{
+        if(!ed) return `<td style="text-align:right;white-space:nowrap">${n((cell[it]||{})[c.label])}</td>`;
+        const key=it+'|'+c.year+'|'+(c.quarter||'');
+        const orig=(cell[it]||{})[c.label];
+        const pend=ed.changes[key];
+        const val=pend!==undefined?pend.value:(orig??'');
+        const changed=pend!==undefined;
+        return `<td style="text-align:right"><input class="afc" value="${escAttr(val)}" inputmode="decimal"
+          data-item="${escAttr(it)}" data-year="${c.year}" data-quarter="${c.quarter??''}" data-orig="${orig??''}"
+          oninput="afCellChg(this)" aria-label="${escAttr(it)} ${escAttr(c.label)}"
+          style="width:92px;text-align:right;background:var(--bg);color:var(--txt);border-radius:6px;padding:4px 6px;font-size:12px;border:1px solid ${changed?'#f59e0b':'var(--line)'}"></td>`;
+      }).join('')+'</tr>';
+  });
+  if(!ed)
+    body+=`<tr style="border-top:2px solid var(--line)"><td style="${stick1}"><b>Total</b></td>`
+      +cols.map(c=>`<td style="text-align:right;white-space:nowrap"><b>${n(c.total)}</b></td>`).join('')+'</tr>';
+  return `<div class="card" style="overflow-x:auto;max-height:560px;overflow-y:auto;padding-top:0">
+    <table class="mini" style="width:100%;border-collapse:separate;border-spacing:0">
+      <tr style="position:sticky;top:0;background:var(--panel,#161b22);z-index:3">
+        <th style="${stick1};z-index:4;text-align:left">${afCfg().noun}</th>
+        ${cols.map(c=>`<th style="text-align:right;white-space:nowrap">${escapeHtml(c.label)}${window._afEdit&&window._afEdit.newPeriods.some(p=>p.label===c.label)?' <span style="color:#f59e0b">•</span>':''}</th>`).join('')}</tr>
+      ${body}</table>
+    <div class="pf-meta" style="margin-top:6px">${items.length} items × ${cols.length} periods · values in $${ed?' · amber = unsaved change; clear a cell to delete its value. Totals recalculate after saving.':' · use the Period filter above to change columns'}</div></div>`;
+}
+/* ── inline editing (Edit · Add Quarter · Add Item · rename/delete) ── */
+window._afEdit=null;
+function afEditStart(){ if(!window._afEdit) window._afEdit={changes:{}, newItems:[], newPeriods:[]}; afReTable(); }
+function afEditCancel(){
+  if(Object.keys(window._afEdit?.changes||{}).length&&!confirm('Discard all unsaved changes?')) return;
+  window._afEdit=null; afReTable();
+}
+function afReTable(){ const el=$('#af-table'); if(el) el.innerHTML=afTableHtml(); }
+function afCellChg(el){
+  const ed=window._afEdit; if(!ed) return;
+  const item=el.dataset.item, y=parseInt(el.dataset.year), q=el.dataset.quarter?parseInt(el.dataset.quarter):null;
+  const key=item+'|'+y+'|'+(q||'');
+  const raw=el.value.trim(), orig=el.dataset.orig;
+  const num=s=>parseFloat(String(s).replace(/[$,\s]/g,''));
+  const same=(raw===''&&orig==='')||(raw!==''&&orig!==''&&!isNaN(num(raw))&&num(raw)===num(orig));
+  if(same) delete ed.changes[key]; else ed.changes[key]={item, year:y, quarter:q, value:raw};
+  const bad=raw!==''&&isNaN(num(raw));
+  el.style.borderColor=bad?'#f87171':(same?'var(--line)':'#f59e0b');
+  const cnt=Object.keys(ed.changes).length, nEl=$('#af-edit-n');
+  if(nEl){ nEl.textContent=cnt+' unsaved change'+(cnt===1?'':'s'); nEl.style.color=cnt?'#f59e0b':'var(--mut)'; }
+}
+function afAddQuarter(){
+  if(!window._afEdit) window._afEdit={changes:{}, newItems:[], newPeriods:[]};
+  const d=afD(); const years=(d.filters.available_years||[]);
+  const maxY=Math.max(...years, new Date().getFullYear());
+  const opts=[]; for(let y=maxY+1; y>=Math.min(...years, maxY)-1; y--) opts.push(y);
+  payModal(`<div class="up-label" style="margin-bottom:10px">Add Quarter</div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <label class="pf-meta">Year <select id="aq-year" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px">${opts.map(y=>`<option${y===maxY?' selected':''}>${y}</option>`).join('')}</select></label>
+      <label class="pf-meta">Quarter <select id="aq-q" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px"><option>Q1</option><option>Q2</option><option>Q3</option><option>Q4</option></select></label>
+    </div>
+    <div class="pf-meta" style="margin-top:8px">The new quarter is inserted chronologically; enter values, then Save Changes.</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button class="ghost" onclick="payModalClose()">Cancel</button>
+      <button class="ex-btn" onclick="afAddQuarterOk()">Add</button>
+    </div>`);
+}
+function afAddQuarterOk(){
+  const y=parseInt($('#aq-year').value), q=parseInt($('#aq-q').value.replace('Q',''));
+  const dup=afMatrixCols().some(c=>c.year===y&&c.quarter===q);
+  if(dup){ alert(`Q${q} ${y} already exists in the matrix.`); return; }
+  window._afEdit.newPeriods.push({year:y, quarter:q, label:`Q${q} ${y}`});
+  payModalClose(); afReTable();
+}
+function afAddItem(){
+  payModal(`<div class="up-label" style="margin-bottom:10px">Add ${afCfg().noun.toLowerCase()} item</div>
+    <input id="ai-name" placeholder="Item name — e.g. ${afKey()==='assets'?'Fidelity Brokerage':'BMW Loan'}" style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:8px 10px">
+    <div class="pf-meta" style="margin-top:6px">The category is assigned automatically from the name. Enter values in the new row, then Save Changes.</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button class="ghost" onclick="payModalClose()">Cancel</button>
+      <button class="ex-btn" onclick="afAddItemOk()">Add</button>
+    </div>`);
+  setTimeout(()=>{ const e=$('#ai-name'); if(e) e.focus(); },50);
+}
+function afAddItemOk(){
+  const name=$('#ai-name').value.trim();
+  if(!name){ alert('Enter an item name.'); return; }
+  const d=afD();
+  const exists=(d.filters.available_items||[]).some(it=>it.item.toLowerCase()===name.toLowerCase())
+    ||window._afEdit.newItems.some(n=>n.toLowerCase()===name.toLowerCase());
+  if(exists){ alert(`An item named "${name}" already exists.`); return; }
+  window._afEdit.newItems.push(name);
+  payModalClose(); afReTable();
+}
+function afEditGuard(){
+  if(Object.keys(window._afEdit?.changes||{}).length){ alert('Save or cancel your cell changes first.'); return false; }
+  return true;
+}
+async function afItemRename(item){
+  if(!afEditGuard()) return;
+  if(window._afEdit&&window._afEdit.newItems.includes(item)){    // unsaved new row — rename locally
+    const nn=prompt('New item name:', item); if(!nn||nn===item) return;
+    window._afEdit.newItems=window._afEdit.newItems.map(x=>x===item?nn:x); afReTable(); return;
+  }
+  const nn=prompt('New item name:', item);
+  if(!nn||nn.trim()===''||nn===item) return;
+  const r=await fetch('/api/finance/records/rename',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({dataset:afKey()==='assets'?'asset':'liability', old:item, new:nn.trim()})});
+  const res=await r.json();
+  if(!r.ok){ alert(res.error||'rename failed'); return; }
+  window._afEdit=null; afLoad();
+}
+async function afItemDelete(item){
+  if(!afEditGuard()) return;
+  if(window._afEdit&&window._afEdit.newItems.includes(item)){
+    window._afEdit.newItems=window._afEdit.newItems.filter(x=>x!==item); afReTable(); return;
+  }
+  if(!confirm(`Delete "${item}" and ALL its values across every period? This cannot be undone (the change is audited).`)) return;
+  const r=await fetch('/api/finance/records/delete-item',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({dataset:afKey()==='assets'?'asset':'liability', item})});
+  const res=await r.json();
+  if(!r.ok){ alert(res.error||'delete failed'); return; }
+  window._afEdit=null; afLoad();
+}
+async function afEditSave(){
+  const ed=window._afEdit; if(!ed) return;
+  const changes=Object.values(ed.changes);
+  if(!changes.length){ window._afEdit=null; afReTable(); return; }
+  const bad=changes.find(c=>c.value!==''&&isNaN(parseFloat(String(c.value).replace(/[$,\s]/g,''))));
+  if(bad){ alert(`"${bad.value}" is not a valid amount (${bad.item}). Fix the red cell or clear it.`); return; }
+  const r=await fetch('/api/finance/records/batch',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({dataset:afKey()==='assets'?'asset':'liability', changes})});
+  const res=await r.json();
+  if(!r.ok){ alert(res.error||'save failed'); return; }
+  window._afEdit=null;
+  window._afNote=`<div class="card" style="border-color:#34d39955;margin-bottom:10px">Saved ${res.applied} value${res.applied===1?'':'s'}${res.deleted?` · ${res.deleted} cleared`:''} — totals and charts refreshed.</div>`;
+  afLoad();
+}
+function afExportMatrixCsv(){
+  const d=afD(); if(!d) return;
+  const periods=(d.timeline||[]).map(t=>t.period);
+  const cell={}, meta={};
+  (d.rows||[]).forEach(r=>{ (cell[r.item]=cell[r.item]||{})[r.period]=r.value; meta[r.item]=r.category; });
+  const esc=v=>{ v=String(v??''); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
+  const items=Object.keys(cell).sort((a,b)=>(meta[a]||'').localeCompare(meta[b]||'')||a.localeCompare(b));
+  const lines=[[afCfg().noun,'Category',...periods].map(esc).join(',')];
+  items.forEach(it=>lines.push([it, meta[it]||'', ...periods.map(p=>(cell[it]||{})[p]??'')].map(esc).join(',')));
+  lines.push(['Total','',...periods.map(p=>{ const t=(d.timeline||[]).find(x=>x.period===p); return t?t.total:''; })].map(esc).join(','));
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/csv'}));
+  a.download=afCfg().csv+'_matrix.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+/* Multi-series line chart with a CLICKABLE legend — click a metric to hide/show its line;
+   the y-axis rescales to the visible series. Hidden state persists per chart id. */
+window._fml={};
+function finMultiLine(seriesList, id){
+  id=id||'fml0';
+  const st=window._fml[id]=window._fml[id]||{hidden:new Set()};
+  st.series=(seriesList||[]).filter(s=>(s.points||[]).some(p=>p.value!=null));
+  return `<div id="fml-${id}">${finMLBody(id)}</div>`;
+}
+function finMLToggle(id,i){
+  const st=window._fml[id]; if(!st||!st.series[i]) return;
+  const n=st.series[i].name;
+  if(st.hidden.has(n)) st.hidden.delete(n); else st.hidden.add(n);
+  const el=$('#fml-'+id); if(el) el.innerHTML=finMLBody(id);
+}
+function finMLBody(id){
+  const st=window._fml[id];
+  const COLORS=['#58a6ff','#a78bfa','#f59e0b','#34d399','#f87171','#22d3ee','#e879f9','#fbbf24'];
+  const seriesList=st.series||[];
+  if(!seriesList.length) return '<div class="pf-meta">No data to chart.</div>';
+  const legend=`<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:4px;font-size:12px">
+    ${seriesList.map((s,i)=>{ const off=st.hidden.has(s.name);
+      return `<span role="button" tabindex="0" title="Click to ${off?'show':'hide'} ${escapeHtml(s.name)}"
+        onclick="finMLToggle('${id}',${i})" onkeydown="if(event.key==='Enter')finMLToggle('${id}',${i})"
+        style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none;${off?'opacity:.38;text-decoration:line-through':''}">
+        <span style="width:18px;height:3px;background:${COLORS[i%COLORS.length]};border-radius:2px;display:inline-block"></span>${escapeHtml(s.name)}</span>`; }).join('')}
+  </div>`;
+  const vis=seriesList.map((s,i)=>({s,i})).filter(({s})=>!st.hidden.has(s.name));
+  if(!vis.length) return legend+'<div class="pf-meta" style="padding:20px 0">All series hidden — click a legend item to show it.</div>';
+  const periods=vis[0].s.points.map(p=>p.period);
+  const all=vis.flatMap(({s})=>s.points.map(p=>p.value||0));
+  if(periods.length===1){                       // single-quarter fallback: one bar per series
+    const mx=Math.max(...all.map(Math.abs),1);
+    return legend+vis.map(({s,i})=>`<div class="fin-bar"><span class="lbl">${escapeHtml(s.name)}</span>
+      <div class="track"><div class="fill" style="width:${(Math.abs(s.points[0].value||0)/mx*100).toFixed(1)}%;background:${COLORS[i%COLORS.length]}"></div></div>
+      <span style="min-width:110px">${finMoney(s.points[0].value)}</span></div>`).join('')
+      +`<div class="pf-meta" style="margin-top:4px">Single period (${escapeHtml(periods[0])}) — values shown as bars.</div>`;
+  }
+  const min=Math.min(...all), max=Math.max(...all), mid=(min+max)/2;
+  const W=780,H=200,L=74,R=12,T=10,B=34;
+  const x=i=>L+i*(W-L-R)/(periods.length-1), y=v=>H-B-((v-min)/((max-min)||1))*(H-T-B);
+  const grid=[min,mid,max].map(v=>`<line x1="${L}" y1="${y(v)}" x2="${W-R}" y2="${y(v)}" stroke="var(--line)" stroke-dasharray="3,4"/>
+    <text x="${L-6}" y="${y(v)+4}" fill="var(--mut)" font-size="11" text-anchor="end">${finMoney(v)}</text>`).join('');
+  const step=Math.max(1, Math.round((periods.length-1)/6));
+  const ticks=periods.map((p,i)=>({p,i})).filter(({i})=>i%step===0||i===periods.length-1)
+    .map(({p,i})=>`<line x1="${x(i)}" y1="${H-B}" x2="${x(i)}" y2="${H-B+4}" stroke="var(--mut)"/>
+      <text x="${x(i)}" y="${H-B+16}" fill="var(--mut)" font-size="10" text-anchor="middle">${escapeHtml(String(p))}</text>`).join('');
+  const lines=vis.map(({s,i:si})=>{
+    const c=COLORS[si%COLORS.length];
+    const pl=s.points.map((p,i)=>`${x(i).toFixed(1)},${y(p.value||0).toFixed(1)}`).join(' ');
+    const dots=s.points.map((p,i)=>`<circle cx="${x(i).toFixed(1)}" cy="${y(p.value||0).toFixed(1)}" r="3.2" fill="${c}" opacity=".9">
+      <title>Period: ${escapeHtml(p.period)}
+${s.category&&s.category!==s.name?('Item: '+escapeHtml(s.name)+'\nCategory: '+escapeHtml(s.category)):escapeHtml(s.name)}
+Value: ${finMoney(p.value)}</title></circle>`).join('');
+    return `<polyline points="${pl}" fill="none" stroke="${c}" stroke-width="${s.name.startsWith('Total')?2.5:1.8}" stroke-linejoin="round"/>${dots}`;
+  }).join('');
+  return legend+`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">
+    ${grid}
+    <line x1="${L}" y1="${T}" x2="${L}" y2="${H-B}" stroke="var(--mut)" stroke-width="1"/>
+    <line x1="${L}" y1="${H-B}" x2="${W-R}" y2="${H-B}" stroke="var(--mut)" stroke-width="1"/>
+    ${lines}${ticks}
+    <text x="${(L+W-R)/2}" y="${H-2}" fill="var(--mut)" font-size="11" text-anchor="middle">Period →</text>
+  </svg>`;
+}
+function afExportCsv(){
+  const d=afD(); if(!d) return;
+  const esc=v=>{ v=String(v??''); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
+  const csv=['item,category,period,value'].concat((d.rows||[]).map(r=>[r.item,r.category,r.period,r.value].map(esc).join(','))).join('\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=afCfg().csv+'_filtered.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+function afCopilot(){
+  const d=afD();
+  if(!d){ if(typeof copilotAsk==='function') copilotAsk('Analyze my '+afCfg().plural.toLowerCase()+'.'); return; }
+  const f=(d.filters||{}).applied||{};
+  let hdr=`Analyzing ${afCfg().plural} · ${d.summary.period||'All periods'}`;
+  if((f.categories||[]).length) hdr+=' · '+f.categories.join(' and ');
+  if((f.items||[]).length) hdr+=' · '+f.items.join(', ');
+  let ctx=hdr+`\n\nThis is my FILTERED personal ${afCfg().noun.toLowerCase()} view (ArtikFinance).\n`;
+  ctx+='FILTERS: '+JSON.stringify(f)+'\n';
+  ctx+=`SUMMARY (${d.summary.period}): total ${finMoney(d.summary.total_assets)}; by category: `+
+    Object.entries(d.summary.category_totals||{}).map(([k,v])=>`${k} ${finMoney(v)}`).join(', ')+'\n';
+  ctx+='TREND:\n'+(d.trend.series||[]).map(s=>'  '+s.name+': '+s.points.map(p=>`${p.period} ${finMoney(p.value)}`).join('; ')).join('\n')+'\n';
+  ctx+='COMPOSITION: '+(d.composition||[]).map(c=>`${c.name} ${finMoney(c.value)} (${c.pct}%)`).join(', ')+'\n';
+  ctx+=`ROWS: ${d.rows.length} of ${d.total_rows_all} ${afCfg().noun.toLowerCase()} records in view.\n`;
+  ctx+='\nAnalyze this filtered asset view: growth over the period, biggest drivers and decliners, category/item performance, risks, and 3 concrete recommendations.';
+  if(typeof copilotAsk==='function') copilotAsk(ctx);
+}
+if(location.hash.startsWith('#assets')){
+  setTimeout(()=>{ try{ showFinance('assets'); }catch(e){} }, 400);
+}else if(location.hash.startsWith('#liabilities')){
+  setTimeout(()=>{ try{ showFinance('liabilities'); }catch(e){} }, 400);
+}else if(location.hash.startsWith('#alerts')){
+  setTimeout(()=>{ try{ showFinance('alerts'); }catch(e){} }, 400);
+}
+
+/* ═══════════ ArtikFinance Alerts ═══════════ */
+window._alerts={tab:'active', list:[]};
+function alertsInit(){
+  const ri=$('#fin-year'); if(ri) ri.style.display='none';
+  $('#fin-out').innerHTML=`<div id="alerts-bar"></div><div id="alerts-body"><div class="spin">Loading…</div></div>
+    <div id="alerts-modal"></div>`;
+  alertsRenderBar(); alertsLoad();
+}
+function alertsRenderBar(){
+  const t=window._alerts.tab;
+  $('#alerts-bar').innerHTML=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+    <div role="tablist" style="display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden">
+      ${[['active','Active'],['paused','Paused'],['triggered','Triggered'],['all','History']].map(([k,l])=>
+        `<button class="ghost" style="border:0;border-radius:0;${t===k?'background:var(--acc);color:#fff':''}" onclick="alertsSetTab('${k}')">${l}</button>`).join('')}
+    </div>
+    <span style="flex:1"></span>
+    <span class="pf-meta">Create alerts by asking Artik Copilot — e.g. “Alert me in Slack when my total credit-card balance exceeds \$25,000.”</span>
+    <button class="ex-btn" onclick="alertsOpenEditor(null)">＋ New Alert</button>
+  </div>`;
+}
+function alertsSetTab(t){ window._alerts.tab=t; alertsRenderBar(); alertsRender(); }
+async function alertsLoad(){
+  try{
+    const d=await (await fetch('/api/alerts')).json();
+    window._alerts.list=d.alerts||[];
+    alertsRender();
+  }catch(e){ $('#alerts-body').innerHTML='<div class="card err">'+escapeHtml(String(e))+'</div>'; }
+}
+function alertsStatusPill(a){
+  if(a.deleted_at) return '<span style="color:#8b949e">Deleted</span>';
+  if(!a.is_enabled) return '<span style="color:#f59e0b;border:1px solid #f59e0b44;background:#f59e0b18;border-radius:999px;padding:2px 9px;font-size:11px">Paused</span>';
+  if(a.last_state) return '<span style="color:#f87171;border:1px solid #f8717144;background:#f8717118;border-radius:999px;padding:2px 9px;font-size:11px">Triggered</span>';
+  return '<span style="color:#34d399;border:1px solid #34d39944;background:#34d39918;border-radius:999px;padding:2px 9px;font-size:11px">Active</span>';
+}
+function alertsWhen(iso){ if(!iso) return '—'; try{ return new Date(iso).toLocaleString(); }catch(e){ return iso; } }
+function alertsRender(){
+  const el=$('#alerts-body'); if(!el) return;
+  const tab=window._alerts.tab;
+  let rows=window._alerts.list.filter(a=>{
+    if(tab==='active') return a.is_enabled && !a.last_state;
+    if(tab==='paused') return !a.is_enabled;
+    if(tab==='triggered') return a.last_state;
+    return true;
+  });
+  if(!rows.length){ el.innerHTML='<div class="card pf-meta">No alerts here yet. Ask Artik Copilot to create one, or click ＋ New Alert.</div>'; return; }
+  el.innerHTML=`<div class="card" style="overflow-x:auto"><table class="mini" style="width:100%">
+    <tr><th>Alert</th><th>Condition</th><th>Frequency</th><th>Slack</th><th>Last Checked</th><th>Last Result</th><th>Status</th><th>Actions</th></tr>`+
+    rows.map(a=>`<tr>
+      <td><b>${escapeHtml(a.name)}</b></td>
+      <td>${escapeHtml(a.condition_text||'')}</td>
+      <td>${escapeHtml(a.schedule_text||'')}</td>
+      <td>${escapeHtml(a.destination_text||'Default')}</td>
+      <td>${alertsWhen(a.last_checked_at)}</td>
+      <td>${a.last_state==null?'—':(a.last_state?'<span class="neg">Condition met</span>':'<span class="pos">OK</span>')}</td>
+      <td>${alertsStatusPill(a)}</td>
+      <td style="white-space:nowrap">
+        <button class="ghost" onclick="alertsRunNow(${a.id})" title="Run now">▶</button>
+        ${a.is_enabled?`<button class="ghost" onclick="alertsToggle(${a.id},false)" title="Pause">⏸</button>`
+                      :`<button class="ghost" onclick="alertsToggle(${a.id},true)" title="Resume">▶️</button>`}
+        <button class="ghost" onclick="alertsTest(${a.id})" title="Send test Slack">🧪</button>
+        <button class="ghost" onclick="alertsHistory(${a.id})" title="History">🕘</button>
+        <button class="ghost" onclick="alertsOpenEditor(${JSON.stringify(a.id)})" title="Edit">✏️</button>
+        <button class="ghost" onclick="alertsDelete(${a.id},'${escapeHtml((a.name||'').replace(/'/g,'&#39;'))}')" title="Delete">🗑</button>
+      </td></tr>`).join('')+`</table></div>`;
+}
+async function alertsRunNow(id){
+  const d=await (await fetch(`/api/alerts/${id}/run`,{method:'POST'})).json();
+  const res=d.result||{};
+  alert(res.ok?(`Ran alert. Condition ${res.state?'MET':'not met'}${res.notified?' — Slack sent':''}.`):('Run failed: '+(res.error||'unknown')));
+  alertsLoad();
+}
+async function alertsToggle(id,on){
+  await fetch(`/api/alerts/${id}/${on?'resume':'pause'}`,{method:'POST'}); alertsLoad();
+}
+async function alertsTest(id){
+  const r=await fetch(`/api/alerts/${id}/test-notification`,{method:'POST'}); const d=await r.json();
+  alert(r.ok?'Test Slack notification sent.':('Test failed: '+(d.error||'unknown')));
+}
+async function alertsDelete(id,name){
+  if(!confirm(`Delete alert “${name}”? (soft delete — history is retained)`)) return;
+  await fetch(`/api/alerts/${id}`,{method:'DELETE'}); alertsLoad();
+}
+async function alertsHistory(id){
+  const d=await (await fetch(`/api/alerts/${id}/history`)).json();
+  const runs=(d.runs||[]).map(r=>`<tr><td>${alertsWhen(r.started_at)}</td>
+    <td>${r.condition_result?'<span class="neg">met</span>':'<span class="pos">not met</span>'}</td>
+    <td>${r.evaluated_value==null?'—':escapeHtml(typeof r.evaluated_value==='object'?JSON.stringify(r.evaluated_value):('$'+Number(r.evaluated_value).toLocaleString()))}</td>
+    <td>${r.notification_sent?'✅ sent':(r.notification_status?escapeHtml(r.notification_status):'—')}</td>
+    <td class="muted">${escapeHtml(r.error_message||'')}</td></tr>`).join('')
+    || '<tr><td colspan="5" class="pf-meta">No runs yet.</td></tr>';
+  alertsModal(`<div class="up-label" style="margin-bottom:8px">Alert history</div>
+    <div style="overflow-x:auto"><table class="mini" style="width:100%">
+    <tr><th>When</th><th>Result</th><th>Value</th><th>Slack</th><th>Error</th></tr>${runs}</table></div>
+    <div style="text-align:right;margin-top:10px"><button class="ex-btn" onclick="alertsModalClose()">Close</button></div>`);
+}
+function alertsModal(html){
+  const m=$('#alerts-modal'); if(!m) return;
+  m.innerHTML=`<div onclick="if(event.target===this)alertsModalClose()" style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1200;display:grid;place-items:center;padding:16px">
+    <div class="card" style="max-width:680px;width:100%;max-height:86vh;overflow-y:auto">${html}</div></div>`;
+}
+function alertsModalClose(){ const m=$('#alerts-modal'); if(m) m.innerHTML=''; }
+const ALERT_SOURCES=['payment_accounts','assets','liabilities','net_worth','monthly_expenses','cashflow','broker_account'];
+const ALERT_OPERATORS=['>','>=','<','<=','=','!=','within_days','overdue_by_days','percentage_increase_greater_than','percentage_decrease_greater_than','absolute_change_greater_than','not_updated_for_days'];
+function alertsOpenEditor(idOrAlert){
+  let a = (idOrAlert && typeof idOrAlert==='object') ? idOrAlert
+        : (idOrAlert!=null ? window._alerts.list.find(x=>x.id===idOrAlert) : null);
+  const editingId = (idOrAlert!=null && typeof idOrAlert!=='object') ? idOrAlert : null;
+  a = a || {name:'', source:'payment_accounts', conditions:[{field:'total_current_balance',operator:'>',value:''}],
+            logical_operator:'AND', schedule:{frequency:'daily',time:'08:00',timezone:'America/Los_Angeles'},
+            notification:{channel:'slack',destination_type:'default',destination:''}, trigger_mode:'state_change'};
+  const src=a.source_type||a.source||'payment_accounts';
+  const sch=a.schedule||{}; const notif=a.notification||{};
+  const S='background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 10px;font-size:13px';
+  const conds=(a.conditions||[]).map((c,i)=>alertsCondRow(c,i)).join('');
+  alertsModal(`<div class="up-label" style="margin-bottom:10px">${editingId?'Edit':'New'} Alert</div>
+    <label style="display:block;font-size:12px" class="pf-meta">Name</label>
+    <input id="al-name" value="${escapeHtml(a.name||'')}" style="${S};width:100%;box-sizing:border-box;margin-bottom:8px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+      <label style="font-size:12px" class="pf-meta">Source<br><select id="al-source" style="${S}">${ALERT_SOURCES.map(s=>`<option value="${s}"${s===src?' selected':''}>${s}</option>`).join('')}</select></label>
+      <label style="font-size:12px" class="pf-meta">Match<br><select id="al-logic" style="${S}"><option${a.logical_operator==='AND'?' selected':''}>AND</option><option${a.logical_operator==='OR'?' selected':''}>OR</option></select></label>
+    </div>
+    <div class="up-label" style="font-size:12px;margin:10px 0 4px">Conditions</div>
+    <div id="al-conds">${conds}</div>
+    <button class="ghost" onclick="alertsAddCond()" style="margin-top:4px">＋ Add condition</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:10px">
+      <label style="font-size:12px" class="pf-meta">Frequency<br><select id="al-freq" style="${S}">${['hourly','daily','weekly','monthly','quarterly'].map(f=>`<option${sch.frequency===f?' selected':''}>${f}</option>`).join('')}</select></label>
+      <label style="font-size:12px" class="pf-meta">Time<br><input id="al-time" value="${escapeHtml(sch.time||'08:00')}" style="${S};width:80px"></label>
+      <label style="font-size:12px" class="pf-meta">Timezone<br><input id="al-tz" value="${escapeHtml(sch.timezone||'America/Los_Angeles')}" style="${S};width:160px"></label>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:10px">
+      <label style="font-size:12px" class="pf-meta">Slack destination type<br><select id="al-dtype" style="${S}">${['default','channel','user'].map(x=>`<option${notif.destination_type===x?' selected':''}>${x}</option>`).join('')}</select></label>
+      <label style="font-size:12px" class="pf-meta">Destination (#channel or @user)<br><input id="al-dest" value="${escapeHtml(notif.destination||'')}" placeholder="#artik" style="${S};width:160px"></label>
+      <label style="font-size:12px" class="pf-meta">Repeat<br><select id="al-mode" style="${S}">${[['state_change','On state change'],['notify_once','Once'],['once_per_day','Once per day'],['every_run','Every run']].map(([v,l])=>`<option value="${v}"${a.trigger_mode===v?' selected':''}>${l}</option>`).join('')}</select></label>
+    </div>
+    <div class="pf-meta" id="al-msg" style="margin-top:8px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button class="ghost" onclick="alertsModalClose()">Cancel</button>
+      <button class="ex-btn" onclick="alertsSave(${editingId==null?'null':editingId})">${editingId?'Save':'Create Alert'}</button>
+    </div>`);
+}
+function alertsCondRow(c,i){
+  const S='background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:5px 7px;font-size:12px';
+  return `<div class="al-cond" style="display:flex;gap:6px;margin-bottom:5px;align-items:center">
+    <input class="alc-field" value="${escapeHtml(c.field||'')}" placeholder="field" style="${S};flex:1">
+    <select class="alc-op" style="${S}">${ALERT_OPERATORS.map(o=>`<option${o===c.operator?' selected':''}>${o}</option>`).join('')}</select>
+    <input class="alc-val" value="${escapeHtml(String(c.value??''))}" placeholder="value" style="${S};width:90px">
+    <button class="ghost" onclick="this.closest('.al-cond').remove()">✕</button></div>`;
+}
+function alertsAddCond(){ const box=$('#al-conds'); if(box) box.insertAdjacentHTML('beforeend', alertsCondRow({field:'',operator:'>',value:''},0)); }
+function alertsGather(){
+  const conds=[...document.querySelectorAll('.al-cond')].map(r=>({
+    field:r.querySelector('.alc-field').value.trim(),
+    operator:r.querySelector('.alc-op').value,
+    value:parseFloat(r.querySelector('.alc-val').value)})).filter(c=>c.field&&!isNaN(c.value));
+  return {name:$('#al-name').value.trim(), source:$('#al-source').value,
+    conditions:conds, logical_operator:$('#al-logic').value,
+    schedule:{frequency:$('#al-freq').value, time:$('#al-time').value, timezone:$('#al-tz').value},
+    notification:{channel:'slack', destination_type:$('#al-dtype').value, destination:$('#al-dest').value.trim()},
+    trigger_mode:$('#al-mode').value};
+}
+async function alertsSave(id){
+  const body=alertsGather(), msg=$('#al-msg');
+  if(!body.name||!body.conditions.length){ if(msg) msg.textContent='⚠️ Name and at least one valid condition are required.'; return; }
+  const url=id?`/api/alerts/${id}`:'/api/alerts';
+  const r=await fetch(url,{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(id?{alert:body}:{confirmed:true, alert:body})});
+  const d=await r.json();
+  if(!r.ok){ if(msg) msg.textContent='⚠️ '+(d.error||'Save failed'); return; }
+  alertsModalClose(); alertsLoad();
+}
+
+window._pay={view:(localStorage.getItem('finPayView')||'cards'),
+  ptab:(localStorage.getItem('finPayTab')||'overview'), histTab:'statements', impStep:1,
+  impApp:'', impMonth:new Date().toISOString().slice(0,7), impMsg:'',
+  mode:'list', filters:{q:'',inst:'',type:'',status:'',month:'',acct:''}, sel:new Set(),
+  data:null, calMonth:new Date().toISOString().slice(0,7)};
+const PAY_PTABS=[['overview','Overview'],['accounts','Accounts'],['import','Import Statement'],['payments','Payments'],['history','History']];
+function payDate(d){ if(!d) return '—'; try{ return new Date(d+(d.length===10?'T12:00:00':'')).toLocaleDateString(); }catch(e){ return d; } }
+function payStatusPill(s){
+  const c={'Paid':'#34d399','Partially Paid':'#fbbf24','Payment Due':'#60a5fa','Due Soon':'#f59e0b',
+    'Overdue':'#f87171','No Payment Required':'#8b949e','Statement Not Available':'#8b949e',
+    'Needs Review':'#e879f9','Awaiting Import':'#8b949e','Scheduled':'#60a5fa'}[s]||'#8b949e';
+  return s?`<span style="color:${c};border:1px solid ${c}44;background:${c}18;border-radius:999px;padding:2px 9px;font-size:11px;white-space:nowrap">${escapeHtml(s)}</span>`:'—';
+}
+/* one entry per account, plus registered apps that have no account data yet */
+function payMerged(){
+  const accts=((window._pay.data||{}).accounts||[]);
+  const apps=(window._finApps||[]).filter(a=>!a.is_archived);
+  const rows=accts.map(a=>({kind:'acct', id:a.id, app_id:a.app_id, icon:a.app_icon||'💳',
+    name:a.app_name||a.account_name||'Account', institution:a.institution||'', type:a.account_type||'',
+    masked:a.masked_account||'', url:a.app_url||'', balance:a.current_balance, due:a.total_payment_due,
+    paid:a.total_payments, remaining:a.remaining_amount_due, due_date:a.due_date||'',
+    month:a.latest_statement_month||'', status:a.payment_status||'', updated:(a.updated_at||'').slice(0,10)}));
+  apps.forEach(p=>{ if(!accts.some(a=>a.app_id===p.id))
+    rows.push({kind:'app', id:null, app_id:p.id, icon:p.icon||'💳', name:p.name,
+      institution:p.institution||'', type:p.account_type||p.category||'', masked:p.masked_account||'',
+      url:p.url, balance:null, due:null, paid:null, remaining:null, due_date:'', month:'',
+      status:'Awaiting Import', updated:(p.updated_at||p.created_at||'').slice(0,10)}); });
+  return rows;
+}
+function finAppsHtml(apps){
+  window._finApps=apps;
+  const hm=location.hash.match(/^#payment-apps\/(\w+)/);
+  if(hm&&PAY_PTABS.some(([k])=>k===hm[1])) window._pay.ptab=hm[1];
+  return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+      <span class="pf-meta">Manage balances, statements, payments, and upcoming due dates across your financial accounts.</span>
+      <button class="ghost" style="padding:2px 9px" onclick="payHelp()" title="How Payment Apps works" aria-label="Help about Payment Apps">ⓘ</button>
+      <span style="flex:1"></span>
+      <button class="ghost" onclick="payPageMenu()" title="More actions" aria-label="More Payment Apps actions">⋯</button>
+    </div>
+    <div role="tablist" aria-label="Payment Apps sections" style="display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:14px;overflow-x:auto">
+      ${PAY_PTABS.map(([k,l])=>`<button role="tab" id="pay-ptab-${k}" aria-selected="${window._pay.ptab===k}" class="ghost" style="border:0;border-radius:8px 8px 0 0;white-space:nowrap;${window._pay.ptab===k?'background:var(--acc);color:#fff':''}" onclick="paySetPTab('${k}')">${l}</button>`).join('')}
+    </div>
+    <div id="pay-tab-body"><div class="spin">Loading…</div></div>
+    <div id="pay-drawer"></div><div id="pay-modal"></div>`;
+}
+function payHelp(){
+  payModal(`<div class="up-label" style="margin-bottom:8px">How Payment Apps works</div>
+    <div class="pf-meta" style="line-height:1.8">
+      • Registered sites open in a separate browser tab.<br>
+      • Your browser's password manager handles login — ArtikFinance never stores credentials.<br>
+      • Screenshots are analyzed by the vision model and are not retained.<br>
+      • Extracted information is always reviewed by you before it is applied.<br>
+      • Statements, payments, and archives are kept per account with a full audit trail.</div>
+    <div style="text-align:right;margin-top:10px"><button class="ex-btn" onclick="payModalClose()">Got it</button></div>`);
+}
+function payPageMenu(){
+  payModal(`<div class="up-label" style="margin-bottom:8px">More actions</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <button class="ghost" onclick="payModalClose();payAcctEdit(null)">Add account record (manual statement)</button>
+      <button class="ghost" onclick="payModalClose();payExportSummaryCsv()">Export payment data (CSV)</button>
+      <button class="ghost" onclick="payModalClose();window._pay.histTab='archived';paySetPTab('history')">Manage archived apps &amp; records</button>
+      <button class="ghost" onclick="payModalClose();finReimport()">Re-import financial statement workbook</button>
+      <button class="ghost" onclick="payModalClose()">Cancel</button>
+    </div>`);
+}
+function paySetPTab(t){
+  window._pay.ptab=t; localStorage.setItem('finPayTab',t);
+  try{ history.replaceState(null,'','#payment-apps/'+t); }catch(e){}
+  document.querySelectorAll('[id^="pay-ptab-"]').forEach(b=>{
+    const on=b.id==='pay-ptab-'+t;
+    b.setAttribute('aria-selected',String(on));
+    b.style.background=on?'var(--acc)':''; b.style.color=on?'#fff':''; });
+  payRenderPTab();
+}
+function payRenderPTab(){
+  const el=$('#pay-tab-body'); if(!el) return;
+  const t=window._pay.ptab;
+  if(t==='overview') el.innerHTML=payPageOverview();
+  else if(t==='accounts') el.innerHTML=payPageAccounts();
+  else if(t==='import'){ el.innerHTML=payPageImport(); payImportRestore(); }
+  else if(t==='payments') el.innerHTML=payPagePayments();
+  else if(t==='history'){ el.innerHTML=payPageHistory(); payHistLoad(); }
+}
+async function payLoadAccounts(){
+  try{
+    const r=await fetch('/api/finance/pay/accounts?tab=active');
+    window._pay.data=await r.json();
+    payRenderPTab();
+  }catch(e){ const el=$('#pay-tab-body'); if(el) el.innerHTML='<div class="card err">'+escapeHtml(String(e))+'</div>'; }
+}
+/* ── Overview tab ── */
+function payPageOverview(){
+  const d=window._pay.data; if(!d) return '<div class="spin">Loading…</div>';
+  const m=d.metrics||{}, rows=payMerged();
+  const attention=(m.due_soon||0)+(m.overdue||0)+rows.filter(r=>r.status==='Needs Review').length;
+  const monthName=new Date(m.month+'-15').toLocaleDateString(undefined,{month:'long'});
+  const card=(l,v,c)=>`<div class="card"><div class="pf-meta">${l}</div><div class="v"${c?` style="color:${c}"`:''}>${v}</div></div>`;
+  const upcoming=rows.filter(r=>r.due_date&&(r.remaining!=null?r.remaining>0:(r.due||0)>0))
+    .sort((a,b)=>a.due_date.localeCompare(b.due_date)).slice(0,5);
+  const waiting=rows.filter(r=>r.kind==='app').slice(0,Math.max(0,5-upcoming.length));
+  const upRows=upcoming.map(r=>`<tr style="cursor:pointer" onclick="payDrawerOpen(${r.id})" title="View account">
+      <td><b>${escapeHtml(r.name)}</b></td><td>${payDate(r.due_date)}</td>
+      <td>${finMoney(r.remaining!=null?r.remaining:r.due)}</td><td>${payStatusPill(r.status)}</td></tr>`)
+    .concat(waiting.map(r=>`<tr><td><b>${escapeHtml(r.name)}</b></td><td class="pf-meta">No statement</td><td class="pf-meta">—</td><td>${payStatusPill('Awaiting Import')}</td></tr>`)).join('');
+  window._payRows=rows;
+  const acctRows=rows.map((r,i)=>`<div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);flex-wrap:wrap">
+      <span style="font-size:17px">${escapeHtml(r.icon)}</span>
+      <div style="min-width:150px;flex:1"><div style="font-weight:600">${escapeHtml(r.name)}</div>
+        <div class="pf-meta">${escapeHtml([r.institution,r.type].filter(Boolean).join(' · '))}${r.masked?' ••••'+escapeHtml(r.masked):''}</div></div>
+      ${r.kind==='acct'?`<div style="min-width:110px;text-align:right"><div class="pf-meta">Balance</div><div><b>${finMoney(r.balance)}</b></div></div>
+      <div style="min-width:110px;text-align:right"><div class="pf-meta">Due ${r.due_date?payDate(r.due_date):''}</div><div>${finMoney(r.due)}</div></div>`
+      :`<div style="flex:2" class="pf-meta">No statement yet — import one to see balances.</div>`}
+      <div style="min-width:120px;text-align:right">${payStatusPill(r.status)}</div>
+      <div style="white-space:nowrap">
+        ${r.kind==='acct'?`<button class="ghost" onclick="payDrawerOpen(${r.id})">View</button>`
+          :`<button class="ghost" onclick="payImportFor(${r.app_id})">Import</button>`}
+        <button class="ghost" onclick="payMenu(${i})" title="More actions" aria-label="More actions for ${escapeHtml(r.name)}">⋯</button>
+      </div></div>`).join('');
+  const chips=[];
+  if(m.interest_this_month) chips.push(`Interest this month <b>${finMoney(m.interest_this_month)}</b>`);
+  if(m.due_soon) chips.push(`Due within 5 days <b>${m.due_soon}</b>`);
+  if(m.overdue) chips.push(`Overdue <b style="color:#f87171">${m.overdue}</b>`);
+  return `<div class="fin-cards" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
+      ${card('Current Balance',finMoney(m.total_current_balance))}
+      ${card('Due in '+monthName,finMoney(m.total_due_this_month))}
+      ${card('Paid in '+monthName,finMoney(m.paid_this_month),'#34d399')}
+      ${card('Needs Attention',String(attention),attention?'#f59e0b':null)}
+    </div>
+    ${chips.length?`<div class="pf-meta" style="margin:2px 0 12px">${chips.join(' &nbsp;·&nbsp; ')}</div>`:''}
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;margin-bottom:4px"><span class="up-label" style="font-size:13px">Upcoming Payments</span>
+        <a class="pf-meta" style="margin-left:auto;cursor:pointer;text-decoration:underline" onclick="paySetPTab('payments')">View all payments →</a></div>
+      ${upRows?`<table class="mini" style="width:100%"><tr><th>Account</th><th>Due Date</th><th>Amount</th><th>Status</th></tr>${upRows}</table>`
+        :'<div class="pf-meta">Nothing due — import a statement to start tracking.</div>'}
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <div class="up-label" style="font-size:13px;margin-bottom:2px">Your Accounts</div>
+      ${acctRows||'<div class="pf-meta">No accounts yet.</div>'}
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="ex-btn" onclick="paySetPTab('import')">Import Statement</button>
+      <button class="ghost" onclick="finAppEdit(null)">+ Add Account</button>
+      <button class="ghost" onclick="payRecordPayment()">Record Payment</button>
+    </div>`;
+}
+function payMenu(i){
+  const r=(window._payRows||[])[i]; if(!r) return;
+  const b=(label,fn)=>`<button class="ghost" onclick="payModalClose();${fn}">${label}</button>`;
+  payModal(`<div class="up-label" style="margin-bottom:8px">${escapeHtml(r.name)}</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${r.url?b('Open website',`finAppOpen(${r.app_id})`):''}
+      ${r.id?b('View details',`payDrawerOpen(${r.id})`):''}
+      ${r.app_id?b('Edit app / account info',`finAppEdit(${r.app_id})`):''}
+      ${r.id?b('Edit account record',`payAcctEdit(${r.id})`):''}
+      ${b('Import statement',`payImportFor(${r.app_id||'null'})`)}
+      ${r.id?b('Record payment',`payPayForm(${r.id})`):''}
+      ${r.id?b('Archive account',`payAcctArchive(${r.id})`):r.app_id?b('Archive app',`payAppArch(${r.app_id},true)`):''}
+      ${r.id?b('Move to Trash',`payAcctTrash(${r.id})`):r.app_id?b('Delete app',`finAppDel(${r.app_id})`):''}
+      <button class="ghost" onclick="payModalClose()">Cancel</button>
+    </div>`);
+}
+function payRecordPayment(){
+  const accts=((window._pay.data||{}).accounts||[]);
+  if(!accts.length){ alert('No accounts yet — import a statement or add an account record first.'); return; }
+  if(accts.length===1){ payPayForm(accts[0].id); return; }
+  payModal(`<div class="up-label" style="margin-bottom:8px">Record a payment — choose account</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${accts.map(a=>`<button class="ghost" onclick="payModalClose();payPayForm(${a.id})">${escapeHtml(a.app_name||a.account_name||('#'+a.id))} — ${finMoney(a.remaining_amount_due)} remaining</button>`).join('')}
+      <button class="ghost" onclick="payModalClose()">Cancel</button>
+    </div>`);
+}
+/* ── Accounts tab ── */
+function payPageAccounts(){
+  const d=window._pay.data; if(!d) return '<div class="spin">Loading…</div>';
+  const f=window._pay.filters, rows=payMerged();
+  const opts=(list,cur,all)=>`<option value="">${all}</option>`+[...new Set(list.filter(Boolean))].sort()
+    .map(v=>`<option${v===cur?' selected':''}>${escapeHtml(v)}</option>`).join('');
+  let filtered=rows;
+  if(f.q){ const q=f.q.toLowerCase(); filtered=filtered.filter(r=>[r.name,r.institution,r.type,r.masked].some(v=>String(v||'').toLowerCase().includes(q))); }
+  if(f.inst) filtered=filtered.filter(r=>r.institution===f.inst);
+  if(f.type) filtered=filtered.filter(r=>r.type===f.type);
+  if(f.status) filtered=filtered.filter(r=>r.status===f.status);
+  window._payRows=filtered;
+  const sel='background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px;font-size:13px';
+  const body = window._pay.view==='cards' ? payAccountsCards(filtered) : payAccountsTable(filtered);
+  return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <span class="up-label">Accounts</span><span style="flex:1"></span>
+      <div style="display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden">
+        <button class="ghost" style="border:0;border-radius:0;${window._pay.view==='cards'?'background:var(--acc);color:#fff':''}" onclick="paySetView('cards')" title="Card view">Cards</button>
+        <button class="ghost" style="border:0;border-radius:0;${window._pay.view==='list'?'background:var(--acc);color:#fff':''}" onclick="paySetView('list')" title="List view">List</button>
+      </div>
+      <button class="ex-btn" onclick="finAppEdit(null)">+ Add Account</button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <input placeholder="Search accounts…" value="${escapeHtml(f.q)}" oninput="window._pay.filters.q=this.value;payRenderPTab()" style="${sel};width:170px">
+      <select onchange="window._pay.filters.inst=this.value;payRenderPTab()" style="${sel}">${opts(rows.map(r=>r.institution),f.inst,'Institution')}</select>
+      <select onchange="window._pay.filters.type=this.value;payRenderPTab()" style="${sel}">${opts(rows.map(r=>r.type),f.type,'Account Type')}</select>
+      <select onchange="window._pay.filters.status=this.value;payRenderPTab()" style="${sel}">${opts(rows.map(r=>r.status),f.status,'Status')}</select>
+      <button class="ghost" onclick="window._pay.filters={q:'',inst:'',type:'',status:'',month:'',acct:''};payRenderPTab()">Clear</button>
+    </div>
+    ${body}`;
+}
+function paySetView(v){ window._pay.view=v; localStorage.setItem('finPayView',v); payRenderPTab(); }
+function payAccountsCards(rows){
+  if(!rows.length) return '<div class="card pf-meta">No accounts match.</div>';
+  return `<div class="fin-cards" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">`+rows.map((r,i)=>`
+    <div class="card" style="display:flex;flex-direction:column;gap:6px">
+      <div style="display:flex;align-items:center;gap:8px"><span style="font-size:19px">${escapeHtml(r.icon)}</span>
+        <div style="min-width:0"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r.name)}</div>
+        <div class="pf-meta" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml([r.institution,r.type].filter(Boolean).join(' · '))}${r.masked?' ••••'+escapeHtml(r.masked):''}</div></div></div>
+      ${r.kind==='acct'?`
+      <div style="display:flex;justify-content:space-between;font-size:12px"><span class="pf-meta">Current balance</span><b>${finMoney(r.balance)}</b></div>
+      <div style="display:flex;justify-content:space-between;font-size:12px"><span class="pf-meta">Amount due</span><span>${finMoney(r.due)}</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:12px"><span class="pf-meta">Due date</span><span>${payDate(r.due_date)}</span></div>`
+      :`<div class="pf-meta">No statement yet — import one to see balances.</div>`}
+      <div>${payStatusPill(r.status)}</div>
+      <div style="display:flex;gap:6px;margin-top:auto">
+        ${r.kind==='acct'?`<button class="ghost" onclick="payDrawerOpen(${r.id})">View account</button>`
+          :`<button class="ghost" onclick="payImportFor(${r.app_id})">Import statement</button>`}
+        <button class="ghost" onclick="payMenu(${i})" title="More actions" aria-label="More actions">⋯</button>
+      </div></div>`).join('')+`</div>`;
+}
+function payAccountsTable(rows){
+  if(!rows.length) return '<div class="card pf-meta">No accounts match.</div>';
+  return `<div class="card" style="overflow-x:auto"><table class="mini" style="width:100%">
+    <tr><th>Account</th><th>Institution</th><th>Balance</th><th>Amount Due</th><th>Due Date</th><th>Status</th><th>Updated</th><th></th></tr>`+
+    rows.map((r,i)=>`<tr ${r.kind==='acct'?`style="cursor:pointer" onclick="payDrawerOpen(${r.id})" title="Click for details"`:''}>
+      <td><b>${escapeHtml(r.name)}</b>${r.masked?' <span class="pf-meta">••••'+escapeHtml(r.masked)+'</span>':''}</td>
+      <td>${escapeHtml(r.institution||'—')}</td>
+      <td>${finMoney(r.balance)}</td><td>${finMoney(r.due)}</td><td>${payDate(r.due_date)}</td>
+      <td>${payStatusPill(r.status)}</td><td>${payDate(r.updated)}</td>
+      <td onclick="event.stopPropagation()"><button class="ghost" onclick="payMenu(${i})" title="Actions" aria-label="Actions for ${escapeHtml(r.name)}">⋯</button></td></tr>`).join('')+
+    `</table><div class="pf-meta" style="margin-top:6px">${rows.length} account${rows.length===1?'':'s'}</div></div>`;
+}
+/* ── Import Statement tab (3-step flow) ── */
+function payPageImport(){
+  const s=window._pay.impStep;
+  const apps=(window._finApps||[]).filter(a=>!a.is_archived);
+  const step=(n,l)=>`<div style="display:flex;align-items:center;gap:8px">
+    <span style="width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;flex:none;${s>=n?'background:var(--acc);color:#fff':'border:1px solid var(--line);color:var(--mut)'}">${n}</span>
+    <span style="${s===n?'font-weight:600':'color:var(--mut)'};white-space:nowrap">${l}</span></div>`;
+  return `<div class="up-label" style="margin-bottom:10px">Import Statement</div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+      ${step(1,'Select Account')}<span class="pf-meta">→</span>${step(2,'Add Screenshot')}<span class="pf-meta">→</span>${step(3,'Review &amp; Apply')}</div>
+    ${window._pay.impMsg?`<div class="card" style="margin-bottom:12px;border-color:#34d39955">${escapeHtml(window._pay.impMsg)}</div>`:''}
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <span class="pf-meta">Account:</span>
+        <select id="fin-shot-app" onchange="window._pay.impApp=this.value" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px">
+          <option value="">(not registered)</option>
+          ${apps.map(a=>`<option value="${a.id}"${String(a.id)===String(window._pay.impApp)?' selected':''}>${escapeHtml(a.name)}</option>`).join('')}
+        </select>
+        <span class="pf-meta">Statement month:</span>
+        <input type="month" id="fin-shot-month" value="${escapeHtml(window._pay.impMonth)}" onchange="window._pay.impMonth=this.value" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px">
+        ${s===1?`<button class="ex-btn" onclick="payImpStep(2)">Continue</button>`:''}
+        <button class="ghost" onclick="finAppEdit(null)">+ Register a new account</button>
+      </div></div>
+    ${s>=2?`<div class="card" style="margin-bottom:12px">
+      <div id="fin-shot-drop" ondragover="event.preventDefault()" ondrop="finShotDrop(event)" onclick="$('#fin-shot-file').click()"
+        style="border:2px dashed var(--line);border-radius:10px;padding:26px;text-align:center;cursor:pointer">
+        Paste, drag and drop, or choose a screenshot
+        <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+          <button class="ghost" onclick="event.stopPropagation();$('#fin-shot-file').click()">Choose File</button>
+          <button class="ghost" onclick="event.stopPropagation();finShotClipboard()">Paste from Clipboard</button>
+        </div></div>
+      <input type="file" id="fin-shot-file" accept="image/*" style="display:none" onchange="if(this.files[0])finShotFile(this.files[0]);this.value=''">
+      <div class="pf-meta" style="margin-top:8px">Credentials are not stored. Screenshots are deleted after processing.</div>
+      <div id="fin-shot-status" class="pf-meta" style="margin-top:6px" aria-live="polite"></div></div>`
+    :'<div id="fin-shot-status" class="pf-meta" aria-live="polite"></div>'}
+    <div id="fin-shot-result"></div>
+    <details style="margin-top:16px"><summary class="pf-meta" style="cursor:pointer">Recent Imports</summary>
+      <div id="fin-shots-hist" style="margin-top:8px"><div class="pf-meta">Loading…</div></div>
+      <div style="margin-top:6px"><a class="pf-meta" style="cursor:pointer;text-decoration:underline" onclick="window._pay.histTab='imports';paySetPTab('history')">View import history →</a></div>
+    </details>`;
+}
+function payImpStep(n){
+  if($('#fin-shot-app')) window._pay.impApp=$('#fin-shot-app').value;
+  if($('#fin-shot-month')) window._pay.impMonth=$('#fin-shot-month').value;
+  window._pay.impStep=n; payRenderPTab();
+}
+function payImportRestore(){
+  if(window._finShot){ window._pay.impStep=3; finShotResult(); }
+  else if(window._finShotImg){ finShotPreview(); }
+  finShotsHistory(5);
+}
+function payImportFor(appId){
+  window._pay.impApp=appId?String(appId):''; window._pay.impStep=2; window._pay.impMsg='';
+  paySetPTab('import');
+}
+/* ── Payments tab ── */
+function payFilteredRows(){
+  const f=window._pay.filters;
+  let rows=((window._pay.data||{}).accounts||[]).slice();
+  if(f.month) rows=rows.filter(a=>(a.latest_statement_month||'')===f.month||(a.due_date||'').startsWith(f.month));
+  if(f.status) rows=rows.filter(a=>(a.payment_status||'')===f.status);
+  if(f.inst) rows=rows.filter(a=>(a.institution||'')===f.inst);
+  if(f.acct) rows=rows.filter(a=>String(a.id)===f.acct);
+  return rows.sort((a,b)=>String(a.due_date||'9999').localeCompare(String(b.due_date||'9999')));
+}
+function payPagePayments(){
+  const d=window._pay.data; if(!d) return '<div class="spin">Loading…</div>';
+  const m=d.metrics||{}, f=window._pay.filters;
+  const monthName=new Date(m.month+'-15').toLocaleDateString(undefined,{month:'long'});
+  const card=(l,v,c)=>`<div class="card"><div class="pf-meta">${l}</div><div class="v"${c?` style="color:${c}"`:''}>${v}</div></div>`;
+  const sel='background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px;font-size:13px';
+  const accts=(d.accounts||[]);
+  const opts=(list,cur,all)=>`<option value="">${all}</option>`+[...new Set(list.filter(Boolean))].sort()
+    .map(v=>`<option${v===cur?' selected':''}>${escapeHtml(v)}</option>`).join('');
+  const rows=payFilteredRows();
+  let body='';
+  if(window._pay.mode==='calendar') body=payCalendarHtml();
+  else if(window._pay.mode==='timeline') body=payTimelineHtml();
+  else body = rows.length?`<div class="card" style="overflow-x:auto"><table class="mini" style="width:100%">
+      <tr><th></th><th>Account</th><th>Month</th><th>Due Date</th><th>Amount Due</th><th>Paid</th><th>Remaining</th><th>Status</th><th></th></tr>`+
+      rows.map(a=>`<tr style="cursor:pointer" onclick="payDrawerOpen(${a.id})" title="View account">
+        <td onclick="event.stopPropagation()"><input type="checkbox" ${window._pay.sel.has(a.id)?'checked':''} onchange="paySelToggle(${a.id},this.checked)" aria-label="Select ${escapeHtml(a.app_name||a.account_name||'account')}"></td>
+        <td><b>${escapeHtml(a.app_name||a.account_name||'—')}</b></td>
+        <td>${escapeHtml(a.latest_statement_month||'—')}</td><td>${payDate(a.due_date)}</td>
+        <td>${finMoney(a.total_payment_due)}</td><td style="color:#34d399">${finMoney(a.total_payments)}</td>
+        <td>${finMoney(a.remaining_amount_due)}</td><td>${payStatusPill(a.payment_status)}</td>
+        <td onclick="event.stopPropagation()" style="white-space:nowrap">
+          <button class="ghost" onclick="payPayForm(${a.id})">Record Payment</button>
+          <button class="ghost" onclick="payDrawerOpen(${a.id},'activity')" title="View account activity" aria-label="View activity">⋯</button>
+        </td></tr>`).join('')+'</table></div>'
+    :'<div class="card pf-meta">No payment obligations match the current filters.</div>';
+  return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <span class="up-label">Payments</span><span style="flex:1"></span>
+      <button class="ghost" onclick="payCopilot('selected')" title="Analyze selected accounts with Artik Copilot">Analyze Selected</button>
+      <button class="ex-btn" onclick="payRecordPayment()">+ Record Payment</button>
+    </div>
+    <div class="fin-cards" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+      ${card('Due in '+monthName,finMoney(m.total_due_this_month))}
+      ${card('Paid in '+monthName,finMoney(m.paid_this_month),'#34d399')}
+      ${card('Remaining',finMoney(m.remaining_due),'#f59e0b')}
+      ${card('Overdue',String(m.overdue||0),m.overdue?'#f87171':null)}
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;align-items:center">
+      <div style="display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden">
+        ${[['list','List'],['calendar','Calendar'],['timeline','Timeline']].map(([k,l])=>`<button class="ghost" style="border:0;border-radius:0;${window._pay.mode===k?'background:var(--acc);color:#fff':''}" onclick="window._pay.mode='${k}';payRenderPTab()">${l}</button>`).join('')}
+      </div>
+      <select onchange="window._pay.filters.month=this.value;payRenderPTab()" style="${sel}">${opts(accts.map(a=>a.latest_statement_month),f.month,'Month')}</select>
+      <select onchange="window._pay.filters.status=this.value;payRenderPTab()" style="${sel}">${opts((d.statuses||[]),f.status,'Status')}</select>
+      <select onchange="window._pay.filters.inst=this.value;payRenderPTab()" style="${sel}">${opts(accts.map(a=>a.institution),f.inst,'Institution')}</select>
+      <select onchange="window._pay.filters.acct=this.value;payRenderPTab()" style="${sel}"><option value="">Account</option>${accts.map(a=>`<option value="${a.id}"${f.acct===String(a.id)?' selected':''}>${escapeHtml(a.app_name||a.account_name||('#'+a.id))}</option>`).join('')}</select>
+      <button class="ghost" onclick="window._pay.filters={q:'',inst:'',type:'',status:'',month:'',acct:''};payRenderPTab()">Clear</button>
+    </div>
+    ${body}`;
+}
+function paySelToggle(id,on){ if(on) window._pay.sel.add(id); else window._pay.sel.delete(id); }
+function payCalendarHtml(){
+  const rows=payFilteredRows(), ym=window._pay.calMonth;
+  const [y,mo]=ym.split('-').map(Number);
+  const first=new Date(y,mo-1,1), days=new Date(y,mo,0).getDate(), startDow=first.getDay();
+  const ev={};
+  const add=(dstr,html)=>{ if(dstr&&dstr.startsWith(ym)){ const d=parseInt(dstr.slice(8,10)); (ev[d]=ev[d]||[]).push(html); } };
+  rows.forEach(a=>{
+    const nm=escapeHtml(a.app_name||a.account_name||'?');
+    add(a.due_date,`<div style="color:#f87171" title="${nm} due">${nm}: ${finMoney(a.total_payment_due)} due</div>`);
+    add(a.scheduled_payment_date,`<div style="color:#60a5fa" title="${nm} scheduled">${nm}: ${finMoney(a.scheduled_payment_amount)} scheduled</div>`);
+    add(a.last_payment_date,`<div style="color:#34d399" title="${nm} paid">${nm}: ${finMoney(a.last_payment_amount)} paid</div>`);
+  });
+  let cells='', day=1;
+  for(let w=0;w<6&&day<=days;w++){
+    cells+='<tr>';
+    for(let d=0;d<7;d++){
+      if((w===0&&d<startDow)||day>days){ cells+='<td style="background:transparent;border:0"></td>'; continue; }
+      const today=new Date().toISOString().slice(0,10)===`${ym}-${String(day).padStart(2,'0')}`;
+      cells+=`<td style="vertical-align:top;min-width:100px;height:64px;font-size:11px${today?';outline:1px solid var(--acc)':''}">
+        <div class="pf-meta">${day}</div>${(ev[day]||[]).join('')}</td>`;
+      day++;
+    }
+    cells+='</tr>';
+  }
+  const nav=off=>{ const dt=new Date(y,mo-1+off,15); return dt.toISOString().slice(0,7); };
+  return `<div class="card" style="overflow-x:auto">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <button class="ghost" onclick="window._pay.calMonth='${nav(-1)}';payRenderPTab()" title="Previous month" aria-label="Previous month">←</button>
+      <b>${first.toLocaleDateString(undefined,{month:'long',year:'numeric'})}</b>
+      <button class="ghost" onclick="window._pay.calMonth='${nav(1)}';payRenderPTab()" title="Next month" aria-label="Next month">→</button>
+      <span class="pf-meta">red: due · blue: scheduled · green: posted payment</span></div>
+    <table class="mini" style="width:100%"><tr>${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>'<th>'+d+'</th>').join('')}</tr>${cells}</table></div>`;
+}
+function payTimelineHtml(){
+  const rows=payFilteredRows(), today=new Date().toISOString().slice(0,10);
+  const items=[];
+  rows.forEach(a=>{
+    const nm=a.app_name||a.account_name||'?';
+    if(a.due_date&&a.due_date>=today&&(a.remaining_amount_due||a.total_payment_due))
+      items.push({d:a.due_date, html:`<b>${escapeHtml(nm)}</b> — ${finMoney(a.remaining_amount_due??a.total_payment_due)} due ${payStatusPill(a.payment_status)}`});
+    if(a.scheduled_payment_date&&a.scheduled_payment_date>=today)
+      items.push({d:a.scheduled_payment_date, html:`<b>${escapeHtml(nm)}</b> — ${finMoney(a.scheduled_payment_amount)} scheduled payment`});
+  });
+  items.sort((x,y)=>x.d.localeCompare(y.d));
+  return `<div class="card">${items.length?items.map(i=>`<div style="display:flex;gap:12px;padding:7px 0;border-bottom:1px solid var(--line)">
+      <span style="min-width:110px" class="pf-meta">${payDate(i.d)}</span><span>${i.html}</span></div>`).join('')
+    :'<div class="pf-meta">No upcoming due dates or scheduled payments in the current view.</div>'}</div>`;
+}
+/* ── History tab (Statements · Imports · Archived · Trash) ── */
+function payPageHistory(){
+  const t=window._pay.histTab;
+  return `<div style="display:flex;gap:2px;flex-wrap:wrap;margin-bottom:12px;border-bottom:1px solid var(--line)">
+      ${[['statements','Statements'],['imports','Imports'],['archived','Archived'],['trash','Trash']]
+        .map(([k,l])=>`<button role="tab" aria-selected="${t===k}" class="ghost" style="border:0;border-radius:8px 8px 0 0;${t===k?'background:var(--acc);color:#fff':''}" onclick="window._pay.histTab='${k}';payRenderPTab()">${l}</button>`).join('')}
+    </div>
+    <div id="pay-hist-body"><div class="spin">Loading…</div></div>`;
+}
+async function payHistLoad(){
+  const el=$('#pay-hist-body'); if(!el) return;
+  const t=window._pay.histTab;
+  try{
+    if(t==='statements'){
+      const d=await (await fetch('/api/finance/pay/history?archived=false')).json();
+      const rows=d.history||[];
+      el.innerHTML=rows.length?`<div class="card" style="overflow-x:auto"><table class="mini" style="width:100%">
+        <tr><th>Month</th><th>Account</th><th>Statement Balance</th><th>Amount Due</th><th>Paid</th><th>Interest</th><th>Status</th></tr>`+
+        rows.map(h=>`<tr style="cursor:pointer" onclick="payDrawerOpen(${h.account_id},'activity')" title="View account activity">
+          <td><b>${escapeHtml(h.statement_month)}</b>${h.version>1?' <span class="pf-meta">v'+h.version+'</span>':''}</td>
+          <td>${escapeHtml(h.app_name||h.account_name||('#'+h.account_id))}</td>
+          <td>${finMoney(h.statement_balance)}</td><td>${finMoney(h.total_payment_due)}</td>
+          <td style="color:#34d399">${finMoney(h.total_payments)}</td><td>${finMoney(h.interest_charged)}</td>
+          <td>${payStatusPill(h.payment_status)}</td></tr>`).join('')+'</table></div>'
+        :'<div class="card pf-meta">No statement history yet.</div>';
+    } else if(t==='imports'){
+      const d=await (await fetch('/api/finance/screenshots')).json();
+      window._payImports=d.screenshots||[];
+      el.innerHTML=payImportsTable(window._payImports,false);
+    } else if(t==='archived'){
+      const [apps,accts,hist]=await Promise.all([
+        (await fetch('/api/finance/apps?include_archived=true')).json(),
+        (await fetch('/api/finance/pay/accounts?tab=archived')).json(),
+        (await fetch('/api/finance/pay/history?archived=true')).json()]);
+      const aApps=(apps.apps||[]).filter(a=>a.is_archived);
+      const aAccts=accts.accounts||[], aHist=hist.history||[];
+      el.innerHTML=
+        `<div class="up-label" style="font-size:12px;margin-bottom:6px">Archived apps</div>`+
+        (aApps.length?`<div class="card" style="margin-bottom:12px">${aApps.map(a=>`<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)">
+          <span>${escapeHtml(a.icon||'💳')}</span><b>${escapeHtml(a.name)}</b><span class="pf-meta">${escapeHtml(a.institution||'')}</span>
+          <span style="flex:1"></span><button class="ghost" onclick="payAppArch(${a.id},false)">Restore</button></div>`).join('')}</div>`
+        :'<div class="card pf-meta" style="margin-bottom:12px">No archived apps.</div>')+
+        `<div class="up-label" style="font-size:12px;margin-bottom:6px">Archived accounts</div>`+
+        (aAccts.length?`<div class="card" style="margin-bottom:12px">${aAccts.map(a=>`<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)">
+          <b>${escapeHtml(a.app_name||a.account_name||('#'+a.id))}</b><span class="pf-meta">${escapeHtml(a.institution||'')} · ${escapeHtml(a.latest_statement_month||'')}</span>
+          <span style="flex:1"></span><button class="ghost" onclick="payDrawerOpen(${a.id})">View</button>
+          <button class="ghost" onclick="payAcctRestore(${a.id});setTimeout(payHistLoad,300)">Restore</button></div>`).join('')}</div>`
+        :'<div class="card pf-meta" style="margin-bottom:12px">No archived accounts.</div>')+
+        `<div class="up-label" style="font-size:12px;margin-bottom:6px">Archived monthly records</div>`+
+        (aHist.length?`<div class="card"><table class="mini" style="width:100%"><tr><th>Month</th><th>Account</th><th>Statement Balance</th><th>Due</th><th></th></tr>${aHist.map(h=>`<tr>
+          <td><b>${escapeHtml(h.statement_month)}</b> <span class="pf-meta">v${h.version}</span></td>
+          <td>${escapeHtml(h.app_name||h.account_name||('#'+h.account_id))}</td>
+          <td>${finMoney(h.statement_balance)}</td><td>${finMoney(h.total_payment_due)}</td>
+          <td><button class="ghost" onclick="payHistArch(${h.id},true);setTimeout(payHistLoad,300)">Restore</button></td></tr>`).join('')}</table></div>`
+        :'<div class="card pf-meta">No archived monthly records.</div>');
+    } else if(t==='trash'){
+      const d=await (await fetch('/api/finance/pay/accounts?tab=trash')).json();
+      const rows=d.accounts||[];
+      el.innerHTML=rows.length?`<div class="card">${rows.map(a=>`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line)">
+          <b>${escapeHtml(a.app_name||a.account_name||('#'+a.id))}</b>
+          <span class="pf-meta">${escapeHtml(a.institution||'')} · deleted ${payDate((a.deleted_at||'').slice(0,10))}</span>
+          <span style="flex:1"></span>
+          <button class="ghost" onclick="payAcctRestore(${a.id});setTimeout(payHistLoad,300)">Restore</button>
+          <button class="ghost" onclick="payAcctPurge(${a.id});setTimeout(payHistLoad,600)">Delete Permanently</button>
+        </div>`).join('')}</div>`
+        :'<div class="card pf-meta">Trash is empty.</div>';
+    }
+  }catch(e){ el.innerHTML='<div class="card err">'+escapeHtml(String(e))+'</div>'; }
+}
+function payImportsTable(rows, compact){
+  if(!rows.length) return '<div class="card pf-meta">No screenshot imports yet.</div>';
+  const shown=compact?rows.slice(0,5):rows;
+  return `<div class="card" style="overflow-x:auto"><table class="mini" style="width:100%">
+    <tr><th>Imported</th><th>Account</th><th>Month</th><th>Status</th>${compact?'':'<th>Confidence</th><th>Applied Record</th>'}<th></th></tr>`+
+    shown.map(s=>{
+      const applied=!!s.applied;
+      return `<tr><td>${escapeHtml(String(s.ts||'').slice(0,16).replace('T',' '))}</td>
+      <td>${escapeHtml(s.app_name||'—')}</td><td>${escapeHtml(s.month||'—')}</td>
+      <td title="${escapeHtml(s.summary||'')}">${applied?'<span class="pos">applied</span>':'<span class="muted">'+escapeHtml(s.status||'extracted')+'</span>'}</td>
+      ${compact?'':`<td>${s.confidence!=null?Math.round(s.confidence*100)+'%':'—'}</td>
+      <td>${s.account_id?`<a style="cursor:pointer;text-decoration:underline" onclick="payDrawerOpen(${s.account_id})">account #${s.account_id}</a>`:'—'}</td>`}
+      <td><button class="ghost" onclick="payImportMenu(${s.id})" title="Import actions" aria-label="Actions for import ${s.id}">⋯</button></td></tr>`;}).join('')+'</table></div>';
+}
+function payImportMenu(sid){
+  const s=(window._payImports||[]).find(x=>x.id===sid); if(!s) return;
+  const b=(label,fn)=>`<button class="ghost" onclick="payModalClose();${fn}">${label}</button>`;
+  payModal(`<div class="up-label" style="margin-bottom:8px">Import #${s.id} — ${escapeHtml(s.app_name||'?')} · ${escapeHtml(s.month||'?')}</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${b('View extraction',`payImportView(${sid})`)}
+      ${!s.applied?b('Review &amp; apply',`finShotReview(${sid})`):''}
+      ${s.account_id?b('Open linked account',`payDrawerOpen(${s.account_id})`):''}
+      ${b('Analyze with Artik Copilot',`finShotCopilot(${sid})`)}
+      ${b('Archive',`finShotArch(${sid})`)}
+      ${b('Delete',`finShotDel(${sid})`)}
+      <button class="ghost" onclick="payModalClose()">Cancel</button>
+    </div>`);
+}
+function payImportView(sid){
+  const s=(window._payImports||[]).find(x=>x.id===sid); if(!s) return;
+  const frows=Object.entries(s.fields||{}).map(([k,v])=>`<tr><td class="pf-meta">${escapeHtml(PAY_FIELD_LABELS[k]||k)}</td><td>${escapeHtml(String(v))}</td></tr>`).join('');
+  payModal(`<div class="up-label" style="margin-bottom:8px">Extraction — import #${s.id}</div>
+    <div class="pf-meta" style="margin-bottom:8px">${escapeHtml(s.summary||'')} ${s.confidence!=null?('· confidence '+Math.round(s.confidence*100)+'%'):''}</div>
+    ${frows?`<table class="mini" style="width:100%">${frows}</table>`:'<div class="pf-meta">No statement fields.</div>'}
+    ${(s.lines||[]).length?`<div class="up-label" style="font-size:12px;margin:10px 0 6px">Transactions (${s.lines.length})</div>
+      <table class="mini" style="width:100%">${s.lines.map(l=>`<tr><td>${escapeHtml(l.description)}</td><td class="${l.amount>=0?'pos':'neg'}">${finMoney(l.amount)}</td><td class="pf-meta">${escapeHtml(l.category||'')}</td></tr>`).join('')}</table>`:''}
+    <div style="text-align:right;margin-top:10px"><button class="ex-btn" onclick="payModalClose()">Close</button></div>`);
+}
+/* ── app registration (modal) + open/archive/delete ── */
+function finAppEdit(id){
+  const a=(window._finApps||[]).find(x=>x.id===id)||{};
+  const inp=(ph,id2,val,w)=>`<input id="${id2}" placeholder="${ph}" title="${ph}" value="${escapeHtml(String(val??''))}" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 10px;font-size:13px;${w?('width:'+w):'flex:1;min-width:150px'}">`;
+  payModal(`<div class="up-label" style="margin-bottom:10px">${id?'Edit':'Add'} account</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${inp('Icon','fa-icon',a.icon||'💳','64px')}${inp('Name — e.g. Chase-Artik','fa-name',a.name)}
+      ${inp('URL — e.g. chase.com','fa-url',a.url)}${inp('Institution — e.g. Chase','fa-inst',a.institution)}
+      ${inp('Account type — e.g. Business Credit','fa-type',a.account_type||a.category)}
+      ${inp('Account name / nickname','fa-acct',a.account_name)}${inp('Acct # last 4','fa-mask',a.masked_account,'90px')}
+    </div>
+    <div class="pf-meta" style="margin-top:6px">The site opens in a new browser tab where your password manager signs you in. Only the last 4 digits of an account number are ever stored.</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button class="ghost" onclick="payModalClose()">Cancel</button>
+      <button class="ex-btn" onclick="finAppSave(${id||'null'})">Save</button>
+    </div>`);
+  const n=$('#fa-name'); if(n) n.focus();
+}
+async function finAppSave(id){
+  const body={icon:$('#fa-icon').value, name:$('#fa-name').value, url:$('#fa-url').value,
+    institution:$('#fa-inst').value, account_type:$('#fa-type').value, category:$('#fa-type').value,
+    account_name:$('#fa-acct').value, masked_account:$('#fa-mask').value};
+  const r=await fetch('/api/finance/apps'+(id?('/'+id):''), {method:id?'PUT':'POST',
+    headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const d=await r.json();
+  if(!r.ok){ alert(d.error||'save failed'); return; }
+  payModalClose(); delete window._finData.apps; finLoad('apps');
+}
+async function finAppDel(id){
+  const a=(window._finApps||[]).find(x=>x.id===id);
+  if(!confirm(`Delete "${(a&&a.name)||'this app'}"? Consider Archive instead — delete removes the app registration (account records and expenses are kept).`)) return;
+  await fetch('/api/finance/apps/'+id,{method:'DELETE'});
+  delete window._finData.apps; finLoad('apps');
+}
+function finAppOpen(id){
+  const a=(window._finApps||[]).find(x=>x.id===id); if(!a) return;
+  fetch('/api/finance/apps/'+id+'/opened',{method:'POST'}).catch(()=>{});
+  window.open(a.url,'_blank','noopener');
+}
+async function payAppArch(id,on){
+  if(on && !confirm('Archive this app? It disappears from the active view and blocks new imports, but all history is preserved. You can restore it any time.')) return;
+  await fetch(`/api/finance/apps/${id}/${on?'archive':'restore'}`,{method:'POST'});
+  delete window._finData.apps; finLoad('apps');
+}
+function payExportSummaryCsv(){
+  const rows=((window._pay.data||{}).accounts||[]);
+  const cols=['app_name','institution','account_type','masked_account','latest_statement_month','statement_balance',
+    'current_balance','minimum_payment_due','total_payment_due','total_payments','remaining_amount_due','due_date',
+    'last_payment_amount','last_payment_date','interest_charged','payment_status','updated_at'];
+  const esc=v=>{ v=String(v??''); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
+  const csv=[cols.join(',')].concat(rows.map(r=>cols.map(c=>esc(r[c])).join(','))).join('\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download='payment_accounts.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+/* ── screenshot capture + review (shared by Import tab) ── */
+function finShotDrop(e){ e.preventDefault(); const f=[...(e.dataTransfer?.files||[])].find(f=>f.type.startsWith('image/')); if(f) finShotFile(f); }
+function finShrink(file){                       // downscale client-side so uploads stay small
+  return new Promise((res,rej)=>{ const img=new Image();
+    img.onload=()=>{ const MAX=1800, sc=Math.min(1,MAX/Math.max(img.width,img.height));
+      const cv=document.createElement('canvas'); cv.width=Math.round(img.width*sc); cv.height=Math.round(img.height*sc);
+      cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height); URL.revokeObjectURL(img.src);
+      res(cv.toDataURL('image/jpeg',0.88)); };
+    img.onerror=rej; img.src=URL.createObjectURL(file); });
+}
+async function finShotClipboard(){
+  const st=$('#fin-shot-status');
+  try{
+    const items=await navigator.clipboard.read();
+    for(const it of items){
+      const t=it.types.find(t=>t.startsWith('image/'));
+      if(t){ finShotFile(await it.getType(t)); return; }
+    }
+    if(st) st.textContent='⚠ No image on the clipboard — take a screenshot with ⌃⌘⇧4 first.';
+  }catch(e){ if(st) st.textContent='⚠ Clipboard access blocked by the browser — use ⌘V paste or drag & drop instead.'; }
+}
+async function finShotFile(file){
+  if(window._pay.ptab!=='import'){ window._pay.impStep=2; paySetPTab('import'); await new Promise(r=>setTimeout(r,80)); }
+  const st=$('#fin-shot-status'); if(!st) return;
+  try{
+    st.textContent='Preparing preview…';
+    window._finShotImg=await finShrink(file);
+    st.textContent='';
+    finShotPreview();
+  }catch(e){ st.textContent='⚠ '+String(e); }
+}
+function finShotPreview(){                       // confirm step — nothing leaves the browser yet
+  const out=$('#fin-shot-result'); if(!out||!window._finShotImg) return;
+  const sel=$('#fin-shot-app');
+  const appName=(sel&&sel.value)?sel.options[sel.selectedIndex].text:'(not registered)';
+  out.innerHTML=`<div class="card">
+    <div class="up-label" style="margin-bottom:6px">Confirm screenshot</div>
+    <div class="pf-meta" style="margin-bottom:8px">Will be analyzed as <b>${escapeHtml(appName)}</b> for <b>${escapeHtml(($('#fin-shot-month')||{}).value||'—')}</b>.
+      Nothing is sent to the vision model until you confirm — check that no full account numbers or SSNs are visible (crop first if needed).</div>
+    <img src="${window._finShotImg}" alt="screenshot preview" style="max-width:100%;max-height:440px;border:1px solid var(--line);border-radius:10px;display:block">
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="ex-btn" id="fin-shot-go" onclick="finShotAnalyze()">Looks good — Analyze</button>
+      <button class="ghost" onclick="window._finShotImg=null;$('#fin-shot-result').innerHTML='';$('#fin-shot-status').textContent=''">Cancel</button>
+    </div></div>`;
+  out.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+async function finShotAnalyze(force){
+  const st=$('#fin-shot-status'), dataUrl=window._finShotImg; if(!dataUrl) return;
+  const go=$('#fin-shot-go'); if(go){ go.disabled=true; go.textContent='⏳ Analyzing…'; }
+  try{
+    const appId=$('#fin-shot-app').value?parseInt($('#fin-shot-app').value):null;
+    const app=(window._finApps||[]).find(x=>x.id===appId);
+    st.textContent='Analyzing screenshot with the vision model…';
+    const r=await fetch('/api/finance/screenshot',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({image:dataUrl, app_id:appId, app_name:app?app.name:'', month:$('#fin-shot-month').value, force:!!force})});
+    const d=await r.json();
+    if(r.status===409){ st.innerHTML='⚠ '+escapeHtml(d.error||'duplicate screenshot')+' <button class="ghost" onclick="finShotAnalyze(true)">Analyze anyway</button>';
+      if(go){ go.disabled=false; go.textContent='Looks good — Analyze'; } return; }
+    if(!r.ok){ st.textContent='⚠ '+(d.error||'extraction failed'); if(go){ go.disabled=false; go.textContent='Looks good — Analyze'; } return; }
+    window._finShotImg=null; window._finShot=d; d.app_id=appId;
+    window._pay.impStep=3; window._pay.impMsg='';
+    payRenderPTab();
+    const st2=$('#fin-shot-status');
+    if(st2) st2.textContent=`Extracted ${Object.keys(d.fields||{}).length} statement fields + ${d.lines.length} transaction lines (${d.provider}, confidence ${d.confidence!=null?Math.round(d.confidence*100)+'%':'—'}). Review below.`;
+  }catch(e){ st.textContent='⚠ '+String(e); if(go){ go.disabled=false; go.textContent='Looks good — Analyze'; } }
+}
+const PAY_FIELD_LABELS={institution:'Institution',account_name:'Account name',account_type:'Account type',
+  masked_account_number:'Account (last 4)',current_balance:'Current balance',statement_balance:'Statement balance',
+  previous_balance:'Previous balance',available_credit:'Available credit',credit_limit:'Credit limit',
+  past_due_amount:'Past due amount',minimum_payment_due:'Minimum due',total_payment_due:'Total due',
+  last_payment_amount:'Last payment',last_payment_date:'Last payment date',scheduled_payment_amount:'Scheduled payment',
+  scheduled_payment_date:'Scheduled date',autopay_enabled:'Autopay',payment_confirmation_status:'Payment confirmation',
+  statement_start_date:'Statement start',statement_end_date:'Statement end',statement_close_date:'Statement close',
+  due_date:'Due date',interest_charged:'Interest charged',fees_charged:'Fees charged',new_purchases:'New purchases',
+  credits:'Credits',rewards:'Rewards',currency:'Currency'};
+function finShotResult(){
+  const d=window._finShot, out=$('#fin-shot-result'); if(!d||!out) return;
+  const cats=d.categories||[], fields=d.fields||{};
+  const inp=(v,cls,extra)=>`<input class="${cls}" value="${escapeHtml(String(v??''))}" style="width:100%;background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:5px 8px;font-size:12px${extra||''}">`;
+  const conf=d.confidence!=null?Math.round(d.confidence*100):null;
+  const lowConf=conf!=null&&conf<70;
+  const accts=((window._pay.data||{}).accounts||[]);
+  const guess=accts.find(a=>a.app_id===d.app_id)||accts.find(a=>(a.institution||'').toLowerCase()===(fields.institution||'').toLowerCase());
+  const frows=Object.keys(PAY_FIELD_LABELS).filter(k=>fields[k]!=null&&fields[k]!=='').map(k=>`
+    <tr class="fs-field" data-k="${k}">
+      <td style="width:26px"><input type="checkbox" class="fsf-inc" checked title="Include this field"></td>
+      <td style="width:190px" class="pf-meta">${PAY_FIELD_LABELS[k]}</td>
+      <td>${inp(fields[k],'fsf-val')}</td></tr>`).join('');
+  const lrows=d.lines.map(l=>`<tr class="fin-shot-row">
+      <td style="width:46%">${inp(l.description,'fs-desc')}</td>
+      <td style="width:110px">${inp(l.amount,'fs-amt',';text-align:right')}</td>
+      <td><select class="fs-cat" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:5px 6px;font-size:12px">
+        ${cats.map(c=>`<option${c===l.category?' selected':''}>${c}</option>`).join('')}</select></td>
+      <td style="width:30px"><button class="ghost" onclick="this.closest('tr').remove()" title="Drop line">✕</button></td></tr>`).join('');
+  out.innerHTML=`<div class="card">
+    <div class="up-label" style="margin-bottom:6px">Review &amp; Apply${d.source?(' — '+escapeHtml(d.source)):''}
+      ${conf!=null?`<span class="pf-meta" style="margin-left:8px">confidence ${conf}%${lowConf?' ⚠ needs review':''}</span>`:''}</div>
+    ${d.summary?`<div class="pf-meta" style="margin-bottom:8px">${escapeHtml(d.summary)}</div>`:''}
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+      <span class="pf-meta">Statement month:</span><input type="month" id="fs-month" value="${escapeHtml(d.month||new Date().toISOString().slice(0,7))}" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px">
+      <span class="pf-meta">Account:</span>
+      <select id="fs-acct" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px">
+        <option value="new">Create new account${d.source?(' ('+escapeHtml(d.source)+')'):''}</option>
+        ${accts.map(a=>`<option value="${a.id}"${guess&&guess.id===a.id?' selected':''}>${escapeHtml((a.app_name||a.account_name||'?')+' — '+(a.institution||'')+' ••••'+(a.masked_account||''))}</option>`).join('')}
+      </select>
+    </div>
+    ${frows?`<div class="up-label" style="font-size:12px;margin:6px 0">Statement Summary → account</div>
+      <div style="overflow-x:auto;max-height:300px;overflow-y:auto"><table class="mini" style="width:100%">${frows}</table></div>`
+      :'<div class="pf-meta">No statement fields were detected in this screenshot.</div>'}
+    ${lrows?`<div class="up-label" style="font-size:12px;margin:10px 0 6px">
+        <label style="cursor:pointer"><input type="checkbox" id="fs-doexp" checked> Transactions → Monthly Expenses</label>
+        <span class="pf-meta" style="margin-left:8px">account label:</span> <input id="fs-group" value="${escapeHtml(d.source||'screenshot')}" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:4px 8px;font-size:12px">
+      </div>
+      <div style="overflow-x:auto"><table class="mini" style="width:100%"><tr><th>Description</th><th>Amount</th><th>Category</th><th></th></tr>${lrows}</table></div>
+      <div class="pf-meta" style="margin:6px 0">Charges negative, income/credits positive. Re-applying the same app + month replaces its previous expense lines.</div>`:''}
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="ghost" onclick="window._finShot=null;window._pay.impStep=2;payRenderPTab()">Cancel</button>
+      <button class="ghost" onclick="finShotDraft()" title="Keep the extraction for later — find it under Recent Imports">Save Draft</button>
+      <button class="ex-btn" id="fs-apply" onclick="finShotApply()">Apply to Account</button>
+    </div></div>`;
+  out.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function finShotDraft(){
+  window._finShot=null; window._pay.impStep=1;
+  window._pay.impMsg='Saved as draft — reopen it any time from Recent Imports → Review.';
+  payRenderPTab();
+}
+function finShotGather(){
+  const fields={};
+  document.querySelectorAll('.fs-field').forEach(tr=>{
+    if(!tr.querySelector('.fsf-inc').checked) return;
+    let v=tr.querySelector('.fsf-val').value.trim(); if(v==='') return;
+    fields[tr.dataset.k]=v;
+  });
+  const lines=[...document.querySelectorAll('.fin-shot-row')].map(tr=>({
+    description:tr.querySelector('.fs-desc').value, amount:parseFloat(tr.querySelector('.fs-amt').value),
+    category:tr.querySelector('.fs-cat').value})).filter(l=>l.description&&!isNaN(l.amount));
+  return {fields, lines};
+}
+async function finShotApply(resolution){
+  const d=window._finShot; if(!d) return;
+  const g=finShotGather(), month=$('#fs-month').value, st=$('#fin-shot-status');
+  const btn=$('#fs-apply'); if(btn){ btn.disabled=true; btn.textContent='⏳ Applying…'; }
+  const msgs=[];
+  try{
+    if(Object.keys(g.fields).length){                      // → account summary + monthly history
+      const acctSel=$('#fs-acct').value;
+      const body={month, fields:g.fields, resolution:resolution||null,
+        needs_review:(d.confidence!=null&&d.confidence<0.7)};
+      if(acctSel!=='new') body.account_id=parseInt(acctSel);
+      const r=await fetch('/api/finance/screenshot/'+d.id+'/apply-account',{method:'POST',
+        headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+      const res=await r.json();
+      if(!r.ok) throw new Error(res.error||'apply to account failed');
+      if(res.conflict){ payConflictModal(res, month); if(btn){ btn.disabled=false; btn.textContent='Apply to Account'; } return; }
+      msgs.push('account #'+res.account_id+' updated ('+month+')');
+    }
+    const doExp=$('#fs-doexp');
+    if(doExp&&doExp.checked&&g.lines.length){              // → monthly expenses
+      const r=await fetch('/api/finance/screenshot/'+d.id+'/apply',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({lines:g.lines, month, account_group:$('#fs-group').value})});
+      const res=await r.json();
+      if(!r.ok) throw new Error(res.error||'apply to expenses failed');
+      msgs.push(res.applied+' expense lines → '+res.month);
+      delete window._finData.expenses;
+    }
+    if(!msgs.length){ if(st) st.textContent='Nothing selected to apply.'; if(btn){ btn.disabled=false; btn.textContent='Apply to Account'; } return; }
+    window._finShot=null; window._pay.impStep=1;
+    window._pay.impMsg='Applied: '+msgs.join(' · ');
+    payLoadAccounts();
+  }catch(e){ if(st) st.textContent='⚠ '+String(e.message||e); if(btn){ btn.disabled=false; btn.textContent='Apply to Account'; } }
+}
+function payConflictModal(res, month){
+  const rows=Object.entries(res.diff||{}).map(([k,v])=>`<tr><td class="pf-meta">${escapeHtml(PAY_FIELD_LABELS[k]||k)}</td>
+    <td>${escapeHtml(String(v.existing??'—'))}</td><td><b>${escapeHtml(String(v.new??'—'))}</b></td></tr>`).join('');
+  payModal(`<div class="up-label" style="margin-bottom:8px">${escapeHtml(month)} already has a record (v${res.existing_version})</div>
+    ${rows?`<table class="mini" style="width:100%"><tr><th>Field</th><th>Existing</th><th>New</th></tr>${rows}</table>`
+      :'<div class="pf-meta">No differing fields — the new import matches the existing record.</div>'}
+    <div class="pf-meta" style="margin:8px 0">Merge = fill only missing fields · Replace = overwrite (audited) · New version = keep both, newest wins.</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="ghost" onclick="payModalClose()">Cancel</button>
+      <button class="ghost" onclick="payModalClose();finShotApply('merge')">Merge</button>
+      <button class="ghost" onclick="payModalClose();finShotApply('replace')">Replace</button>
+      <button class="ex-btn" onclick="payModalClose();finShotApply('new_version')">New version</button>
+    </div>`);
+}
+async function finShotsHistory(limit){
+  const el=$('#fin-shots-hist'); if(!el) return;
+  try{
+    const d=await (await fetch('/api/finance/screenshots')).json();
+    window._payImports=d.screenshots||[];
+    el.innerHTML=payImportsTable(window._payImports, true);
+  }catch(e){ el.innerHTML='<div class="pf-meta">'+escapeHtml(String(e))+'</div>'; }
+}
+function finShotReview(sid){
+  const s=(window._payImports||[]).find(x=>x.id===sid); if(!s) return;
+  window._finShot={id:s.id, app_id:s.app_id, month:s.month, source:s.app_name, summary:s.summary,
+    confidence:s.confidence, fields:s.fields||{}, lines:s.lines||[],
+    categories:['Housing','Utilities','Insurance','Food','Medical','Education','Shopping','Travel','Investments','Entertainment','Income','Miscellaneous']};
+  window._pay.impStep=3; window._pay.impMsg='';
+  if(window._pay.ptab!=='import') paySetPTab('import'); else payRenderPTab();
+}
+function finShotCopilot(sid){
+  const s=(window._payImports||[]).find(x=>x.id===sid); if(!s) return;
+  let ctx=`Screenshot import #${s.id} (${s.app_name||'?'}, month ${s.month||'?'}, confidence ${s.confidence!=null?Math.round(s.confidence*100)+'%':'?'}).\n`;
+  ctx+='Extracted statement fields: '+JSON.stringify(s.fields||{})+'\n';
+  if((s.lines||[]).length) ctx+='Transaction lines: '+JSON.stringify(s.lines)+'\n';
+  ctx+='\nSummarize what this statement shows, flag anything unusual, and suggest what I should verify before applying it.';
+  if(typeof copilotAsk==='function') copilotAsk(ctx);
+}
+async function finShotArch(sid){
+  await fetch('/api/finance/screenshot/'+sid+'/archive',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+  if(window._pay.ptab==='history') payHistLoad(); else finShotsHistory(5);
+}
+async function finShotDel(sid){
+  if(!confirm('Delete this import record? The extraction data is removed (applied account/expense records are kept).')) return;
+  await fetch('/api/finance/screenshot/'+sid,{method:'DELETE'});
+  if(window._pay.ptab==='history') payHistLoad(); else finShotsHistory(5);
+}
+document.addEventListener('paste', e=>{           // paste a screenshot anywhere on the Payment Apps page
+  const v=$('#view-finance');
+  if(window._finPage!=='apps'||!v||v.classList.contains('hidden')) return;
+  if(e.target&&/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+  const it=[...(e.clipboardData?.items||[])].find(i=>i.type.startsWith('image/'));
+  if(it){ e.preventDefault(); finShotFile(it.getAsFile()); }
+});
+/* ── modal + account/payment/history CRUD ── */
+function payModal(html){
+  const m=$('#pay-modal'); if(!m) return;
+  m.innerHTML=`<div onclick="if(event.target===this)payModalClose()" style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1200;display:grid;place-items:center;padding:16px">
+    <div class="card" style="max-width:640px;width:100%;max-height:86vh;overflow-y:auto">${html}</div></div>`;
+}
+function payModalClose(){ const m=$('#pay-modal'); if(m) m.innerHTML=''; }
+async function payAcctArchive(id){
+  if(!confirm('Archive this account? It moves to History → Archived (read-only except notes/tags) and stays available for historical analysis.')) return;
+  await fetch(`/api/finance/pay/accounts/${id}/archive`,{method:'POST'}); payDrawerClose(); payLoadAccounts();
+}
+async function payAcctTrash(id){
+  if(!confirm('Delete this payment record?\nThis removes the record from active views (find it in History → Trash). Historical analysis may be affected.')) return;
+  await fetch(`/api/finance/pay/accounts/${id}/trash`,{method:'POST'}); payDrawerClose(); payLoadAccounts();
+}
+async function payAcctRestore(id){ await fetch(`/api/finance/pay/accounts/${id}/restore`,{method:'POST'}); payLoadAccounts(); }
+async function payAcctPurge(id){
+  if(!confirm('Permanently delete this account and ALL its history, payments and audit trail? This cannot be undone.')) return;
+  const r=await fetch(`/api/finance/pay/accounts/${id}`,{method:'DELETE'}); const d=await r.json();
+  if(!r.ok) alert(d.error||'delete failed');
+  payLoadAccounts();
+}
+function payAcctEdit(id){
+  const a=id?(((window._pay.data||{}).accounts||[]).find(x=>x.id===id)||{}):{};
+  const apps=(window._finApps||[]).filter(x=>!x.is_archived);
+  const F=(l,k,v,type)=>`<label style="display:flex;flex-direction:column;gap:3px;font-size:12px;min-width:150px;flex:1"><span class="pf-meta">${l}</span>
+    <input id="pa-${k}" type="${type||'text'}" value="${escapeHtml(String(v??''))}" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 10px;font-size:13px"></label>`;
+  payModal(`<div class="up-label" style="margin-bottom:10px">${id?'Edit account':'Add Account Record'}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;min-width:150px;flex:1"><span class="pf-meta">Registered app</span>
+        <select id="pa-app_id" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px">
+          <option value="">(none)</option>${apps.map(x=>`<option value="${x.id}"${a.app_id===x.id?' selected':''}>${escapeHtml(x.name)}</option>`).join('')}</select></label>
+      ${F('Account name','account_name',a.account_name)}${F('Institution','institution',a.institution)}
+      ${F('Account type','account_type',a.account_type)}${F('Acct # last 4','masked_account',a.masked_account)}
+      ${F('Statement month'+(id?' (latest)':' *'),'statement_month',a.latest_statement_month,'month')}
+      ${F('Current balance','current_balance',a.current_balance,'number')}${F('Statement balance','statement_balance',a.statement_balance,'number')}
+      ${F('Minimum due','minimum_payment_due',a.minimum_payment_due,'number')}${F('Total due','total_payment_due',a.total_payment_due,'number')}
+      ${F('Due date','due_date',a.due_date,'date')}${F('Interest charged','interest_charged',a.interest_charged,'number')}
+      ${F('Fees charged','fees_charged',a.fees_charged,'number')}${F('Credit limit','credit_limit',a.credit_limit,'number')}
+      ${F('Available credit','available_credit',a.available_credit,'number')}
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button class="ghost" onclick="payModalClose()">Cancel</button>
+      <button class="ex-btn" onclick="payAcctSave(${id||'null'})">Save</button>
+    </div>`);
+}
+async function payAcctSave(id){
+  const g=k=>{ const el=$('#pa-'+k); return el&&el.value!==''?el.value:null; };
+  const body={};
+  ['app_id','account_name','institution','account_type','masked_account','current_balance','statement_balance',
+   'minimum_payment_due','total_payment_due','due_date','interest_charged','fees_charged','credit_limit','available_credit']
+    .forEach(k=>{ const v=g(k); if(v!=null) body[k]=v; });
+  if(!id&&g('statement_month')) body.statement_month=g('statement_month');
+  if(id&&g('statement_month')) body.latest_statement_month=g('statement_month');
+  const r=await fetch('/api/finance/pay/accounts'+(id?('/'+id):''), {method:id?'PUT':'POST',
+    headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const d=await r.json();
+  if(!r.ok){ alert(d.error||'save failed'); return; }
+  payModalClose(); payLoadAccounts(); if(id&&window._payDrawerId===id) payDrawerOpen(id);
+}
+function payPayForm(aid){
+  const today=new Date().toISOString().slice(0,10), month=new Date().toISOString().slice(0,7);
+  payModal(`<div class="up-label" style="margin-bottom:10px">Record a payment</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;flex:1;min-width:140px"><span class="pf-meta">Amount *</span><input id="pp-amount" type="number" step="0.01" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 10px"></label>
+      <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;flex:1;min-width:140px"><span class="pf-meta">Date *</span><input id="pp-date" type="date" value="${today}" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 10px"></label>
+      <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;flex:1;min-width:140px"><span class="pf-meta">Method</span><input id="pp-method" placeholder="ACH / check / autopay" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 10px"></label>
+      <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;flex:1;min-width:140px"><span class="pf-meta">Status</span><select id="pp-status" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px">
+        ${['Posted','Scheduled','Pending','Failed','Cancelled'].map(s=>'<option>'+s+'</option>').join('')}</select></label>
+      <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;flex:1;min-width:140px"><span class="pf-meta">Statement month</span><input id="pp-month" type="month" value="${month}" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 10px"></label>
+      <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;flex:1;min-width:140px"><span class="pf-meta">Confirmation #</span><input id="pp-conf" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 10px"></label>
+      <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;width:100%"><span class="pf-meta">Notes</span><input id="pp-notes" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 10px"></label>
+    </div>
+    <div class="pf-meta" style="margin-top:6px">Only Posted payments count toward remaining due; the original amount due is kept for history. Confirmation numbers are stored masked (last 4).</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button class="ghost" onclick="payModalClose()">Cancel</button>
+      <button class="ex-btn" onclick="payPaySave(${aid})">Save payment</button>
+    </div>`);
+}
+async function payPaySave(aid){
+  const body={amount:$('#pp-amount').value, payment_date:$('#pp-date').value, payment_method:$('#pp-method').value,
+    payment_status:$('#pp-status').value, statement_month:$('#pp-month').value, confirmation:$('#pp-conf').value,
+    notes:$('#pp-notes').value};
+  const r=await fetch(`/api/finance/pay/accounts/${aid}/payments`,{method:'POST',
+    headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const d=await r.json();
+  if(!r.ok){ alert(d.error||'save failed'); return; }
+  payModalClose(); payLoadAccounts(); if(window._payDrawerId===aid) payDrawerOpen(aid,'activity');
+}
+async function payPayStatus(pid,status,aid){
+  const r=await fetch(`/api/finance/pay/payments/${pid}`,{method:'PUT',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({payment_status:status})});
+  if(!r.ok){ const d=await r.json(); alert(d.error||'update failed'); }
+  payLoadAccounts(); payDrawerOpen(aid,'activity');
+}
+async function payPayDel(pid,aid){
+  if(!confirm('Delete this payment record? (soft-deleted; totals recalculate)')) return;
+  await fetch(`/api/finance/pay/payments/${pid}`,{method:'DELETE'});
+  payLoadAccounts(); payDrawerOpen(aid,'activity');
+}
+/* ── details drawer (Summary · Activity · Documents · Insights) ── */
+function payDrawerClose(){
+  const el=$('#pay-drawer'); if(el) el.innerHTML=''; window._payDrawerId=null;
+  if(window._payLastFocus&&window._payLastFocus.focus){ try{ window._payLastFocus.focus(); }catch(e){} }
+}
+async function payDrawerOpen(id, tab){
+  if(!window._payDrawerId) window._payLastFocus=document.activeElement;
+  window._payDrawerId=id; window._payDrawerTab=tab||'summary';
+  window._payActSub=window._payActSub||'payments'; window._payDocSub=window._payDocSub||'imports';
+  const el=$('#pay-drawer'); if(!el) return;
+  el.innerHTML=`<div style="position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:1100" onclick="payDrawerClose()"></div>
+    <div style="position:fixed;top:0;right:0;bottom:0;width:min(640px,100vw);background:var(--panel,#161b22);border-left:1px solid var(--line);z-index:1101;overflow-y:auto;padding:16px"><div class="spin">Loading account…</div></div>`;
+  try{
+    const r=await fetch('/api/finance/pay/accounts/'+id);
+    const d=await r.json();
+    if(!r.ok) throw new Error(d.error||'load failed');
+    window._payDetail=d; payDrawerRender();
+  }catch(e){ el.querySelector('div:last-child').innerHTML='<div class="card err">'+escapeHtml(String(e.message||e))+'</div>'; }
+}
+function payDrawerRender(){
+  const el=$('#pay-drawer'); const d=window._payDetail; if(!el||!d) return;
+  const a=d.account, tab=window._payDrawerTab||'summary';
+  const tabs=[['summary','Summary'],['activity','Activity'],['documents','Documents'],['insights','Insights']];
+  const body={summary:paySummaryTab,activity:payActivityTab,documents:payDocumentsTab,insights:payInsightsTab}[tab](d);
+  el.innerHTML=`<div style="position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:1100" onclick="payDrawerClose()"></div>
+    <div role="dialog" aria-label="Account details" style="position:fixed;top:0;right:0;bottom:0;width:min(640px,100vw);background:var(--panel,#161b22);border-left:1px solid var(--line);z-index:1101;overflow-y:auto;padding:16px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:20px">${escapeHtml(a.app_icon||'💳')}</span>
+        <div><div style="font-weight:700">${escapeHtml(a.app_name||a.account_name||'Account')} ${a.is_archived?'<span class="pf-meta">(archived)</span>':''}${a.deleted_at?'<span class="pf-meta">(in trash)</span>':''}</div>
+        <div class="pf-meta">${escapeHtml([a.institution,a.account_type].filter(Boolean).join(' · '))}${a.masked_account?' ••••'+escapeHtml(a.masked_account):''}</div></div>
+        <span style="flex:1"></span>
+        ${payStatusPill(a.payment_status)}
+        <button class="ghost" onclick="payDrawerClose()" title="Close" aria-label="Close details">✕</button>
+      </div>
+      <div role="tablist" aria-label="Account detail sections" style="display:flex;gap:2px;flex-wrap:wrap;margin:12px 0;border-bottom:1px solid var(--line)">
+        ${tabs.map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" class="ghost" style="border:0;border-radius:6px 6px 0 0;${tab===k?'background:var(--acc);color:#fff':''}" onclick="window._payDrawerTab='${k}';payDrawerRender()">${l}</button>`).join('')}
+      </div>
+      <div>${body}</div></div>`;
+}
+function payRowsHtml(items){
+  const out=items.map(([l,v,keep])=>{
+    const s=(v==null)?'':String(v);
+    const empty=(v==null||s===''||s==='—'||s==='— · —'||s.startsWith('— ·')||s.endsWith('· —')&&s.startsWith('—'));
+    if(empty&&!keep) return '';
+    return `<div style="display:flex;justify-content:space-between;gap:8px;border-bottom:1px dashed var(--line);padding:4px 0;font-size:13px">
+      <span class="pf-meta">${l}</span><span style="text-align:right">${empty?'<span class="pf-meta">Not available</span>':v}</span></div>`;
+  }).filter(Boolean).join('');
+  return out||'';
+}
+function paySummaryTab(d){
+  const a=d.account, h=(d.history||[])[0]||{};
+  const mv=v=>v==null?null:finMoney(v), dv=v=>v?payDate(v):null;
+  const grp=(title,rows)=>rows?`<div class="card" style="margin-bottom:10px"><div class="up-label" style="font-size:12px;margin-bottom:6px">${title}</div>${rows}</div>`:'';
+  const combo=(m,dt)=>((m!=null||dt)?[m!=null?finMoney(m):'—',dt?payDate(dt):'—'].join(' · '):null);
+  return grp('Account', payRowsHtml([
+      ['Institution',a.institution?escapeHtml(a.institution):null],
+      ['Account name',a.account_name?escapeHtml(a.account_name):null],
+      ['Account type',a.account_type?escapeHtml(a.account_type):null],
+      ['Account',a.masked_account?('••••'+escapeHtml(a.masked_account)):null],
+      ['Statement month',a.latest_statement_month?escapeHtml(a.latest_statement_month):null]]))
+    +grp('Balance', payRowsHtml([
+      ['Current balance',a.current_balance!=null?('<b>'+finMoney(a.current_balance)+'</b>'):null,true],
+      ['Statement balance',mv(a.statement_balance)],
+      ['Credit limit',mv(a.credit_limit)],
+      ['Available credit',mv(a.available_credit)]]))
+    +grp('Payment', payRowsHtml([
+      ['Amount due',mv(a.total_payment_due),true],
+      ['Minimum due',mv(a.minimum_payment_due)],
+      ['Remaining due',mv(a.remaining_amount_due)],
+      ['Due date',dv(a.due_date),true],
+      ['Last payment',combo(a.last_payment_amount,a.last_payment_date)],
+      ['Scheduled payment',combo(a.scheduled_payment_amount,a.scheduled_payment_date)],
+      ['Autopay',a.autopay_enabled?'On':null]]))
+    +grp('Charges', payRowsHtml([
+      ['Interest charged',mv(a.interest_charged)],
+      ['Fees charged',mv(a.fees_charged)],
+      ['New purchases',mv(h.new_purchases)],
+      ['Credits',mv(h.credits)]]))
+    +`<div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${a.app_url?`<button class="ex-btn" onclick="window.open('${escapeHtml(a.app_url)}','_blank','noopener')" title="Open the payment site">Open Site</button>`:''}
+      <button class="ghost" onclick="payPayForm(${a.id})">Record Payment</button>
+      <button class="ghost" onclick="payAcctEdit(${a.id})">Edit</button>
+      <button class="ghost" onclick="payDrawerMenu()" title="More actions" aria-label="More account actions">⋯</button>
+    </div>`;
+}
+function payDrawerMenu(){
+  const a=(window._payDetail||{}).account||{};
+  const b=(label,fn)=>`<button class="ghost" onclick="payModalClose();${fn}">${label}</button>`;
+  payModal(`<div class="up-label" style="margin-bottom:8px">${escapeHtml(a.app_name||a.account_name||'Account')} — more</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${b('Import statement',`payImportFor(${a.app_id||'null'});payDrawerClose()`)}
+      ${b('Analyze with Artik Copilot',`payCopilot('account',[${a.id}])`)}
+      ${a.is_archived||a.deleted_at?b('Restore',`payAcctRestore(${a.id});payDrawerClose()`)
+        :b('Archive account',`payAcctArchive(${a.id})`)+b('Move to Trash',`payAcctTrash(${a.id})`)}
+      <button class="ghost" onclick="payModalClose()">Cancel</button>
+    </div>`);
+}
+function paySubBar(cur, items, varName){
+  return `<div style="display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:10px">
+    ${items.map(([k,l])=>`<button class="ghost" style="border:0;border-radius:0;${cur===k?'background:var(--acc);color:#fff':''}" onclick="window.${varName}='${k}';payDrawerRender()">${l}</button>`).join('')}</div>`;
+}
+function payActivityTab(d){
+  const sub=window._payActSub||'payments';
+  const body={payments:payTabPayments,history:payTabHistory,expenses:payTabExpenses}[sub](d);
+  return paySubBar(sub,[['payments','Payments'],['history','Statement History'],['expenses','Expenses']],'_payActSub')+body;
+}
+function payDocumentsTab(d){
+  const sub=window._payDocSub||'imports';
+  const body={imports:payTabImports,notes:payTabNotes,audit:payTabAudit}[sub](d);
+  return paySubBar(sub,[['imports','Imports'],['notes','Notes'],['audit','Audit']],'_payDocSub')+body;
+}
+function payInsightsTab(d){
+  const rows=d.history||[];
+  const latestPerMonth={};
+  rows.slice().reverse().forEach(h=>{ latestPerMonth[h.statement_month]=h; });
+  const pts=Object.values(latestPerMonth).sort((a,b)=>a.statement_month.localeCompare(b.statement_month))
+    .map(h=>({period:h.statement_month, bal:h.statement_balance, paid:h.total_payments}));
+  const qs=['Why did this balance increase?','What is due next?','How much interest have I paid?',
+    'Compare this month with last month.'];
+  window._payCopilotQs=qs;
+  return (pts.length>=2?`<div class="fin-chart" style="margin-bottom:10px"><div class="up-label" style="margin-bottom:6px">Statement balance trend</div>${finLine(pts,'bal','#60a5fa','Statement Balance')}</div>
+    <div class="fin-chart" style="margin-bottom:10px"><div class="up-label" style="margin-bottom:6px">Payments made</div>${finLine(pts,'paid','#34d399','Payments')}</div>`
+    :'<div class="pf-meta" style="margin-bottom:10px">Trends appear after two or more statement months.</div>')
+    +`<div class="pf-meta" style="margin-bottom:8px">Artik Copilot receives this account's structured summary + monthly history (no credentials, masked account numbers).</div>
+    <button class="ex-btn" onclick="payCopilot('account',[${d.account.id}])">Analyze this account</button>
+    <div class="up-label" style="font-size:12px;margin:12px 0 6px">Ask Copilot</div>
+    ${qs.map((q,i)=>`<div class="pf-meta" style="padding:3px 0;cursor:pointer;text-decoration:underline" onclick="payCopilot('account',[${d.account.id}],window._payCopilotQs[${i}])">${escapeHtml(q)}</div>`).join('')}`;
+}
+function payTabPayments(d){
+  const rows=d.payments||[];
+  return `<div style="margin-bottom:8px;display:flex;gap:8px">
+      <button class="ex-btn" onclick="payPayForm(${d.account.id})">Record payment</button>
+      <button class="ghost" onclick="payExportPayments()" title="Download payment history CSV">Export CSV</button></div>`+
+    (rows.length?`<div style="overflow-x:auto"><table class="mini" style="width:100%">
+      <tr><th>Date</th><th>Amount</th><th>Status</th><th>Method</th><th>Confirmation</th><th>Month</th><th>Source</th><th></th></tr>`+
+      rows.map(p=>`<tr><td>${payDate(p.payment_date)}</td><td><b>${finMoney(p.amount)}</b></td>
+        <td><select onchange="payPayStatus(${p.id},this.value,${d.account.id})" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:3px" title="Change status">
+          ${(d.txn_statuses||[]).map(s=>`<option${s===p.payment_status?' selected':''}>${s}</option>`).join('')}</select></td>
+        <td>${escapeHtml(p.payment_method||'—')}</td><td>${escapeHtml(p.confirmation||'—')}</td>
+        <td>${escapeHtml(p.statement_month||'—')}</td><td class="muted">${escapeHtml(p.source_type||'')}</td>
+        <td><button class="ghost" onclick="payPayDel(${p.id},${d.account.id})" title="Delete payment" aria-label="Delete payment">🗑</button></td></tr>`).join('')+'</table></div>'
+    :'<div class="pf-meta">No payments recorded yet.</div>');
+}
+function payExportPayments(){
+  const d=window._payDetail; if(!d) return;
+  const cols=['payment_date','amount','payment_status','payment_method','confirmation','statement_month','source_type'];
+  const esc=v=>{ v=String(v??''); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
+  const csv=[cols.join(',')].concat((d.payments||[]).map(r=>cols.map(c=>esc(r[c])).join(','))).join('\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download='payments_'+(d.account.app_name||d.account.id)+'.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+function payTabHistory(d){
+  const rows=d.history||[];
+  if(!rows.length) return '<div class="pf-meta">No monthly records yet.</div>';
+  return `<div style="overflow-x:auto"><table class="mini" style="width:100%">
+      <tr><th>Month</th><th>v</th><th>Stmt Bal</th><th>Total Due</th><th>Paid</th><th>Remaining</th><th>Interest</th><th>Status</th><th>Source</th><th></th></tr>`+
+    rows.map(h=>`<tr${h.is_archived?' style="opacity:.5"':''}><td><b>${escapeHtml(h.statement_month)}</b></td><td>${h.version}</td>
+      <td>${finMoney(h.statement_balance)}</td><td>${finMoney(h.total_payment_due)}</td>
+      <td>${finMoney(h.total_payments)}</td><td>${finMoney(h.remaining_amount_due)}</td>
+      <td>${finMoney(h.interest_charged)}</td><td>${payStatusPill(h.payment_status)}</td>
+      <td class="muted">${escapeHtml(h.source_type||'')}${h.is_archived?' · archived':''}</td>
+      <td style="white-space:nowrap">
+        ${h.is_archived?`<button class="ghost" onclick="payHistArch(${h.id},true)" title="Restore">Restore</button>`
+        :`<button class="ghost" onclick="payHistEdit(${h.id})" title="Edit this record" aria-label="Edit record">✏️</button>
+          <button class="ghost" onclick="payHistArch(${h.id},false)" title="Archive this monthly record" aria-label="Archive record">🗄</button>`}
+      </td></tr>`).join('')+'</table></div>';
+}
+function payHistEdit(hid){
+  const h=(window._payDetail.history||[]).find(x=>x.id===hid); if(!h) return;
+  const F=(l,k,type)=>`<label style="display:flex;flex-direction:column;gap:3px;font-size:12px;flex:1;min-width:130px"><span class="pf-meta">${l}</span>
+    <input id="ph-${k}" type="${type||'number'}" step="0.01" value="${h[k]??''}" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 10px"></label>`;
+  payModal(`<div class="up-label" style="margin-bottom:10px">Edit ${escapeHtml(h.statement_month)} record (v${h.version})</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${F('Statement balance','statement_balance')}${F('Current balance','current_balance')}
+      ${F('Minimum due','minimum_payment_due')}${F('Total due','total_payment_due')}
+      ${F('Due date','due_date','date')}${F('Interest','interest_charged')}${F('Fees','fees_charged')}
+      ${F('New purchases','new_purchases')}${F('Credits','credits')}
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button class="ghost" onclick="payModalClose()">Cancel</button>
+      <button class="ex-btn" onclick="payHistSave(${hid})">Save</button>
+    </div>`);
+}
+async function payHistSave(hid){
+  const body={};
+  ['statement_balance','current_balance','minimum_payment_due','total_payment_due','due_date',
+   'interest_charged','fees_charged','new_purchases','credits'].forEach(k=>{
+    const el=$('#ph-'+k); if(el&&el.value!=='') body[k]=el.value; });
+  const r=await fetch('/api/finance/pay/history/'+hid,{method:'PUT',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body)});
+  const d=await r.json();
+  if(!r.ok){ alert(d.error||'save failed'); return; }
+  payModalClose(); payLoadAccounts(); payDrawerOpen(window._payDrawerId, window._payDrawerTab);
+}
+async function payHistArch(hid, restore){
+  await fetch('/api/finance/pay/history/'+hid+'/archive',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({restore})});
+  payLoadAccounts();
+  if(window._payDrawerId) payDrawerOpen(window._payDrawerId,'activity');
+}
+function payTabImports(d){
+  const rows=d.imports||[];
+  return rows.length?`<div style="overflow-x:auto"><table class="mini" style="width:100%">
+      <tr><th>Imported</th><th>Month</th><th>Status</th><th>Confidence</th><th>Summary</th></tr>`+
+    rows.map(s=>`<tr><td>${escapeHtml(String(s.ts||'').slice(0,16).replace('T',' '))}</td>
+      <td>${escapeHtml(s.month||'—')}</td><td>${escapeHtml(s.status||'')}</td>
+      <td>${s.confidence!=null?Math.round(s.confidence*100)+'%':'—'}</td>
+      <td class="muted">${escapeHtml(s.summary||'')}</td></tr>`).join('')+'</table></div>'
+    +'<div class="pf-meta" style="margin-top:6px">Screenshots themselves are never stored — only the extracted data.</div>'
+    :'<div class="pf-meta">No screenshot imports linked to this account yet.</div>';
+}
+function payTabExpenses(d){
+  const rows=d.expenses||[];
+  const cats=['Housing','Utilities','Insurance','Food','Medical','Education','Shopping','Travel','Investments','Entertainment','Income','Miscellaneous'];
+  return rows.length?`<div class="pf-meta" style="margin-bottom:6px">Expense lines imported from this account's screenshots (visible in Monthly Expenses).</div>
+    <div style="overflow-x:auto"><table class="mini" style="width:100%"><tr><th>Month</th><th>Description</th><th>Amount</th><th>Category</th><th></th></tr>`+
+    rows.map(l=>`<tr><td>${escapeHtml(l.month||'—')}</td>
+      <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(l.description)}">${escapeHtml(l.description)}</td>
+      <td class="${l.amount>=0?'pos':'neg'}">${finMoney(l.amount)}</td>
+      <td><select onchange="payExpLine(${l.id},this.value,false)" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:3px" title="Change category">
+        ${cats.map(c=>`<option${c===l.category?' selected':''}>${c}</option>`).join('')}</select></td>
+      <td><button class="ghost" onclick="payExpLine(${l.id},null,true)" title="Remove this expense line" aria-label="Remove expense line">🗑</button></td></tr>`).join('')+'</table></div>'
+    :'<div class="pf-meta">No linked expense lines. Apply a screenshot with transaction lines to see them here.</div>';
+}
+async function payExpLine(id,category,del){
+  if(del&&!confirm('Remove this expense line from Monthly Expenses?')) return;
+  const r=await fetch('/api/finance/pay/expense-line/'+id,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({category, delete:del})});
+  if(!r.ok){ const d=await r.json(); alert(d.error||'failed'); }
+  delete window._finData.expenses; payDrawerOpen(window._payDrawerId,'activity');
+}
+function payTabNotes(d){
+  const a=d.account;
+  return `<div class="pf-meta" style="margin-bottom:6px">Notes and tags stay editable even when the account is archived.</div>
+    <label style="display:flex;flex-direction:column;gap:4px;font-size:12px"><span class="pf-meta">Notes</span>
+      <textarea id="pn-notes" rows="6" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:8px 10px;font-size:13px;resize:vertical">${escapeHtml(a.notes||'')}</textarea></label>
+    <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;margin-top:8px"><span class="pf-meta">Tags (comma-separated)</span>
+      <input id="pn-tags" value="${escapeHtml(a.tags||'')}" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 10px"></label>
+    <div style="margin-top:10px"><button class="ex-btn" onclick="payNotesSave(${a.id})">Save notes</button></div>`;
+}
+async function payNotesSave(aid){
+  const r=await fetch('/api/finance/pay/accounts/'+aid,{method:'PUT',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({notes:$('#pn-notes').value, tags:$('#pn-tags').value})});
+  const d=await r.json();
+  if(!r.ok){ alert(d.error||'save failed'); return; }
+  window._payDetail.account=Object.assign(window._payDetail.account,{notes:$('#pn-notes').value,tags:$('#pn-tags').value});
+  payDrawerRender();
+}
+function payTabAudit(d){
+  const rows=d.audit||[];
+  return rows.length?`<div style="overflow-x:auto"><table class="mini" style="width:100%">
+      <tr><th>When</th><th>Entity</th><th>Action</th><th>Field</th><th>Old</th><th>New</th><th>By</th></tr>`+
+    rows.map(x=>`<tr><td>${escapeHtml(String(x.created_at||'').slice(0,16).replace('T',' '))}</td>
+      <td>${escapeHtml(x.entity_type)}#${x.entity_id}</td><td>${escapeHtml(x.action)}</td>
+      <td>${escapeHtml(x.field_name||'—')}</td><td class="muted">${escapeHtml(x.old_value||'—')}</td>
+      <td>${escapeHtml(x.new_value||'—')}</td><td class="muted">${escapeHtml(x.actor||'')}</td></tr>`).join('')+'</table></div>'
+    :'<div class="pf-meta">No audit entries yet.</div>';
+}
+async function payCopilot(scope, ids, question){
+  let accountIds=ids||[];
+  if(scope==='selected'){
+    accountIds=[...window._pay.sel];
+    if(!accountIds.length){ alert('Select one or more accounts first (checkboxes in the Payments list).'); return; }
+  }
+  try{
+    const r=await fetch('/api/finance/pay/copilot-context',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({account_ids:accountIds, include_archived:scope==='portfolio'})});
+    const d=await r.json();
+    let ctx=(d.context||'')+'\n\n';
+    ctx+=question||(scope==='account'?'Analyze this account: balance trend, interest paid, payment behavior, risks, and what I should do next.'
+      :accountIds.length?'Compare these accounts: balances, dues, interest, payment discipline. Which should I pay first and why?'
+      :'Analyze my whole payment portfolio: total obligations, due-date sequence, interest hot-spots, missed/partial payments, and 3 concrete recommendations.');
+    if(typeof copilotAsk==='function') copilotAsk(ctx);
+    payDrawerClose();
+  }catch(e){ alert('Copilot context failed: '+e); }
+}
+/* deep-link: #payment-apps/<tab> opens the Payment Apps page on load */
+if(location.hash.startsWith('#payment-apps')){
+  setTimeout(()=>{ try{ showFinance('apps'); }catch(e){} }, 400);
 }
 
 /* ═══════════ Autonomous Trading Desk ═══════════ */
@@ -4312,7 +6367,7 @@ async function loadArticleSummary(tk){
 function hlRow(h){
   const sent=h.sentiment==='positive'?'pos':h.sentiment==='negative'?'neg':'neu';
   return `<div class="hl"><span class="dot ${sent}"></span><div style="flex:1">
-    ${h.url?`<a href="${h.url}" target="_blank" rel="noopener">${escapeHtml(h.headline||'')}</a>`:escapeHtml(h.headline||'')}
+    ${safeUrl(h.url)?`<a href="${safeUrl(h.url)}" target="_blank" rel="noopener">${escapeHtml(h.headline||'')}</a>`:escapeHtml(h.headline||'')}
     <div class="meta"><span style="color:#a9c7e6;font-weight:700">${escapeHtml((h.source||'').split(':')[0])}</span>
       <span>${escapeHtml(h.sentiment||'—')}</span>${h.impact_score!=null?`<span>impact ${h.impact_score}</span>`:''}
       ${h.relevance_score!=null?`<span>rel ${Math.round(h.relevance_score*100)}%</span>`:''}
@@ -4386,7 +6441,7 @@ function sigRow(x){
     <span class="badge" style="margin-left:auto;background:${d>=0?'rgba(34,197,94,.15)':'rgba(239,68,68,.15)'};color:${d>=0?'var(--buy)':'var(--sell)'}">${d>=0?'+':''}${d} overlay</span></div>
     <div class="kv2"><span>impact ${x.impact_score}</span><span>conf ${Math.round((x.confidence||0)*100)}%</span><span>${escapeHtml(x.sentiment||'')}</span>${x.expiration_days?`<span>expires in ${x.expiration_days}d</span>`:''}</div>
     ${x.rationale?`<div style="font-size:12px;margin-top:6px">${escapeHtml(x.rationale)}</div>`:''}
-    ${x.headline?`<div class="muted" style="font-size:11.5px;margin-top:4px">${escapeHtml((x.headline||'').slice(0,120))} ${x.url?`<a href="${x.url}" target="_blank" rel="noopener">↗</a>`:''}</div>`:''}
+    ${x.headline?`<div class="muted" style="font-size:11.5px;margin-top:4px">${escapeHtml((x.headline||'').slice(0,120))} ${safeUrl(x.url)?`<a href="${safeUrl(x.url)}" target="_blank" rel="noopener">↗</a>`:''}</div>`:''}
   </div>`;
 }
 async function loadResSignals(tk){
@@ -4399,7 +6454,7 @@ function renderResultsTime(){
   let all=[]; _filteredTickers().forEach(t=>_filteredHeadlines(t).forEach(h=>all.push(h)));
   all.sort((a,b)=>(a.published||'')<(b.published||'')?1:-1);
   $('#res-body').innerHTML = all.length
-    ? `<div class="tcard">`+all.slice(0,80).map(h=>`<div class="hl"><span class="dot ${h.sentiment==='positive'?'pos':h.sentiment==='negative'?'neg':'neu'}"></span><div style="flex:1"><span class="tchip">${escapeHtml(h.ticker||'')}</span> ${h.url?`<a href="${h.url}" target="_blank" rel="noopener">${escapeHtml(h.headline||'')}</a>`:escapeHtml(h.headline||'')}<div class="meta"><span style="color:#a9c7e6;font-weight:700">${escapeHtml((h.source||'').split(':')[0])}</span><span>${escapeHtml(h.sentiment||'')}</span>${h.impact_score!=null?`<span>impact ${h.impact_score}</span>`:''}<span>${escapeHtml((h.published||'').slice(0,16))}</span></div></div></div>`).join('')+`</div>`
+    ? `<div class="tcard">`+all.slice(0,80).map(h=>`<div class="hl"><span class="dot ${h.sentiment==='positive'?'pos':h.sentiment==='negative'?'neg':'neu'}"></span><div style="flex:1"><span class="tchip">${escapeHtml(h.ticker||'')}</span> ${safeUrl(h.url)?`<a href="${safeUrl(h.url)}" target="_blank" rel="noopener">${escapeHtml(h.headline||'')}</a>`:escapeHtml(h.headline||'')}<div class="meta"><span style="color:#a9c7e6;font-weight:700">${escapeHtml((h.source||'').split(':')[0])}</span><span>${escapeHtml(h.sentiment||'')}</span>${h.impact_score!=null?`<span>impact ${h.impact_score}</span>`:''}<span>${escapeHtml((h.published||'').slice(0,16))}</span></div></div></div>`).join('')+`</div>`
     : '<div class="muted" style="padding:24px">No headlines match.</div>';
 }
 
@@ -4539,7 +6594,7 @@ async function etradeLoad(){
   let s;
   try { s=await (await fetch('/api/etrade/status')).json(); }
   catch(e){ if(out) out.innerHTML='<div class="err">Failed to load status: '+etEsc(e)+'</div>'; return; }
-  _etConnected=!!s.connected;
+  _etConnected=!!s.connected; window._etEnv=s.env||'';
   if(dc) dc.classList.toggle('hidden', !s.connected);
   const envTag = s.env ? `<span class="pill">${etEsc(s.env)}</span>` : '';
   if(st) st.innerHTML = s.connected ? `Connected ${envTag}` : (s.configured ? `Not connected ${envTag}` : 'Not configured');
@@ -4643,7 +6698,10 @@ function etradeSelectAccount(sel){
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="ghost" onclick="etradeDetail('${key}','balance')">💰 Balance</button>
-          <button class="ghost" onclick="etradeDetail('${key}','portfolio')">🔄 Refresh holdings</button>
+          <button class="ghost" onclick="etradeDetail('${key}','portfolio')">🔄 Holdings</button>
+          <button class="ghost" onclick="etradeDetail('${key}','pnl')" title="Day's and total profit &amp; loss">📈 P&amp;L</button>
+          <button class="ghost" onclick="etradeDetail('${key}','orders')" title="Recent orders">🧾 Orders</button>
+          <button class="ghost" onclick="etradeTrade('${key}')" title="Buy or sell (preview first)">🛒 Trade</button>
           <button class="ex-btn" onclick="etradeAnalyze('${key}','${etEsc(String(a.accountId||'').slice(-4))}')">📊 Analyze Portfolio</button>
         </div>
       </div>
@@ -4676,12 +6734,19 @@ async function etradeDetail(key, kind){
   catch(e){ box.innerHTML='<div class="err">'+etEsc(e)+'</div>'; return; }
   if(d.error){ box.innerHTML='<div class="err">'+etEsc(d.error)+'</div>'; return; }
   let summary='';
+  const etMoney=v=>v==null||v===''?'—':Number(v).toLocaleString(undefined,{style:'currency',currency:'USD'});
+  const etGain=(g,pct)=>{ if(g==null&&pct==null) return '—'; const c=(Number(g)||0)>=0?'#34d399':'#f87171';
+    return `<span style="color:${c}">${etMoney(g)}${pct!=null?` (${Number(pct).toFixed(2)}%)`:''}</span>`; };
   if(kind==='balance'){
     const c=((d.BalanceResponse||{}).Computed)||{};
     const rtv=c.RealTimeValues||{};
     summary=`<div class="pf-meta" style="margin-top:8px">
       Net account value: <b>${etEsc(rtv.totalAccountValue ?? c.netCash ?? '—')}</b> ·
       Cash available: <b>${etEsc(c.cashAvailableForInvestment ?? '—')}</b></div>`;
+  } else if(kind==='pnl'){
+    summary=brkRenderPnl(d);
+  } else if(kind==='orders'){
+    summary=brkRenderOrders(d);
   } else {
     let pos=(((d.PortfolioResponse||{}).AccountPortfolio||[])[0]||{}).Position||[];
     if(!Array.isArray(pos)) pos=[pos];
@@ -4707,6 +6772,143 @@ async function etradeDetail(key, kind){
   }
   box.innerHTML = summary + `<details style="margin-top:8px"><summary class="pf-meta">Raw JSON</summary>
     <pre style="white-space:pre-wrap;font-size:11px;max-height:280px;overflow:auto">${etEsc(JSON.stringify(d,null,2))}</pre></details>`;
+}
+
+/* ── shared brokerage renderers (E*TRADE + Schwab return the same /pnl & /orders shape) ── */
+function brkMoney(v){ return v==null||v===''?'—':Number(v).toLocaleString(undefined,{style:'currency',currency:'USD'}); }
+function brkGain(g,pct){ if(g==null&&pct==null) return '—'; const c=(Number(g)||0)>=0?'#34d399':'#f87171';
+  return `<span style="color:${c}">${brkMoney(g)}${pct!=null?` (${Number(pct).toFixed(2)}%)`:''}</span>`; }
+function brkRenderPnl(d){
+  const t=d.totals||{}, pos=d.positions||[];
+  const card=(l,v)=>`<div class="card"><div class="pf-meta">${l}</div><div style="font-size:17px;font-weight:700">${v}</div></div>`;
+  return `<div class="fin-cards" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-top:8px">
+      ${card('Market Value',brkMoney(t.totalMarketValue))}
+      ${card("Day's Gain",brkGain(t.todaysGainLoss,t.todaysGainLossPct))}
+      ${card('Total Gain',brkGain(t.totalGainLoss,t.totalGainLossPct))}
+      ${card('Cost Basis',brkMoney(t.totalPricePaid))}
+      ${card('Cash',brkMoney(t.cashBalance))}
+    </div>`+
+    (pos.length?`<table class="mini" style="margin-top:8px;width:100%">
+      <tr><th>Symbol</th><th>Qty</th><th>Paid</th><th>Last</th><th>Mkt Value</th><th>Day's Gain</th><th>Total Gain</th><th>% Port</th></tr>`+
+      pos.map(p=>`<tr><td><b>${etEsc(p.symbol)}</b></td><td>${etEsc(p.quantity??'')}</td>
+        <td>${brkMoney(p.pricePaid)}</td><td>${brkMoney(p.lastTrade)}</td><td>${brkMoney(p.marketValue)}</td>
+        <td>${brkGain(p.daysGain,p.daysGainPct)}</td><td>${brkGain(p.totalGain,p.totalGainPct)}</td>
+        <td>${p.pctOfPortfolio!=null?Number(p.pctOfPortfolio).toFixed(1)+'%':'—'}</td></tr>`).join('')+'</table>'
+    :'<div class="pf-meta" style="margin-top:8px">No open positions.</div>');
+}
+function brkRenderOrders(d){
+  const os=d.orders||[];
+  const when=v=>{ if(!v) return '—'; const n=Number(v); return new Date(isNaN(n)?v:n).toLocaleString(); };
+  return os.length?`<table class="mini" style="margin-top:8px;width:100%">
+      <tr><th>Placed</th><th>Symbol</th><th>Action</th><th>Qty</th><th>Filled</th><th>Type</th><th>Limit</th><th>Avg Exec</th><th>Status</th></tr>`+
+    os.map(o=>`<tr><td>${when(o.placedTime)}</td>
+      <td><b>${etEsc(o.symbol)}</b></td><td>${etEsc(o.action||'')}</td>
+      <td>${etEsc(o.orderedQuantity??'')}</td><td>${etEsc(o.filledQuantity??'')}</td>
+      <td>${etEsc(o.priceType||'')}</td><td>${o.limitPrice?brkMoney(o.limitPrice):'—'}</td>
+      <td>${o.averageExecutionPrice?brkMoney(o.averageExecutionPrice):'—'}</td>
+      <td>${etEsc(o.status||'')}</td></tr>`).join('')+'</table>'
+    :'<div class="pf-meta" style="margin-top:8px">No recent orders.</div>';
+}
+/* ── shared trade ticket (E*TRADE + Schwab): review → confirm → place ── */
+function etradeTrade(key){
+  brkTrade({api:'/api/etrade/accounts/', box:'et-detail-'+key, key, name:'E*TRADE',
+    live:(window._etEnv||'').toLowerCase()==='live',
+    terms:[['GOOD_FOR_DAY','Day'],['GOOD_UNTIL_CANCEL','GTC'],['IMMEDIATE_OR_CANCEL','IOC'],['FILL_OR_KILL','FOK']],
+    ordersFn:`etradeDetail('${key}','orders')`});
+}
+function schwabTrade(key){
+  brkTrade({api:'/api/schwab/accounts/', box:'sw-detail-'+key, key, name:'Schwab', live:true,
+    terms:[['DAY','Day'],['GOOD_TILL_CANCEL','GTC'],['IMMEDIATE_OR_CANCEL','IOC'],['FILL_OR_KILL','FOK']],
+    ordersFn:`swExtra('${key}','orders')`});
+}
+function brkTrade(cfg){
+  const box=$('#'+cfg.box); if(!box) return;
+  // only ONE ticket may exist at a time — tabs are hidden (not destroyed), so a ticket
+  // left open on another broker/account would collide on the bt-* input ids.
+  if(window._brkT && window._brkT.box!==cfg.box){
+    const old=document.getElementById(window._brkT.box);
+    if(old && old.querySelector('#bt-sym'))
+      old.innerHTML='<div class="pf-meta">Trade ticket moved to another account.</div>';
+  }
+  window._brkPrev=null;
+  window._brkT=cfg;
+  const S='background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 10px;font-size:13px';
+  box.innerHTML=`<div class="card" style="margin-top:8px${cfg.live?';border-color:#f8717155':''}">
+    <div class="up-label">🛒 Trade ${cfg.live?`<span style="color:#f87171">· ${etEsc(cfg.name)} LIVE — real money</span>`:`<span class="pf-meta">· ${etEsc(cfg.name)} sandbox</span>`}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:flex-end">
+      <label style="display:flex;flex-direction:column;gap:3px;font-size:12px"><span class="pf-meta">Symbol</span>
+        <input id="bt-sym" placeholder="AAPL" style="${S};width:90px;text-transform:uppercase"></label>
+      <label style="display:flex;flex-direction:column;gap:3px;font-size:12px"><span class="pf-meta">Action</span>
+        <select id="bt-act" style="${S}"><option>BUY</option><option>SELL</option><option>BUY_TO_COVER</option><option>SELL_SHORT</option></select></label>
+      <label style="display:flex;flex-direction:column;gap:3px;font-size:12px"><span class="pf-meta">Quantity</span>
+        <input id="bt-qty" type="number" min="1" step="1" style="${S};width:80px"></label>
+      <label style="display:flex;flex-direction:column;gap:3px;font-size:12px"><span class="pf-meta">Type</span>
+        <select id="bt-type" style="${S}" onchange="$('#bt-lim').parentElement.style.display=this.value==='LIMIT'?'':'none'"><option>MARKET</option><option>LIMIT</option></select></label>
+      <label style="display:none;flex-direction:column;gap:3px;font-size:12px"><span class="pf-meta">Limit price</span>
+        <input id="bt-lim" type="number" min="0.01" step="0.01" style="${S};width:90px"></label>
+      <label style="display:flex;flex-direction:column;gap:3px;font-size:12px"><span class="pf-meta">Term</span>
+        <select id="bt-term" style="${S}">${cfg.terms.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></label>
+      <button class="ex-btn" id="bt-go" onclick="brkPreview()">Preview order</button>
+    </div>
+    <div class="pf-meta" style="margin-top:6px">Nothing is sent to market at preview — you confirm on the next step.</div>
+    <div id="bt-prev" style="margin-top:8px"></div></div>`;
+  $('#bt-sym').focus();
+}
+async function brkPreview(){
+  const cfg=window._brkT; if(!cfg) return;
+  const g=id=>($('#'+id)||{}).value||'';
+  const body={symbol:g('bt-sym').trim().toUpperCase(), action:g('bt-act'), quantity:g('bt-qty'),
+    price_type:g('bt-type'), limit_price:g('bt-lim'), order_term:g('bt-term')};
+  const out=$('#bt-prev'), btn=$('#bt-go');
+  if(!body.symbol||!body.quantity){ out.innerHTML='<div class="err">Enter a symbol and quantity.</div>'; return; }
+  btn.disabled=true; btn.textContent='Previewing…';
+  out.innerHTML='<div class="spin">Building order preview…</div>';
+  try{
+    const r=await fetch(cfg.api+encodeURIComponent(cfg.key)+'/order/preview',{method:'POST',
+      headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    const d=await r.json();
+    if(!r.ok){ out.innerHTML='<div class="err">'+etEsc(d.error||'preview failed')+'</div>'; return; }
+    const s=d.summary||{};
+    window._brkPrev={key:cfg.key, preview_id:d.preview_id, summary:s};
+    out.innerHTML=`<div class="card" style="border-color:#f59e0b55">
+      <div class="up-label" style="font-size:12px;margin-bottom:6px">Order preview — not placed yet</div>
+      <div style="font-size:15px;margin-bottom:4px"><b>${etEsc(s.action)} ${etEsc(String(s.quantity))} ${etEsc(s.symbol)}</b>
+        · ${etEsc(s.priceType)}${s.limitPrice?(' @ '+brkMoney(s.limitPrice)):''} · ${etEsc(s.orderTerm)}</div>
+      <div class="pf-meta">Estimated total: <b>${brkMoney(s.estimatedTotalAmount)}</b>${s.lastPrice?(' · last '+brkMoney(s.lastPrice)):''} · commission: ${brkMoney(s.estimatedCommission)}</div>
+      ${(d.messages||[]).map(m=>`<div class="pf-meta" style="color:#f59e0b">⚠ ${etEsc(m)}</div>`).join('')}
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="ex-btn" onclick="brkPlace()">✅ Place order</button>
+        <button class="ghost" onclick="window._brkPrev=null;$('#bt-prev').innerHTML=''">Cancel</button>
+      </div>
+      <div class="pf-meta" style="margin-top:4px">Preview is valid for 2 minutes.</div></div>`;
+  }catch(e){ out.innerHTML='<div class="err">'+etEsc(String(e))+'</div>'; }
+  finally{ btn.disabled=false; btn.textContent='Preview order'; }
+}
+async function brkPlace(){
+  const cfg=window._brkT, p=window._brkPrev; if(!cfg||!p||p.key!==cfg.key) return;
+  const s=p.summary;
+  if(!confirm(`PLACE this order on ${cfg.name}${cfg.live?' (LIVE — real money)':''}?\n\n${s.action} ${s.quantity} ${s.symbol} · ${s.priceType}${s.limitPrice?(' @ $'+s.limitPrice):''}\nEstimated total: $${s.estimatedTotalAmount??'—'}`)) return;
+  const out=$('#bt-prev');
+  out.innerHTML='<div class="spin">Placing order…</div>';
+  try{
+    const r=await fetch(cfg.api+encodeURIComponent(cfg.key)+'/order/place',{method:'POST',
+      headers:{'Content-Type':'application/json'}, body:JSON.stringify({preview_id:p.preview_id})});
+    const d=await r.json();
+    if(!r.ok){ out.innerHTML='<div class="err">'+etEsc(d.error||'place failed')+'</div>'; return; }
+    window._brkPrev=null;
+    out.innerHTML=`<div class="card" style="border-color:#34d39955">✅ Order placed — ${etEsc(cfg.name)} order ID <b>${etEsc(String(d.order_id??'—'))}</b>
+      <div style="margin-top:8px"><button class="ghost" onclick="${cfg.ordersFn}">View orders</button></div></div>`;
+  }catch(e){ out.innerHTML='<div class="err">'+etEsc(String(e))+'</div>'; }
+}
+/* Schwab P&L / orders views (same response shape as E*TRADE) */
+async function swExtra(key, kind){
+  const box=$('#sw-detail-'+key); if(!box) return;
+  box.innerHTML='<div class="spin">Loading '+kind+'…</div>';
+  let d;
+  try { d=await (await fetch('/api/schwab/accounts/'+encodeURIComponent(key)+'/'+kind)).json(); }
+  catch(e){ box.innerHTML='<div class="err">'+etEsc(e)+'</div>'; return; }
+  if(d.error){ box.innerHTML='<div class="err">'+etEsc(d.error)+'</div>'; return; }
+  box.innerHTML = kind==='pnl' ? brkRenderPnl(d) : brkRenderOrders(d);
 }
 
 // ── Charles Schwab brokerage connection (OAuth 2.0, redirect-based) ────────────
@@ -4788,7 +6990,10 @@ function schwabSelectAccount(sel){
           <div class="pf-meta">${etEsc(a.accountId||'')} · ${etEsc(a.accountType||'')}</div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="ghost" onclick="schwabDetail('${key}')">🔄 Refresh holdings</button>
+          <button class="ghost" onclick="schwabDetail('${key}')">🔄 Holdings</button>
+          <button class="ghost" onclick="swExtra('${key}','pnl')" title="Day's and total profit &amp; loss">📈 P&amp;L</button>
+          <button class="ghost" onclick="swExtra('${key}','orders')" title="Orders from the last 30 days">🧾 Orders</button>
+          <button class="ghost" onclick="schwabTrade('${key}')" title="Buy or sell (review first)">🛒 Trade</button>
           <button class="ex-btn" onclick="schwabAnalyze('${key}','${etEsc(String(a.accountId||'').slice(-4))}')">📊 Analyze Portfolio</button>
         </div>
       </div>

@@ -247,7 +247,7 @@ async def _auth_gate(request: Request, call_next):
     # Role-based access: E*TRADE + Portfolio APIs are admin-only (server-side enforced,
     # not just hidden in the sidebar).
     _ADMIN_ONLY = ("/api/etrade", "/api/schwab", "/api/ibkr", "/api/portfolio",
-                   "/api/analyze_portfolio", "/api/finance")
+                   "/api/analyze_portfolio", "/api/finance", "/api/alerts")
     if user.get("role") != "admin" and any(path.startswith(p) for p in _ADMIN_ONLY):
         return JSONResponse({"error": "admin only"}, status_code=403)
     if user["must_reset_password"] and path not in (
@@ -257,6 +257,36 @@ async def _auth_gate(request: Request, call_next):
                                 status_code=403)
         return RedirectResponse("/change-password", status_code=302)
     return await call_next(request)
+
+
+# Security response headers. Registered AFTER _auth_gate so it is the OUTERMOST middleware —
+# it therefore also stamps auth-gate redirects/401s (e.g. the login page + /login redirect).
+# CSP allows 'unsafe-inline' because the whole UI is built on inline scripts + on* handlers;
+# frame-ancestors/object-src/base-uri still add real value (clickjacking + injected-object/
+# base defenses), and HSTS is emitted only in production.
+_CSP = ("default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; "
+        "font-src 'self' data:; "
+        "connect-src 'self'; "
+        "form-action 'self'; "
+        "base-uri 'self'; "
+        "object-src 'none'; "
+        "frame-ancestors 'none'")
+
+
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    resp = await call_next(request)
+    resp.headers.setdefault("X-Frame-Options", "DENY")
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    resp.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+    resp.headers.setdefault("Content-Security-Policy", _CSP)
+    if IS_PRODUCTION:
+        resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return resp
 
 
 # ── Auth pages — JSON-submitted via fetch (no form-urlencoded password fields) ──
@@ -327,21 +357,82 @@ def login_page(request: Request):
     return HTMLResponse(login_html())
 
 
+# ── Login brute-force throttle (in-memory; single-instance service) ───────────
+# Keyed by client IP AND by identifier so neither a single IP spraying accounts nor a
+# distributed guess against one account gets unlimited tries. Lockout is exponential.
+_LOGIN_FAILS: dict = {}          # key -> {"count": int, "until": epoch}
+_LOGIN_MAX = 5                   # free attempts before lockout kicks in
+_LOGIN_BASE_LOCK = 30            # seconds; doubles each further failure, capped
+_LOGIN_MAX_LOCK = 900            # 15 min cap
+
+
+def _client_ip(request: Request) -> str:
+    # App Runner terminates TLS and forwards the real client in X-Forwarded-For.
+    xff = request.headers.get("x-forwarded-for", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "?"
+
+
+def _login_keys(ip: str, identifier: str) -> list[str]:
+    return [f"ip:{ip}", f"id:{(identifier or '').lower()}"]
+
+
+def _login_locked(ip: str, identifier: str) -> int:
+    """Seconds remaining if locked out (max across the IP + identifier keys), else 0."""
+    now = time.time()
+    worst = 0
+    for k in _login_keys(ip, identifier):
+        rec = _LOGIN_FAILS.get(k)
+        if rec and rec["count"] >= _LOGIN_MAX and rec["until"] > now:
+            worst = max(worst, int(rec["until"] - now) + 1)
+    return worst
+
+
+def _login_record_failure(ip: str, identifier: str) -> None:
+    now = time.time()
+    for k in _login_keys(ip, identifier):
+        rec = _LOGIN_FAILS.get(k) or {"count": 0, "until": 0}
+        rec["count"] += 1
+        if rec["count"] >= _LOGIN_MAX:
+            lock = min(_LOGIN_BASE_LOCK * (2 ** (rec["count"] - _LOGIN_MAX)), _LOGIN_MAX_LOCK)
+            rec["until"] = now + lock
+        _LOGIN_FAILS[k] = rec
+    # opportunistic cleanup so the dict can't grow unbounded
+    if len(_LOGIN_FAILS) > 4096:
+        for k in [k for k, v in _LOGIN_FAILS.items() if v["until"] < now and v["count"] < _LOGIN_MAX]:
+            _LOGIN_FAILS.pop(k, None)
+
+
+def _login_clear(ip: str, identifier: str) -> None:
+    for k in _login_keys(ip, identifier):
+        _LOGIN_FAILS.pop(k, None)
+
+
 @app.post("/api/login")
 async def api_login(request: Request):
     """JSON login. Password is read from the body, used only to verify, then dropped.
-    Generic error (never reveals whether the username exists)."""
+    Generic error (never reveals whether the username exists). Brute-force throttled
+    per client IP + per identifier (lockout after too many failures)."""
     try:
         b = await request.json()
     except Exception:  # noqa: BLE001
         b = {}
     identifier = (b.get("identifier") or "").strip()
+    ip = _client_ip(request)
+    locked = _login_locked(ip, identifier)
+    if locked:
+        return JSONResponse(
+            {"success": False, "error": f"Too many failed attempts. Try again in {locked}s."},
+            status_code=429, headers={"Retry-After": str(locked)})
     password = b.get("password") or ""
     u = users_db.get_by_login(identifier)
     ok = bool(u and u["is_active"] and users_db.verify_password(password, u["password_hash"]))
     password = None  # overwrite the raw value as soon as verification is done
     if not ok:
+        _login_record_failure(ip, identifier)
         return JSONResponse({"success": False, "error": "Invalid username or password"}, status_code=401)
+    _login_clear(ip, identifier)
     users_db.touch_last_login(u["id"])
     resp = JSONResponse({"success": True,
                          "redirect": "/change-password" if u["must_reset_password"] else "/"})
@@ -555,6 +646,187 @@ def etrade_portfolio(account_id_key: str, request: Request):
         return JSONResponse({"error": str(e)}, 502)
 
 
+@app.get("/api/etrade/accounts/{account_id_key}/pnl")
+def etrade_pnl(account_id_key: str, request: Request):
+    """Profit & loss: per-position day's/total gain + the account-level Totals block."""
+    sess, err = _et_session_or_error(request)
+    if err:
+        return err
+    try:
+        data = etrade.ETradeClient().portfolio(sess["token"], sess["secret"], account_id_key)
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": str(e)}, 502)
+    resp = (data or {}).get("PortfolioResponse") or {}
+    ap = (resp.get("AccountPortfolio") or [{}])[0]
+    pos = ap.get("Position") or []
+    if isinstance(pos, dict):
+        pos = [pos]
+    rows = []
+    for p in pos:
+        q = p.get("Quick") or {}
+        rows.append({
+            "symbol": ((p.get("Product") or {}).get("symbol") or p.get("symbolDescription") or "").upper(),
+            "quantity": _num(p.get("quantity")),
+            "pricePaid": _num(p.get("pricePaid")),
+            "lastTrade": _num(q.get("lastTrade")),
+            "totalCost": _num(p.get("totalCost")),
+            "marketValue": _num(p.get("marketValue")),
+            "daysGain": _num(p.get("daysGain")), "daysGainPct": _num(p.get("daysGainPct")),
+            "totalGain": _num(p.get("totalGain")), "totalGainPct": _num(p.get("totalGainPct")),
+            "pctOfPortfolio": _num(p.get("pctOfPortfolio")),
+        })
+    t = resp.get("Totals") or {}
+    return {"positions": rows, "totals": {
+        "todaysGainLoss": _num(t.get("todaysGainLoss")),
+        "todaysGainLossPct": _num(t.get("todaysGainLossPct")),
+        "totalGainLoss": _num(t.get("totalGainLoss")),
+        "totalGainLossPct": _num(t.get("totalGainLossPct")),
+        "totalMarketValue": _num(t.get("totalMarketValue")),
+        "totalPricePaid": _num(t.get("totalPricePaid")),
+        "cashBalance": _num(t.get("cashBalance")),
+    }}
+
+
+@app.get("/api/etrade/accounts/{account_id_key}/orders")
+def etrade_orders(account_id_key: str, request: Request):
+    sess, err = _et_session_or_error(request)
+    if err:
+        return err
+    try:
+        data = etrade.ETradeClient().list_orders(sess["token"], sess["secret"], account_id_key)
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": str(e)}, 502)
+    orders = ((data or {}).get("OrdersResponse") or {}).get("Order") or []
+    if isinstance(orders, dict):
+        orders = [orders]
+    out = []
+    for o in orders:
+        det = o.get("OrderDetail") or []
+        if isinstance(det, dict):
+            det = [det]
+        d0 = det[0] if det else {}
+        inst = d0.get("Instrument") or []
+        if isinstance(inst, dict):
+            inst = [inst]
+        i0 = inst[0] if inst else {}
+        out.append({
+            "orderId": o.get("orderId"), "orderType": o.get("orderType"),
+            "status": d0.get("status"), "placedTime": d0.get("placedTime"),
+            "symbol": ((i0.get("Product") or {}).get("symbol") or ""),
+            "action": i0.get("orderAction"),
+            "orderedQuantity": _num(i0.get("orderedQuantity") or i0.get("quantity")),
+            "filledQuantity": _num(i0.get("filledQuantity")),
+            "priceType": d0.get("priceType"), "limitPrice": _num(d0.get("limitPrice")),
+            "averageExecutionPrice": _num(i0.get("averageExecutionPrice")),
+        })
+    return {"orders": out}
+
+
+# Order tickets: E*TRADE requires preview → place with the SAME clientOrderId + Order
+# payload. Previews are held in memory per user for 2 minutes; place must reference the
+# exact previewId, so a stale/foreign preview can never be executed.
+_ET_PREVIEWS: dict = {}   # user_id -> {account, preview_id, client_order_id, order, summary, ts}
+_ET_ACTIONS = {"BUY", "SELL", "BUY_TO_COVER", "SELL_SHORT"}
+_ET_TERMS = {"GOOD_FOR_DAY", "GOOD_UNTIL_CANCEL", "IMMEDIATE_OR_CANCEL", "FILL_OR_KILL"}
+
+
+@app.post("/api/etrade/accounts/{account_id_key}/order/preview")
+async def etrade_order_preview(account_id_key: str, request: Request):
+    sess, err = _et_session_or_error(request)
+    if err:
+        return err
+    uid, _ = _et_uid(request)
+    try:
+        b = await request.json()
+    except Exception:  # noqa: BLE001
+        b = {}
+    symbol = (b.get("symbol") or "").strip().upper()
+    action = (b.get("action") or "").strip().upper()
+    price_type = (b.get("price_type") or "MARKET").strip().upper()
+    order_term = (b.get("order_term") or "GOOD_FOR_DAY").strip().upper()
+    if not re.match(r"^[A-Z][A-Z0-9.\-]{0,9}$", symbol):
+        return JSONResponse({"error": "enter a valid ticker symbol"}, 400)
+    if action not in _ET_ACTIONS:
+        return JSONResponse({"error": f"action must be one of {sorted(_ET_ACTIONS)}"}, 400)
+    if price_type not in ("MARKET", "LIMIT"):
+        return JSONResponse({"error": "price_type must be MARKET or LIMIT"}, 400)
+    if order_term not in _ET_TERMS:
+        return JSONResponse({"error": f"order_term must be one of {sorted(_ET_TERMS)}"}, 400)
+    try:
+        qty = int(b.get("quantity"))
+        assert qty > 0
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"error": "quantity must be a positive whole number"}, 400)
+    limit_price = None
+    if price_type == "LIMIT":
+        try:
+            limit_price = round(float(b.get("limit_price")), 2)
+            assert limit_price > 0
+        except Exception:  # noqa: BLE001
+            return JSONResponse({"error": "a positive limit price is required for LIMIT orders"}, 400)
+    try:
+        out = etrade.ETradeClient().preview_order(
+            sess["token"], sess["secret"], account_id_key, symbol=symbol, action=action,
+            quantity=qty, price_type=price_type, limit_price=limit_price, order_term=order_term)
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": str(e)}, 502)
+    pr = out.get("PreviewOrderResponse") or {}
+    pids = pr.get("PreviewIds") or []
+    if isinstance(pids, dict):
+        pids = [pids]
+    pid = (pids[0] or {}).get("previewId") if pids else None
+    if not pid:
+        return JSONResponse({"error": f"E*TRADE returned no previewId: {str(pr)[:300]}"}, 502)
+    ordr = pr.get("Order") or []
+    if isinstance(ordr, dict):
+        ordr = [ordr]
+    o0 = ordr[0] if ordr else {}
+    msgs = ((o0.get("messages") or {}).get("Message") or [])
+    if isinstance(msgs, dict):
+        msgs = [msgs]
+    summary = {"symbol": symbol, "action": action, "quantity": qty, "priceType": price_type,
+               "limitPrice": limit_price, "orderTerm": order_term,
+               "estimatedCommission": _num(o0.get("estimatedCommission")),
+               "estimatedTotalAmount": _num(o0.get("estimatedTotalAmount"))}
+    _ET_PREVIEWS[uid] = {"account": account_id_key, "preview_id": pid,
+                         "client_order_id": out["_client_order_id"], "order": out["_order"],
+                         "summary": summary, "ts": time.time()}
+    return {"preview_id": pid, "summary": summary,
+            "messages": [m.get("description") or "" for m in msgs if m]}
+
+
+@app.post("/api/etrade/accounts/{account_id_key}/order/place")
+async def etrade_order_place(account_id_key: str, request: Request):
+    sess, err = _et_session_or_error(request)
+    if err:
+        return err
+    uid, _ = _et_uid(request)
+    try:
+        b = await request.json()
+    except Exception:  # noqa: BLE001
+        b = {}
+    pend = _ET_PREVIEWS.get(uid)
+    if (not pend or str(pend["preview_id"]) != str(b.get("preview_id"))
+            or pend["account"] != account_id_key):
+        return JSONResponse({"error": "no matching preview — preview the order first"}, 400)
+    if time.time() - pend["ts"] > 120:
+        _ET_PREVIEWS.pop(uid, None)
+        return JSONResponse({"error": "preview expired (2 min) — preview the order again"}, 400)
+    try:
+        out = etrade.ETradeClient().place_order(
+            sess["token"], sess["secret"], account_id_key, preview_id=pend["preview_id"],
+            client_order_id=pend["client_order_id"], order=pend["order"])
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": str(e)}, 502)
+    _ET_PREVIEWS.pop(uid, None)
+    po = out.get("PlaceOrderResponse") or {}
+    oids = po.get("OrderIds") or []
+    if isinstance(oids, dict):
+        oids = [oids]
+    oid = (oids[0] or {}).get("orderId") if oids else None
+    return {"placed": True, "order_id": oid, "summary": pend["summary"]}
+
+
 def _extract_etrade_holdings(data: dict) -> tuple:
     """Parse an E*TRADE portfolio response → (holdings, total_value, total_gain).
     holdings = [{ticker, qty, cost_basis}]. NO tokens/credentials are touched."""
@@ -756,6 +1028,193 @@ def schwab_portfolio(account_number: str, request: Request):
             holdings, tv, tg = _extract_schwab_holdings(sa)
             return {"holdings": holdings, "total_value": tv, "total_gain": tg}
     return JSONResponse({"error": "account not found"}, 404)
+
+
+@app.get("/api/schwab/accounts/{account_number}/pnl")
+def schwab_pnl(account_number: str, request: Request):
+    """Profit & loss per position + account totals (day's gain from Schwab, totals computed)."""
+    uid, _ = _schwab_uid(request)
+    raw, err = _schwab_accounts_raw(uid)
+    if err:
+        return err
+    for a in raw or []:
+        sa = a.get("securitiesAccount") or a
+        if str(sa.get("accountNumber")) != account_number:
+            continue
+        rows, day_sum, gain_sum, mv_sum = [], 0.0, 0.0, 0.0
+        for p in sa.get("positions") or []:
+            sym = ((p.get("instrument") or {}).get("symbol") or "").strip().upper()
+            if not sym:
+                continue
+            qty = _num(p.get("longQuantity")) - _num(p.get("shortQuantity"))
+            avg = _num(p.get("averagePrice"))
+            mv = _num(p.get("marketValue"))
+            gain = _num(p.get("longOpenProfitLoss")) + _num(p.get("shortOpenProfitLoss"))
+            cost = round(avg * qty, 2) if (avg and qty) else round(mv - gain, 2)
+            rows.append({
+                "symbol": sym, "quantity": qty, "pricePaid": avg,
+                "lastTrade": round(mv / qty, 2) if qty else None,
+                "totalCost": cost, "marketValue": mv,
+                "daysGain": _num(p.get("currentDayProfitLoss")),
+                "daysGainPct": _num(p.get("currentDayProfitLossPercentage")),
+                "totalGain": round(gain, 2),
+                "totalGainPct": round(gain / cost * 100, 2) if cost else None,
+            })
+            day_sum += _num(p.get("currentDayProfitLoss"))
+            gain_sum += gain
+            mv_sum += mv
+        for r in rows:
+            r["pctOfPortfolio"] = round((r["marketValue"] or 0) / mv_sum * 100, 2) if mv_sum else None
+        bal = sa.get("currentBalances") or {}
+        cost_sum = sum(r["totalCost"] or 0 for r in rows)
+        return {"positions": rows, "totals": {
+            "todaysGainLoss": round(day_sum, 2),
+            "todaysGainLossPct": round(day_sum / (mv_sum - day_sum) * 100, 2) if (mv_sum - day_sum) else None,
+            "totalGainLoss": round(gain_sum, 2),
+            "totalGainLossPct": round(gain_sum / cost_sum * 100, 2) if cost_sum else None,
+            "totalMarketValue": round(mv_sum, 2),
+            "totalPricePaid": round(cost_sum, 2),
+            "cashBalance": _num(bal.get("cashBalance")),
+            "liquidationValue": _num(bal.get("liquidationValue")),
+        }}
+    return JSONResponse({"error": "account not found"}, 404)
+
+
+def _schwab_hash(uid, account_number: str):
+    """Order endpoints need the account HASH (never the raw number) — cached per session."""
+    sess = _SCHWAB_SESSIONS.get(uid) or {}
+    hashes = sess.get("hashes") or {}
+    if account_number not in hashes:
+        token = _schwab_access(uid)
+        if not token:
+            return None
+        for e in _schwab_client().account_numbers(token):
+            hashes[str(e.get("accountNumber"))] = e.get("hashValue")
+        sess["hashes"] = hashes
+    return hashes.get(account_number)
+
+
+@app.get("/api/schwab/accounts/{account_number}/orders")
+def schwab_orders(account_number: str, request: Request):
+    uid, _ = _schwab_uid(request)
+    token = _schwab_access(uid)
+    if not token:
+        return JSONResponse({"error": "Not connected to Schwab."}, 400)
+    try:
+        h = _schwab_hash(uid, account_number)
+        if not h:
+            return JSONResponse({"error": "account not found"}, 404)
+        now = dt.datetime.now(dt.timezone.utc)
+        orders = _schwab_client().orders(
+            token, h, (now - dt.timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+            now.strftime("%Y-%m-%dT%H:%M:%S.000Z"))
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": str(e)}, 502)
+    out = []
+    for o in orders or []:
+        legs = o.get("orderLegCollection") or []
+        l0 = legs[0] if legs else {}
+        out.append({
+            "orderId": o.get("orderId"), "status": o.get("status"),
+            "placedTime": o.get("enteredTime"),
+            "symbol": ((l0.get("instrument") or {}).get("symbol") or ""),
+            "action": l0.get("instruction"),
+            "orderedQuantity": _num(o.get("quantity")),
+            "filledQuantity": _num(o.get("filledQuantity")),
+            "priceType": o.get("orderType"), "limitPrice": _num(o.get("price")),
+            "averageExecutionPrice": _num((((o.get("orderActivityCollection") or [{}])[0]
+                                            .get("executionLegs") or [{}])[0]).get("price")),
+        })
+    return {"orders": out}
+
+
+# Schwab has no preview endpoint — our review step builds the exact payload, shows it
+# (with a best-effort quote estimate), and only the reviewed payload can be placed.
+_SCHWAB_PREVIEWS: dict = {}   # uid -> {account, preview_id, payload, summary, ts}
+_SW_INSTRUCTIONS = {"BUY", "SELL", "SELL_SHORT", "BUY_TO_COVER"}
+_SW_DURATIONS = {"DAY", "GOOD_TILL_CANCEL", "IMMEDIATE_OR_CANCEL", "FILL_OR_KILL"}
+
+
+@app.post("/api/schwab/accounts/{account_number}/order/preview")
+async def schwab_order_preview(account_number: str, request: Request):
+    uid, _ = _schwab_uid(request)
+    token = _schwab_access(uid)
+    if not token:
+        return JSONResponse({"error": "Not connected to Schwab."}, 400)
+    try:
+        b = await request.json()
+    except Exception:  # noqa: BLE001
+        b = {}
+    symbol = (b.get("symbol") or "").strip().upper()
+    action = (b.get("action") or "").strip().upper()
+    price_type = (b.get("price_type") or "MARKET").strip().upper()
+    duration = (b.get("order_term") or "DAY").strip().upper()
+    if not re.match(r"^[A-Z][A-Z0-9.\-/]{0,9}$", symbol):
+        return JSONResponse({"error": "enter a valid ticker symbol"}, 400)
+    if action not in _SW_INSTRUCTIONS:
+        return JSONResponse({"error": f"action must be one of {sorted(_SW_INSTRUCTIONS)}"}, 400)
+    if price_type not in ("MARKET", "LIMIT"):
+        return JSONResponse({"error": "price_type must be MARKET or LIMIT"}, 400)
+    if duration not in _SW_DURATIONS:
+        return JSONResponse({"error": f"order_term must be one of {sorted(_SW_DURATIONS)}"}, 400)
+    try:
+        qty = int(b.get("quantity"))
+        assert qty > 0
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"error": "quantity must be a positive whole number"}, 400)
+    limit_price = None
+    if price_type == "LIMIT":
+        try:
+            limit_price = round(float(b.get("limit_price")), 2)
+            assert limit_price > 0
+        except Exception:  # noqa: BLE001
+            return JSONResponse({"error": "a positive limit price is required for LIMIT orders"}, 400)
+    if not _schwab_hash(uid, account_number):
+        return JSONResponse({"error": "account not found"}, 404)
+    last = None
+    try:                                        # best-effort estimate; never blocks the order
+        qd = _schwab_client().quote(token, symbol)
+        last = _num(((qd.get(symbol) or {}).get("quote") or {}).get("lastPrice"))
+    except Exception:  # noqa: BLE001
+        pass
+    est = round((limit_price or last) * qty, 2) if (limit_price or last) else None
+    payload = schwab.SchwabClient.order_payload(symbol, action, qty, price_type, limit_price, duration)
+    pid = secrets.token_urlsafe(12)
+    summary = {"symbol": symbol, "action": action, "quantity": qty, "priceType": price_type,
+               "limitPrice": limit_price, "orderTerm": duration, "lastPrice": last,
+               "estimatedTotalAmount": est, "estimatedCommission": 0}
+    _SCHWAB_PREVIEWS[uid] = {"account": account_number, "preview_id": pid, "payload": payload,
+                             "summary": summary, "ts": time.time()}
+    msgs = [] if last else ["No live quote available — the estimate is blank; the order will fill at market."] \
+        if price_type == "MARKET" else []
+    return {"preview_id": pid, "summary": summary, "messages": msgs}
+
+
+@app.post("/api/schwab/accounts/{account_number}/order/place")
+async def schwab_order_place(account_number: str, request: Request):
+    uid, _ = _schwab_uid(request)
+    token = _schwab_access(uid)
+    if not token:
+        return JSONResponse({"error": "Not connected to Schwab."}, 400)
+    try:
+        b = await request.json()
+    except Exception:  # noqa: BLE001
+        b = {}
+    pend = _SCHWAB_PREVIEWS.get(uid)
+    if (not pend or pend["preview_id"] != b.get("preview_id")
+            or pend["account"] != account_number):
+        return JSONResponse({"error": "no matching preview — preview the order first"}, 400)
+    if time.time() - pend["ts"] > 120:
+        _SCHWAB_PREVIEWS.pop(uid, None)
+        return JSONResponse({"error": "preview expired (2 min) — preview the order again"}, 400)
+    try:
+        h = _schwab_hash(uid, account_number)
+        out = _schwab_client().place_order(token, h, pend["payload"])
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": str(e)}, 502)
+    _SCHWAB_PREVIEWS.pop(uid, None)
+    oid = (out.get("location") or "").rstrip("/").split("/")[-1] or None
+    return {"placed": True, "order_id": oid, "summary": pend["summary"]}
 
 
 @app.post("/api/schwab/analyze")
@@ -1380,15 +1839,27 @@ def finance_summary():
 
 
 @app.get("/api/finance/assets")
-def finance_assets():
-    return {"timeline": finance.timeline("asset"), "latest": finance.latest_breakdown("asset"),
-            "rows": finance.records("asset")}
+def finance_assets(period_type: str = "all", year: str = "", quarter: str = "",
+                   period_from: str = "", period_to: str = "", categories: str = "", items: str = ""):
+    """Assets page — one filtered dataset drives cards, charts, and table together."""
+    try:
+        return finance.assets_search({"period_type": period_type, "year": year, "quarter": quarter,
+                                      "period_from": period_from, "period_to": period_to,
+                                      "categories": categories, "items": items})
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
 
 
 @app.get("/api/finance/liabilities")
-def finance_liabilities():
-    return {"timeline": finance.timeline("liability"), "latest": finance.latest_breakdown("liability"),
-            "rows": finance.records("liability")}
+def finance_liabilities(period_type: str = "all", year: str = "", quarter: str = "",
+                        period_from: str = "", period_to: str = "", categories: str = "", items: str = ""):
+    """Liabilities page — same filtered-search service as Assets (dataset='liability')."""
+    try:
+        return finance.assets_search({"period_type": period_type, "year": year, "quarter": quarter,
+                                      "period_from": period_from, "period_to": period_to,
+                                      "categories": categories, "items": items}, dataset="liability")
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
 
 
 @app.get("/api/finance/networth")
@@ -1398,7 +1869,7 @@ def finance_networth():
 
 @app.get("/api/finance/cashflow")
 def finance_cashflow():
-    return {"timeline": finance.timeline("cashflow"), "rows": finance.records("cashflow")}
+    return finance.cashflow_series()
 
 
 @app.get("/api/finance/tax")
@@ -1412,8 +1883,30 @@ def finance_ccinterest():
 
 
 @app.get("/api/finance/expenses")
-def finance_expenses():
-    return finance.monthly_expenses()
+def finance_expenses(month: str | None = None):
+    return finance.monthly_expenses(month)
+
+
+@app.post("/api/finance/records/batch")
+async def finance_records_batch(request: Request):
+    """Inline matrix edits (Assets/Liabilities): reviewed cell changes → upsert/delete + audit."""
+    b = await request.json()
+    return _fin_call(finance.records_batch, b.get("dataset") or "", b.get("changes") or [],
+                     _fin_actor(request))
+
+
+@app.post("/api/finance/records/rename")
+async def finance_records_rename(request: Request):
+    b = await request.json()
+    return _fin_call(finance.record_item_rename, b.get("dataset") or "", b.get("old") or "",
+                     b.get("new") or "", _fin_actor(request))
+
+
+@app.post("/api/finance/records/delete-item")
+async def finance_records_delete_item(request: Request):
+    b = await request.json()
+    return _fin_call(finance.record_item_delete, b.get("dataset") or "", b.get("item") or "",
+                     _fin_actor(request))
 
 
 @app.get("/api/finance/imports")
@@ -1425,6 +1918,700 @@ def finance_imports():
 def finance_reimport():
     """Re-import the bundled workbook, replacing existing data (audited in import history)."""
     return finance.run_import(replace=True)
+
+
+# ── Payment Apps — registered payment-site launchers + screenshot→expense imports.
+# The app NEVER stores site credentials: "Open" launches the real site in a new browser
+# tab where Chrome's own password manager autofills. Screenshots are analyzed by the
+# vision model and discarded — only the extracted lines are stored.
+@app.get("/api/finance/apps")
+def finance_apps_list(include_archived: bool = False):
+    return {"apps": finance.payment_apps(include_archived=include_archived)}
+
+
+@app.post("/api/finance/apps")
+async def finance_apps_create(request: Request):
+    try:
+        return finance.payment_app_save(await request.json(), actor=_fin_actor(request))
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+
+@app.put("/api/finance/apps/{app_id}")
+async def finance_apps_update(app_id: int, request: Request):
+    try:
+        return finance.payment_app_save(await request.json(), app_id, actor=_fin_actor(request))
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+
+@app.delete("/api/finance/apps/{app_id}")
+def finance_apps_delete(app_id: int, request: Request):
+    finance.payment_app_delete(app_id, _fin_actor(request))
+    return {"ok": True}
+
+
+@app.post("/api/finance/apps/{app_id}/opened")
+def finance_apps_opened(app_id: int):
+    finance.payment_app_reviewed(app_id)
+    return {"ok": True}
+
+
+_FIN_CATEGORIES = ["Housing", "Utilities", "Insurance", "Food", "Medical", "Education",
+                   "Shopping", "Travel", "Investments", "Entertainment", "Income", "Miscellaneous"]
+_FIN_NUM = {"type": ["number", "null"]}
+_FIN_DATE = {"type": ["string", "null"], "description": "YYYY-MM-DD if visible"}
+_FIN_EXTRACT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        # account identity
+        "institution": {"type": ["string", "null"], "description": "Financial institution (Chase, Bank of America…)"},
+        "account_name": {"type": ["string", "null"], "description": "Account holder / account nickname"},
+        "account_type": {"type": ["string", "null"], "description": "e.g. Business Credit Card, Checking, Mortgage, HOA"},
+        "masked_account_number": {"type": ["string", "null"], "description": "LAST 4 DIGITS ONLY — never more"},
+        # balances
+        "current_balance": _FIN_NUM, "statement_balance": _FIN_NUM, "previous_balance": _FIN_NUM,
+        "available_credit": _FIN_NUM, "credit_limit": _FIN_NUM, "past_due_amount": _FIN_NUM,
+        # payment info
+        "minimum_payment_due": _FIN_NUM, "total_payment_due": _FIN_NUM,
+        "last_payment_amount": _FIN_NUM, "last_payment_date": _FIN_DATE,
+        "scheduled_payment_amount": _FIN_NUM, "scheduled_payment_date": _FIN_DATE,
+        "autopay_enabled": {"type": ["boolean", "null"]},
+        "payment_confirmation_status": {"type": ["string", "null"],
+                                        "description": "Only if the screenshot explicitly shows a payment as posted/completed/credited/scheduled/pending"},
+        # statement info
+        "statement_start_date": _FIN_DATE, "statement_end_date": _FIN_DATE,
+        "statement_close_date": _FIN_DATE, "due_date": _FIN_DATE,
+        "statement_month": {"type": ["string", "null"], "description": "Statement/activity month as YYYY-MM if visible"},
+        "interest_charged": _FIN_NUM, "fees_charged": _FIN_NUM,
+        "new_purchases": _FIN_NUM, "credits": _FIN_NUM, "rewards": _FIN_NUM,
+        "currency": {"type": ["string", "null"], "description": "ISO code, default USD"},
+        # meta
+        "source": {"type": ["string", "null"], "description": "Bank/site name if identifiable from the screenshot"},
+        "summary": {"type": "string", "description": "One-line summary of what the screenshot shows"},
+        "confidence": {"type": "number", "description": "0..1 — your confidence in the extracted fields overall"},
+        "lines": {"type": "array", "items": {"type": "object", "properties": {
+            "description": {"type": "string"},
+            "amount": {"type": "number", "description": "Charges/payments/expenses NEGATIVE; credits/refunds/income POSITIVE"},
+            "category": {"type": "string", "enum": _FIN_CATEGORIES},
+            "date": {"type": "string", "description": "Transaction date if visible (YYYY-MM-DD or as shown)"},
+        }, "required": ["description", "amount"]}},
+    },
+    "required": ["lines", "summary", "confidence"],
+}
+_FIN_EXTRACT_PROMPT = (
+    "This is a screenshot of a payment/banking/billing website belonging to the user (their own account). "
+    "Extract two things:\n"
+    "1) STATEMENT FIELDS — institution, account type/name, balances (current/statement/previous), "
+    "credit limit + available credit, minimum and total payment due, due date, statement period/close dates, "
+    "last + scheduled payments, autopay status, interest/fees/purchases/credits/rewards, statement month. "
+    "Use null for anything not visible — NEVER guess. Do NOT report a payment as made unless the screenshot "
+    "explicitly shows it as posted, completed, or credited (use payment_confirmation_status for that).\n"
+    "2) `lines` — EVERY transaction, charge, bill, or payment line visible. Sign convention: "
+    "expenses/charges/payments NEGATIVE; income/credits/refunds POSITIVE. Pick the closest category. "
+    "If no transaction lines are visible (e.g. a balance/summary page), lines may be empty.\n"
+    "Account numbers: LAST 4 DIGITS ONLY, never more. Set `confidence` (0..1) for the overall extraction.")
+
+
+def _fin_extract_claude(b64: str, media: str, hint: str, key: str):
+    import anthropic
+    client = anthropic.Anthropic(api_key=key)
+    msg = _models.with_fallback(_models.CLAUDE, lambda mdl: client.messages.create(
+        model=mdl, max_tokens=3000,
+        tools=[{"name": "record_expenses", "description": "Record the extracted expense lines.",
+                "input_schema": _FIN_EXTRACT_SCHEMA}],
+        tool_choice={"type": "tool", "name": "record_expenses"},
+        messages=[{"role": "user", "content": [
+            {"type": "image", "source": {"type": "base64", "media_type": media, "data": b64}},
+            {"type": "text", "text": _FIN_EXTRACT_PROMPT + hint}]}]))
+    return next((b.input for b in msg.content if getattr(b, "type", "") == "tool_use"), None)
+
+
+def _fin_extract_openai(b64: str, media: str, hint: str, key: str):
+    from openai import OpenAI
+    client = OpenAI(api_key=key)
+    resp = _models.with_fallback(_models.GPT, lambda mdl: client.chat.completions.create(
+        model=mdl,
+        messages=[{"role": "user", "content": [
+            {"type": "image_url", "image_url": {"url": f"data:{media};base64,{b64}"}},
+            {"type": "text", "text": _FIN_EXTRACT_PROMPT + hint}]}],
+        tools=[{"type": "function", "function": {
+            "name": "record_expenses", "description": "Record the extracted expense lines.",
+            "parameters": _FIN_EXTRACT_SCHEMA}}],
+        tool_choice={"type": "function", "function": {"name": "record_expenses"}},
+        max_completion_tokens=3000, reasoning_effort="minimal"))
+    calls = resp.choices[0].message.tool_calls
+    return json.loads(calls[0].function.arguments) if calls else None
+
+
+@app.post("/api/finance/screenshot")
+async def finance_screenshot(request: Request):
+    """Analyze a pasted/dropped payment-site screenshot → proposed expense lines.
+    The image is sent to the vision model and NOT persisted anywhere."""
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"error": "invalid JSON body"}, status_code=400)
+    data_url = str(body.get("image") or "")
+    m = re.match(r"^data:(image/(?:png|jpeg|webp|gif));base64,(.+)$", data_url, re.S)
+    if not m:
+        return JSONResponse({"error": "image must be a base64 data URL (png/jpeg/webp/gif)"}, status_code=400)
+    media, b64 = m.group(1), m.group(2)
+    if len(b64) > 12_000_000:
+        return JSONResponse({"error": "image too large — please crop or downscale"}, status_code=413)
+    app_id = body.get("app_id")
+    app_name = (body.get("app_name") or "").strip()
+    month = (body.get("month") or "").strip() or None
+    # Duplicate-import guard: same image already analyzed (hash of the decoded bytes).
+    import base64 as _b64mod
+    try:
+        source_hash = hashlib.sha256(_b64mod.b64decode(b64)).hexdigest()
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"error": "invalid base64 image data"}, status_code=400)
+    dup = finance.screenshot_duplicate(source_hash)
+    if dup and not body.get("force"):
+        return JSONResponse({"error": f"duplicate screenshot — already imported as #{dup['id']} "
+                                      f"({dup.get('app_name') or '?'} · {dup.get('month') or '?'}, {dup['status']}). "
+                                      f"Re-send with force=true to analyze anyway.",
+                             "duplicate_of": dup["id"]}, status_code=409)
+    hint = f"\nThe user says this screenshot is from: {app_name}." if app_name else ""
+    if month:
+        hint += f"\nThe user is importing this as expenses for month {month}."
+
+    akey, okey = _anthropic_key(), _openai_key()
+    if not akey and not okey:
+        return JSONResponse({"error": "no ANTHROPIC_API_KEY or OPENAI_API_KEY configured"}, status_code=503)
+    out, provider, last_err = None, None, None
+    if akey:
+        try:
+            out, provider = _fin_extract_claude(b64, media, hint, akey), "claude"
+        except Exception as e:  # noqa: BLE001
+            last_err = _err_detail(e)
+    if out is None and okey:
+        try:
+            out, provider = _fin_extract_openai(b64, media, hint, okey), "gpt"
+        except Exception as e:  # noqa: BLE001
+            last_err = _err_detail(e)
+    if not out:
+        return JSONResponse({"error": f"could not analyze screenshot: {last_err or 'no extraction returned'}"},
+                            status_code=422)
+    out["lines"] = out.get("lines") or []
+    for ln in out["lines"]:
+        if not ln.get("category"):
+            ln["category"] = finance.classify_expense(str(ln.get("description") or ""))
+    if out.get("masked_account_number"):     # belt & braces: never keep more than last-4
+        out["masked_account_number"] = re.sub(r"\D", "", str(out["masked_account_number"]))[-4:]
+    sid = finance.screenshot_save(app_id, app_name or out.get("source") or "", month, out, source_hash)
+    fields = {k: v for k, v in out.items() if k not in ("lines", "summary", "source", "confidence")
+              and v is not None}
+    return {"id": sid, "provider": provider, "month": month or out.get("statement_month") or "",
+            "source": out.get("source") or app_name, "summary": out.get("summary") or "",
+            "confidence": out.get("confidence"), "fields": fields,
+            "lines": out["lines"], "categories": _FIN_CATEGORIES}
+
+
+@app.post("/api/finance/screenshot/{sid}/apply")
+async def finance_screenshot_apply(sid: int, request: Request):
+    try:
+        body = await request.json()
+        return finance.screenshot_apply(sid, body.get("lines") or [],
+                                        (body.get("month") or "").strip(),
+                                        (body.get("account_group") or "").strip())
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+
+@app.get("/api/finance/screenshots")
+def finance_screenshots(include_archived: bool = False):
+    return {"screenshots": finance.screenshots(include_archived=include_archived)}
+
+
+def _fin_actor(request: Request) -> str:
+    u = getattr(request.state, "user", None)
+    return (u or {}).get("username") or "admin"
+
+
+def _fin_call(fn, *args, **kw):
+    """Uniform ValueError→400 for the payment-accounts endpoints."""
+    try:
+        return fn(*args, **kw)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+
+# ── Payment Account Summary — consolidated accounts / history / payments ──────
+@app.post("/api/finance/apps/{app_id}/archive")
+def finance_app_archive(app_id: int, request: Request):
+    finance.payment_app_archive(app_id, True, _fin_actor(request))
+    return {"ok": True}
+
+
+@app.post("/api/finance/apps/{app_id}/restore")
+def finance_app_restore(app_id: int, request: Request):
+    finance.payment_app_archive(app_id, False, _fin_actor(request))
+    return {"ok": True}
+
+
+@app.get("/api/finance/pay/accounts")
+def finance_pay_accounts(tab: str = "active"):
+    return finance.accounts_list(tab)
+
+
+@app.get("/api/finance/pay/history")
+def finance_pay_history(archived: bool | None = None, month: str | None = None):
+    return {"history": finance.history_list(archived, month)}
+
+
+@app.post("/api/finance/pay/accounts")
+async def finance_pay_accounts_create(request: Request):
+    return _fin_call(finance.account_create, await request.json(), _fin_actor(request))
+
+
+@app.get("/api/finance/pay/accounts/{aid}")
+def finance_pay_account(aid: int):
+    return _fin_call(finance.account_get, aid)
+
+
+@app.put("/api/finance/pay/accounts/{aid}")
+async def finance_pay_account_update(aid: int, request: Request):
+    return _fin_call(finance.account_update, aid, await request.json(), _fin_actor(request))
+
+
+@app.post("/api/finance/pay/accounts/{aid}/archive")
+def finance_pay_account_archive(aid: int, request: Request):
+    finance.account_archive(aid, True, _fin_actor(request))
+    return {"ok": True}
+
+
+@app.post("/api/finance/pay/accounts/{aid}/restore")
+def finance_pay_account_restore(aid: int, request: Request):
+    finance.account_archive(aid, False, _fin_actor(request))
+    finance.account_trash(aid, restore=True, actor=_fin_actor(request))
+    return {"ok": True}
+
+
+@app.post("/api/finance/pay/accounts/{aid}/trash")
+def finance_pay_account_trash(aid: int, request: Request):
+    finance.account_trash(aid, restore=False, actor=_fin_actor(request))
+    return {"ok": True}
+
+
+@app.delete("/api/finance/pay/accounts/{aid}")
+def finance_pay_account_purge(aid: int, request: Request):
+    return _fin_call(lambda: (finance.account_purge(aid, _fin_actor(request)), {"ok": True})[1])
+
+
+@app.post("/api/finance/pay/accounts/{aid}/payments")
+async def finance_pay_payment_add(aid: int, request: Request):
+    return _fin_call(finance.payment_add, aid, await request.json(), _fin_actor(request))
+
+
+@app.put("/api/finance/pay/payments/{pid}")
+async def finance_pay_payment_update(pid: int, request: Request):
+    return _fin_call(finance.payment_update, pid, await request.json(), _fin_actor(request))
+
+
+@app.delete("/api/finance/pay/payments/{pid}")
+def finance_pay_payment_delete(pid: int, request: Request):
+    return _fin_call(lambda: (finance.payment_delete(pid, _fin_actor(request)), {"ok": True})[1])
+
+
+@app.put("/api/finance/pay/history/{hid}")
+async def finance_pay_history_update(hid: int, request: Request):
+    return _fin_call(finance.history_update, hid, await request.json(), _fin_actor(request))
+
+
+@app.post("/api/finance/pay/history/{hid}/archive")
+async def finance_pay_history_archive(hid: int, request: Request):
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        pass
+    return _fin_call(lambda: (finance.history_archive(hid, not body.get("restore"),
+                                                      _fin_actor(request)), {"ok": True})[1])
+
+
+@app.post("/api/finance/screenshot/{sid}/apply-account")
+async def finance_screenshot_apply_account(sid: int, request: Request):
+    """Review-panel 'Apply to Account': statement fields → account + monthly history.
+    Returns {conflict, diff} when the account already has that statement month and no
+    resolution (merge/replace/new_version) was chosen."""
+    return _fin_call(finance.apply_import_to_account, sid, await request.json(), _fin_actor(request))
+
+
+@app.post("/api/finance/screenshot/{sid}/archive")
+async def finance_screenshot_archive(sid: int, request: Request):
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        pass
+    finance.screenshot_archive(sid, not body.get("restore"), _fin_actor(request))
+    return {"ok": True}
+
+
+@app.delete("/api/finance/screenshot/{sid}")
+def finance_screenshot_delete(sid: int, request: Request):
+    finance.screenshot_delete(sid, _fin_actor(request))
+    return {"ok": True}
+
+
+@app.post("/api/finance/pay/expense-line/{line_id}")
+async def finance_pay_expense_line(line_id: int, request: Request):
+    b = await request.json()
+    return _fin_call(finance.expense_line_update, line_id, b.get("category"),
+                     bool(b.get("delete")), _fin_actor(request))
+
+
+@app.post("/api/finance/pay/copilot-context")
+async def finance_pay_copilot_context(request: Request):
+    """Structured portfolio digest for Copilot (all / selected / single account)."""
+    b = await request.json()
+    ids = [int(i) for i in (b.get("account_ids") or []) if str(i).isdigit()]
+    return {"context": finance.payments_copilot_context(ids or None,
+                                                        include_archived=bool(b.get("include_archived")))}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ArtikFinance Alerts — NL → structured rule → confirm → scheduler → Slack.
+# Admin-gated (via _ADMIN_ONLY "/api/alerts") since alerts read personal finance data;
+# every row is additionally scoped by the authenticated user_id.
+# ══════════════════════════════════════════════════════════════════════════════
+import alerts_store  # noqa: E402
+import alerts_engine  # noqa: E402
+import alerts_scheduler  # noqa: E402
+
+
+@app.on_event("startup")
+def _start_alerts_scheduler():
+    alerts_scheduler.start()
+
+
+def _alerts_uid(request: Request):
+    u = _user(request) or _current_user(request)
+    return (u.get("id") if u else 0), u
+
+
+_ALERT_TOOL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "intent": {"type": "string", "enum": ["create_alert", "manage_alert", "not_alert"]},
+        "action": {"type": "string", "enum": ["create", "pause", "resume", "delete", "run",
+                                              "edit", "list", "none"]},
+        "target_name": {"type": "string", "description": "Existing alert name for manage actions"},
+        "missing_fields": {"type": "array", "items": {"type": "string"},
+                           "description": "Required info the user did NOT provide (e.g. 'threshold','metric','frequency','destination'). Empty when complete."},
+        "clarification": {"type": "string", "description": "One question to ask if info is missing"},
+        "clarification_options": {"type": "array", "items": {"type": "string"}},
+        "alert": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "description": {"type": "string"},
+                "source": {"type": "string", "enum": sorted(alerts_engine.SOURCES)},
+                "metric": {"type": "string"},
+                "filters": {"type": "object"},
+                "conditions": {"type": "array", "items": {"type": "object", "properties": {
+                    "field": {"type": "string"},
+                    "operator": {"type": "string", "enum": sorted(alerts_engine.OPERATORS)},
+                    "value": {"type": "number"}}, "required": ["field", "operator", "value"]}},
+                "logical_operator": {"type": "string", "enum": ["AND", "OR"]},
+                "schedule": {"type": "object", "properties": {
+                    "frequency": {"type": "string", "enum": sorted(alerts_engine.FREQUENCIES)},
+                    "time": {"type": "string"}, "timezone": {"type": "string"}}},
+                "notification": {"type": "object", "properties": {
+                    "channel": {"type": "string", "enum": ["slack"]},
+                    "destination_type": {"type": "string", "enum": ["channel", "user", "default"]},
+                    "destination": {"type": "string"}}},
+                "trigger_mode": {"type": "string", "enum": sorted(alerts_engine.TRIGGER_MODES)},
+                "cooldown_minutes": {"type": "number"},
+            },
+        },
+    },
+    "required": ["intent"],
+}
+_ALERT_TOOL_NAME = "artik_alert"
+_ALERT_SYSTEM = """You convert a user's plain-English request into a STRUCTURED ArtikFinance alert
+rule. You NEVER write code, SQL, or cron. Only use the allow-listed sources, fields, and operators.
+
+Sources and their fields:
+- payment_accounts: total_current_balance, statement_balance, minimum_due, total_due, remaining_due,
+  interest, credit_card_interest, paid_this_month, overdue_count, due_soon_count (scalar);
+  due_date, remaining_amount_due, current_balance, total_payment_due, updated_at (per-account).
+  Filters: account_type (e.g. ["Credit Card"]), status (["Active"]), institution, account.
+- assets: total_assets, category_total. Filters: category, item.
+- liabilities: total_debt, category_total. Filters: category, item.
+- net_worth: net_worth, assets, liabilities.
+- monthly_expenses: monthly_spend, monthly_income, category_total. Filters: category.
+- cashflow: cashflow_metric. Filters: metric_name.
+- broker_account: total_value, total_gain. Filters: broker (etrade/schwab), account_ending.
+
+Operators: > >= < <= = != within_days overdue_by_days percentage_increase_greater_than
+percentage_decrease_greater_than absolute_change_greater_than not_updated_for_days.
+Use within_days on due_date; overdue_by_days for overdue; not_updated_for_days for stale accounts.
+"Credit-card interest exceeds $200" -> payment_accounts, credit_card_interest, > 200.
+"Any unpaid payment due within 5 days" -> payment_accounts, conditions:
+  [{due_date, within_days, 5}, {remaining_amount_due, >, 0}], AND.
+"Assets decrease >10% from previous quarter" -> assets, total_assets,
+  percentage_decrease_greater_than 10.
+
+Rules:
+- intent=create_alert when the user asks to be alerted/notified. intent=manage_alert to
+  pause/resume/delete/run/edit/list an existing alert (set action + target_name). Else not_alert.
+- Default schedule: {frequency:"daily", time:"08:00", timezone:"America/Los_Angeles"} unless the
+  user specifies otherwise.
+- Default notification: {channel:"slack", destination_type:"default", destination:""}. If the user
+  names a #channel or @user, set destination_type + destination accordingly.
+- Give a short human name. Do NOT invent a threshold, metric, frequency, or destination the user
+  didn't imply — instead list what's missing in missing_fields and ask ONE clarification with options.
+- Default trigger_mode "state_change", cooldown_minutes 1440."""
+
+
+def _alert_interpret_llm(prompt: str):
+    akey, okey = _anthropic_key(), _openai_key()
+    if not akey and not okey:
+        raise RuntimeError("no ANTHROPIC_API_KEY or OPENAI_API_KEY configured")
+    msgs = [{"role": "user", "content": prompt[:2000]}]
+    if akey:
+        try:
+            import anthropic
+            client = anthropic.Anthropic(api_key=akey)
+            msg = _models.with_fallback(_models.CLAUDE, lambda mdl: client.messages.create(
+                model=mdl, max_tokens=1200, system=_ALERT_SYSTEM,
+                tools=[{"name": _ALERT_TOOL_NAME, "description": "Return the structured alert.",
+                        "input_schema": _ALERT_TOOL_SCHEMA}],
+                tool_choice={"type": "tool", "name": _ALERT_TOOL_NAME}, messages=msgs))
+            out = next((b.input for b in msg.content if getattr(b, "type", "") == "tool_use"), None)
+            if out:
+                return out
+        except Exception as e:  # noqa: BLE001
+            last = _err_detail(e)
+    if okey:
+        from openai import OpenAI
+        client = OpenAI(api_key=okey)
+        resp = _models.with_fallback(_models.GPT, lambda mdl: client.chat.completions.create(
+            model=mdl, messages=[{"role": "system", "content": _ALERT_SYSTEM}] + msgs,
+            tools=[{"type": "function", "function": {"name": _ALERT_TOOL_NAME,
+                    "description": "Return the structured alert.", "parameters": _ALERT_TOOL_SCHEMA}}],
+            tool_choice={"type": "function", "function": {"name": _ALERT_TOOL_NAME}},
+            max_completion_tokens=1200, reasoning_effort="minimal"))
+        calls = resp.choices[0].message.tool_calls
+        if calls:
+            return json.loads(calls[0].function.arguments)
+    raise RuntimeError("interpreter returned nothing")
+
+
+@app.post("/api/alerts/interpret")
+async def alerts_interpret(request: Request):
+    """NL prompt → structured alert (or clarification / manage intent). No alert is created here."""
+    b = await request.json()
+    prompt = (b.get("prompt") or "").strip()
+    if not prompt:
+        return JSONResponse({"error": "prompt is required"}, status_code=400)
+    try:
+        out = _alert_interpret_llm(prompt)
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": f"could not interpret: {_err_detail(e)}"}, status_code=502)
+    intent = out.get("intent") or "not_alert"
+    if intent == "manage_alert":
+        return {"intent": "manage_alert", "action": out.get("action") or "none",
+                "target_name": out.get("target_name") or "",
+                "requires_confirmation": out.get("action") in ("delete", "pause", "resume")}
+    if intent != "create_alert":
+        return {"intent": "not_alert"}
+    raw = out.get("alert") or {}
+    if not (raw.get("source") or raw.get("source_type")):     # recover an omitted source
+        inferred = alerts_engine.infer_source(raw.get("conditions"))
+        if inferred:
+            raw["source"] = inferred
+    missing = list(out.get("missing_fields") or [])
+    # Try to validate; validation errors become clarifications rather than hard failures.
+    normalized, verror = None, None
+    try:
+        normalized = alerts_engine.validate_alert(raw)
+    except alerts_engine.AlertError as e:
+        verror = str(e)
+    if missing or normalized is None:
+        return {"intent": "create_alert", "requires_confirmation": False,
+                "missing_fields": missing or ["details"],
+                "clarification": out.get("clarification") or verror
+                or "I need a bit more detail to set up that alert.",
+                "clarification_options": out.get("clarification_options") or [],
+                "alert": raw}
+    return {"intent": "create_alert", "requires_confirmation": True, "missing_fields": [],
+            "alert": {**normalized,
+                      "condition_text": alerts_engine.describe(normalized),
+                      "schedule_text": alerts_engine.schedule_phrase(normalized["schedule"])}}
+
+
+@app.get("/api/alerts")
+def alerts_list(request: Request, status: str = None):
+    uid, _ = _alerts_uid(request)
+    return {"alerts": [_alert_view(a) for a in alerts_store.list_alerts(uid, status)]}
+
+
+def _alert_view(a: dict) -> dict:
+    """Add human-readable condition/schedule/destination text; never leak internals."""
+    a = dict(a)
+    try:
+        a["condition_text"] = alerts_engine.describe(a)
+        a["schedule_text"] = alerts_engine.schedule_phrase(a.get("schedule") or {})
+    except Exception:  # noqa: BLE001
+        a["condition_text"] = ""
+        a["schedule_text"] = ""
+    n = a.get("notification") or {}
+    a["destination_text"] = n.get("destination") or "Default channel"
+    return a
+
+
+@app.post("/api/alerts")
+async def alerts_create(request: Request):
+    uid, _ = _alerts_uid(request)
+    b = await request.json()
+    raw = b.get("alert") or b
+    if not b.get("confirmed"):
+        return JSONResponse({"error": "alert must be explicitly confirmed (confirmed=true)"},
+                            status_code=400)
+    try:
+        alert = alerts_engine.validate_alert(raw)
+    except alerts_engine.AlertError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    if alerts_store.name_exists(uid, alert["name"]):
+        return JSONResponse({"error": f"you already have an alert named '{alert['name']}'"},
+                            status_code=409)
+    next_run = alerts_engine.compute_next_run(alert["schedule"]) if alert["is_enabled"] else None
+    created = alerts_store.create(uid, alert, next_run)
+    return _alert_view(created)
+
+
+@app.get("/api/alerts/{alert_id}")
+def alerts_get(alert_id: int, request: Request):
+    uid, _ = _alerts_uid(request)
+    a = alerts_store.get(uid, alert_id)
+    if not a:
+        return JSONResponse({"error": "alert not found"}, status_code=404)
+    return _alert_view(a)
+
+
+@app.put("/api/alerts/{alert_id}")
+async def alerts_update(alert_id: int, request: Request):
+    uid, _ = _alerts_uid(request)
+    existing = alerts_store.get(uid, alert_id)
+    if not existing:
+        return JSONResponse({"error": "alert not found"}, status_code=404)
+    b = await request.json()
+    merged = {**existing, **(b.get("alert") or b)}
+    merged["source"] = merged.get("source_type")
+    try:
+        alert = alerts_engine.validate_alert(merged)
+    except alerts_engine.AlertError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    if alerts_store.name_exists(uid, alert["name"], exclude_id=alert_id):
+        return JSONResponse({"error": f"another alert is named '{alert['name']}'"}, status_code=409)
+    next_run = alerts_engine.compute_next_run(alert["schedule"]) if alert["is_enabled"] else None
+    updated = alerts_store.update(uid, alert_id, alert, next_run_at=next_run)
+    return _alert_view(updated)
+
+
+@app.delete("/api/alerts/{alert_id}")
+def alerts_delete(alert_id: int, request: Request):
+    uid, _ = _alerts_uid(request)
+    if not alerts_store.soft_delete(uid, alert_id):
+        return JSONResponse({"error": "alert not found"}, status_code=404)
+    return {"ok": True}
+
+
+@app.post("/api/alerts/{alert_id}/pause")
+def alerts_pause(alert_id: int, request: Request):
+    uid, _ = _alerts_uid(request)
+    a = alerts_store.set_enabled(uid, alert_id, False, None)
+    if not a:
+        return JSONResponse({"error": "alert not found"}, status_code=404)
+    return _alert_view(a)
+
+
+@app.post("/api/alerts/{alert_id}/resume")
+def alerts_resume(alert_id: int, request: Request):
+    uid, _ = _alerts_uid(request)
+    a0 = alerts_store.get(uid, alert_id)
+    if not a0:
+        return JSONResponse({"error": "alert not found"}, status_code=404)
+    nxt = alerts_engine.compute_next_run(a0["schedule"])
+    return _alert_view(alerts_store.set_enabled(uid, alert_id, True, nxt))
+
+
+@app.post("/api/alerts/{alert_id}/run")
+def alerts_run_now(alert_id: int, request: Request):
+    uid, _ = _alerts_uid(request)
+    a = alerts_store.get(uid, alert_id)
+    if not a:
+        return JSONResponse({"error": "alert not found"}, status_code=404)
+    alerts_store.audit(alert_id, uid, "run", "manual")
+    res = alerts_scheduler.run_alert(a, manual=True)
+    return {"result": res, "alert": _alert_view(alerts_store.get(uid, alert_id))}
+
+
+@app.post("/api/alerts/{alert_id}/test-notification")
+def alerts_test_notification(alert_id: int, request: Request):
+    uid, _ = _alerts_uid(request)
+    a = alerts_store.get(uid, alert_id)
+    if not a:
+        return JSONResponse({"error": "alert not found"}, status_code=404)
+    title, body, sev = alerts_engine.test_message(a, os.environ.get("ARTIK_BROKER_BASE_URL", ""))
+    try:
+        from notifications import notify_slack_message
+        dest = (a.get("notification") or {}).get("destination") or ""
+        ok, detail = notify_slack_message(title=title, message=body, severity=sev,
+                                          event_type="financial_alert_test", channel=dest or None,
+                                          metadata={"alert_id": alert_id, "test": True})
+    except Exception as e:  # noqa: BLE001
+        ok, detail = False, str(e)
+    alerts_store.record_notification(alert_id, None, uid, channel="slack",
+                                     destination_type=(a.get("notification") or {}).get("destination_type") or "default",
+                                     destination=(a.get("notification") or {}).get("destination") or "",
+                                     delivery_status="sent" if ok else "failed",
+                                     error_message=None if ok else str(detail)[:300])
+    alerts_store.audit(alert_id, uid, "test", "sent" if ok else "failed")
+    if not ok:
+        return JSONResponse({"ok": False, "error": f"Slack delivery failed: {detail}"}, status_code=502)
+    return {"ok": True, "detail": "Test notification sent."}
+
+
+@app.get("/api/alerts/{alert_id}/history")
+def alerts_history(alert_id: int, request: Request):
+    uid, _ = _alerts_uid(request)
+    if not alerts_store.get(uid, alert_id):
+        return JSONResponse({"error": "alert not found"}, status_code=404)
+    return alerts_store.history(uid, alert_id)
+
+
+@app.post("/api/alerts/manage")
+async def alerts_manage(request: Request):
+    """Chatbot-driven management: resolve a target alert by name and apply an action."""
+    uid, _ = _alerts_uid(request)
+    b = await request.json()
+    action = (b.get("action") or "").lower()
+    name = (b.get("target_name") or "").strip().lower()
+    matches = [a for a in alerts_store.list_alerts(uid)
+               if name and name in (a["name"] or "").lower()]
+    if not matches:
+        return JSONResponse({"error": f"no alert matching '{b.get('target_name')}'"}, status_code=404)
+    if len(matches) > 1:
+        return {"ambiguous": True, "matches": [{"id": a["id"], "name": a["name"]} for a in matches]}
+    a = matches[0]
+    aid = a["id"]
+    if action == "pause":
+        return _alert_view(alerts_store.set_enabled(uid, aid, False, None))
+    if action == "resume":
+        return _alert_view(alerts_store.set_enabled(uid, aid, True,
+                           alerts_engine.compute_next_run(a["schedule"])))
+    if action == "delete":
+        alerts_store.soft_delete(uid, aid)
+        return {"ok": True, "deleted": a["name"]}
+    if action == "run":
+        return {"result": alerts_scheduler.run_alert(alerts_store.get(uid, aid), manual=True)}
+    return JSONResponse({"error": f"unsupported action '{action}'"}, status_code=400)
 
 
 @app.post("/api/users")
@@ -2221,6 +3408,13 @@ When asked about analyst ratings or the composite/intelligence signal, read them
 that analyst Strong Buy/Buy/Hold/Sell counts are Wall-Street analysts (from Finnhub), distinct from the Artik
 BUY/HOLD/SELL status.
 
+FINANCE CONTEXT (contextType="finance"): the context is the user's PERSONAL FINANCIAL STATEMENT
+(net worth timeline, assets, liabilities, cash flow, tax & income, card APRs, monthly expenses,
+computed insights). Act as a thoughtful personal-finance analyst: answer questions about any
+section, compare periods, explain drivers, quantify trade-offs (e.g. margin debt vs cash), and give
+concrete, prioritized recommendations. Use ONLY the provided figures; never invent numbers. This is
+analysis, not licensed financial advice — note assumptions where relevant.
+
 PAGE CONTEXT (contextType="page"): the context is a whole page — Portfolio, Dow, S&P 500, or Favorites —
 with `page_summary` (counts, averages, sector allocation; for Portfolio also value/cost/gain and sector
 weights), a `stocks` array (every visible stock with ticker, sector, archetype, Artik score, recommendation,
@@ -2267,6 +3461,12 @@ _COPILOT_TOOL_DESC = ("Return the ArtikFinance AI response together with routing
 
 
 def _copilot_context_block(context_type: str, context: dict) -> str:
+    if context_type == "finance":
+        # Server-built digest of the WHOLE personal financial statement (all sections), so the
+        # conversation stays finance-aware across follow-ups. Client only names the focused page.
+        return ("FINANCIAL STATEMENT CONTEXT (source of truth — computed from the user's imported "
+                "workbook; do not invent figures beyond it):\n"
+                + finance.copilot_context((context or {}).get("page")))
     label = {"stock": "CURRENT STOCK DETAIL", "search": "CURRENT SEARCH RESULTS",
              "page": "CURRENT PAGE (all visible stocks + page summary + any loaded research)"}.get(
         context_type, "CONTEXT")
@@ -2327,8 +3527,10 @@ async def api_copilot(request: Request):
     if sel_mode not in _COPILOT_MODES + ["auto"]:
         sel_mode = "auto"
     ctx_type = body.get("contextType") or ("stock" if body.get("mode") == "stock" else "")
-    if ctx_type not in ("stock", "search", "page"):
+    if ctx_type not in ("stock", "search", "page", "finance"):
         ctx_type = "stock" if (body.get("context") or {}).get("ticker") else ("search" if body.get("context") else "")
+    if ctx_type == "finance" and not _is_admin(request):
+        ctx_type = ""   # personal financial data is admin-only — never injected for other roles
 
     mode_line = (f"The user explicitly selected mode = {sel_mode.upper()}. Use it; do not ask for clarification."
                  if sel_mode != "auto" else
@@ -2681,8 +3883,10 @@ def _is_stored_key(key: str) -> bool:
     return bool(key) and (key.startswith("pf:") or key.startswith("et:") or key.startswith("sc:"))
 
 
-def _stored_portfolio_response(key: str):
-    """Load a broker snapshot's holdings and score them live via the shared engine."""
+def _stored_portfolio_response(key: str, request: Request | None = None):
+    """Load a broker snapshot's holdings and score them live via the shared engine.
+    Ownership: a snapshot is only returned to its owner or to an admin (defense in depth —
+    these endpoints are already admin-gated, but this stops any future IDOR)."""
     try:
         sid = int(key.split(":", 1)[1])
     except (ValueError, IndexError):
@@ -2690,6 +3894,9 @@ def _stored_portfolio_response(key: str):
     snap = portfolio_store.get(sid)
     if not snap:
         return JSONResponse({"error": "snapshot not found."}, status_code=404)
+    u = _user(request) if request is not None else None
+    if u and u.get("role") != "admin" and snap.get("user_id") not in (None, u.get("id")):
+        return JSONResponse({"error": "snapshot not found."}, status_code=404)   # don't leak existence
     rows, totals = _score_holdings(snap["holdings"])
     now = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
     src = snap.get("source") or "broker"
@@ -2704,9 +3911,9 @@ def _stored_portfolio_response(key: str):
 
 
 @app.get("/api/portfolio")
-def api_portfolio(date: str = Query(None), file: str = Query(None), key: str = Query(None)):
+def api_portfolio(request: Request, date: str = Query(None), file: str = Query(None), key: str = Query(None)):
     if _is_stored_key(key):
-        return _stored_portfolio_response(key)
+        return _stored_portfolio_response(key, request)
     if key and key.startswith("xl:"):
         file = key[3:]
     snaps = _list_portfolio_snapshots()
@@ -2750,7 +3957,7 @@ def api_portfolio(date: str = Query(None), file: str = Query(None), key: str = Q
 
 
 @app.get("/api/portfolio/refresh")
-def api_portfolio_refresh(date: str = Query(None), file: str = Query(None), key: str = Query(None)):
+def api_portfolio_refresh(request: Request, date: str = Query(None), file: str = Query(None), key: str = Query(None)):
     """Re-score a saved snapshot's holdings against LIVE data.
 
     Share counts + cost basis come from the broker export (only as fresh as the
@@ -2759,7 +3966,7 @@ def api_portfolio_refresh(date: str = Query(None), file: str = Query(None), key:
     renderer can display it.
     """
     if _is_stored_key(key):                   # broker snapshots are always scored live
-        return _stored_portfolio_response(key)
+        return _stored_portfolio_response(key, request)
     if key and key.startswith("xl:"):
         file = key[3:]
     snaps = _list_portfolio_snapshots()

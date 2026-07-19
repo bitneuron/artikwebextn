@@ -88,7 +88,63 @@ class SchwabClient:
         except Exception:  # noqa: BLE001
             return {"raw": r.text}
 
+    def api_post(self, path: str, access_token: str, json_body: dict) -> dict:
+        if requests is None:
+            raise SchwabError("the 'requests' library is not available")
+        r = requests.post(API_BASE + path, json=json_body, timeout=30, headers={
+            "Authorization": f"Bearer {access_token}", "Accept": "application/json",
+            "Content-Type": "application/json"})
+        if r.status_code not in (200, 201):
+            raise SchwabError(f"{path} failed: HTTP {r.status_code} {r.text[:300]}")
+        out = {"status": r.status_code, "location": r.headers.get("Location") or ""}
+        try:
+            if r.text:
+                out["body"] = r.json()
+        except Exception:  # noqa: BLE001
+            pass
+        return out
+
     def accounts(self, access_token: str, positions: bool = True) -> list:
         data = self.api_get("/trader/v1/accounts", access_token,
                             params={"fields": "positions"} if positions else None)
         return data if isinstance(data, list) else [data]
+
+    def account_numbers(self, access_token: str) -> list:
+        """[{accountNumber, hashValue}] — order/orders endpoints take the HASH, never the number."""
+        data = self.api_get("/trader/v1/accounts/accountNumbers", access_token)
+        return data if isinstance(data, list) else [data]
+
+    def orders(self, access_token: str, account_hash: str, from_iso: str, to_iso: str,
+               max_results: int = 50) -> list:
+        data = self.api_get(f"/trader/v1/accounts/{account_hash}/orders", access_token,
+                            params={"fromEnteredTime": from_iso, "toEnteredTime": to_iso,
+                                    "maxResults": str(max_results)})
+        return data if isinstance(data, list) else [data]
+
+    # ── order placement (equities). Schwab has NO server-side preview endpoint —
+    # the app builds the payload once, shows it to the user, and posts it on confirm. ──
+    @staticmethod
+    def order_payload(symbol: str, instruction: str, quantity: int, order_type: str = "MARKET",
+                      limit_price=None, duration: str = "DAY") -> dict:
+        p = {
+            "orderType": order_type,
+            "session": "NORMAL",
+            "duration": duration,
+            "orderStrategyType": "SINGLE",
+            "orderLegCollection": [{
+                "instruction": instruction,
+                "quantity": int(quantity),
+                "instrument": {"symbol": symbol, "assetType": "EQUITY"},
+            }],
+        }
+        if order_type == "LIMIT":
+            p["price"] = str(limit_price)
+        return p
+
+    def place_order(self, access_token: str, account_hash: str, payload: dict) -> dict:
+        """201 on success; the new order id is the tail of the Location header."""
+        return self.api_post(f"/trader/v1/accounts/{account_hash}/orders", access_token, payload)
+
+    def quote(self, access_token: str, symbol: str) -> dict:
+        """Best-effort last price for the order review (market-data scope may be absent)."""
+        return self.api_get(f"/marketdata/v1/{symbol}/quotes", access_token)

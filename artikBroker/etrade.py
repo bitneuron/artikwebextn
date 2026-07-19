@@ -90,6 +90,16 @@ class ETradeClient:
         return requests.get(url, headers={"Authorization": header, "Accept": "application/json"},
                             params=query, timeout=25)
 
+    def _post(self, url: str, oauth: dict, token_secret: str = "", json_body: dict | None = None):
+        # OAuth 1.0a: a JSON request body is NOT part of the signature (only form-encoded
+        # bodies would be) — the signature covers method + url + oauth params.
+        if requests is None:
+            raise ETradeError("the 'requests' library is not available")
+        header = self._auth_header("POST", url, oauth, token_secret)
+        return requests.post(url, headers={"Authorization": header, "Accept": "application/json",
+                                           "Content-Type": "application/json"},
+                             json=json_body, timeout=30)
+
     # ── OAuth flow ─────────────────────────────────────────────────────────────
     def get_request_token(self) -> tuple[str, str]:
         url = f"{self.base}/oauth/request_token"
@@ -128,6 +138,17 @@ class ETradeClient:
         except Exception:  # noqa: BLE001
             return {"raw": r.text}
 
+    def api_post(self, path: str, token: str, secret: str, json_body: dict) -> dict:
+        url = f"{self.base}{path}"
+        r = self._post(url, self._oauth_params({"oauth_token": token}), token_secret=secret,
+                       json_body=json_body)
+        if r.status_code not in (200, 201):
+            raise ETradeError(f"{path} failed: HTTP {r.status_code} {r.text[:300]}")
+        try:
+            return r.json()
+        except Exception:  # noqa: BLE001
+            return {"raw": r.text}
+
     def list_accounts(self, token: str, secret: str) -> dict:
         return self.api_get("/v1/accounts/list.json", token, secret)
 
@@ -137,4 +158,53 @@ class ETradeClient:
                             query={"instType": inst_type, "realTimeNAV": "true"})
 
     def portfolio(self, token: str, secret: str, account_id_key: str) -> dict:
-        return self.api_get(f"/v1/accounts/{account_id_key}/portfolio.json", token, secret)
+        # totalsRequired adds the account-level Totals block (day's + total gain/loss).
+        return self.api_get(f"/v1/accounts/{account_id_key}/portfolio.json", token, secret,
+                            query={"totalsRequired": "true", "count": "200"})
+
+    def list_orders(self, token: str, secret: str, account_id_key: str, count: int = 25) -> dict:
+        return self.api_get(f"/v1/accounts/{account_id_key}/orders.json", token, secret,
+                            query={"count": str(count)})
+
+    # ── order placement (equities): preview → place, both required by E*TRADE ──
+    @staticmethod
+    def _order_entry(symbol: str, action: str, quantity: int, price_type: str,
+                     limit_price, order_term: str) -> dict:
+        return {
+            "allOrNone": "false",
+            "priceType": price_type,
+            "orderTerm": order_term,
+            "marketSession": "REGULAR",
+            "stopPrice": "",
+            "limitPrice": str(limit_price) if price_type == "LIMIT" else "",
+            "Instrument": [{
+                "Product": {"securityType": "EQ", "symbol": symbol},
+                "orderAction": action,
+                "quantityType": "QUANTITY",
+                "quantity": str(int(quantity)),
+            }],
+        }
+
+    def preview_order(self, token: str, secret: str, account_id_key: str, *, symbol: str,
+                      action: str, quantity: int, price_type: str = "MARKET",
+                      limit_price=None, order_term: str = "GOOD_FOR_DAY") -> dict:
+        """Step 1 of 2. Returns E*TRADE's preview (estimated cost/commission + previewId)
+        plus `_client_order_id`/`_order` which MUST be echoed back into place_order."""
+        client_order_id = uuid.uuid4().hex[:20]
+        order = [self._order_entry(symbol, action, quantity, price_type, limit_price, order_term)]
+        out = self.api_post(f"/v1/accounts/{account_id_key}/orders/preview.json", token, secret,
+                            {"PreviewOrderRequest": {"orderType": "EQ",
+                                                     "clientOrderId": client_order_id,
+                                                     "Order": order}})
+        out["_client_order_id"] = client_order_id
+        out["_order"] = order
+        return out
+
+    def place_order(self, token: str, secret: str, account_id_key: str, *, preview_id,
+                    client_order_id: str, order: list) -> dict:
+        """Step 2 of 2 — must reuse the preview's clientOrderId + Order payload verbatim."""
+        return self.api_post(f"/v1/accounts/{account_id_key}/orders/place.json", token, secret,
+                             {"PlaceOrderRequest": {"orderType": "EQ",
+                                                    "clientOrderId": client_order_id,
+                                                    "PreviewIds": [{"previewId": preview_id}],
+                                                    "Order": order}})

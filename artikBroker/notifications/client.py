@@ -125,6 +125,43 @@ def get_client() -> NotifyClient:
     return _default_client
 
 
+def notify_slack_message(*, title: str, message: str, severity: str = "info",
+                         event_type: str = "financial_alert", channel: str | None = None,
+                         metadata: dict | None = None) -> tuple[bool, str]:
+    """Send a CUSTOM Slack message through the SAME Artik Notifier `/slack` endpoint the
+    agent notifier uses (reuses its config/transport/retries). Used by the alerts engine.
+    Returns (ok, detail); never raises. NEVER pass secrets in metadata."""
+    cfg = get_client().cfg
+    if not cfg.enabled:
+        return False, "notifications disabled"
+    if not cfg.api_url or not cfg.api_key:
+        return False, "missing ARTIK_NOTIFY_API_URL / ARTIK_NOTIFY_API_KEY"
+    payload = {
+        "source_app": cfg.app_name,
+        "event_type": event_type,
+        "severity": (severity or "info"),
+        "title": (title or "ArtikFinance Alert")[:255],
+        "message": message or "",
+        "channel": channel or None,
+        "metadata": {k: v for k, v in (metadata or {}).items()},
+    }
+    url = cfg.api_url.rstrip("/") + _SLACK_PATH
+    headers = {"X-API-Key": cfg.api_key}
+    last_err = "unknown"
+    for i in range(1, max(1, cfg.retries) + 1):
+        try:
+            status_code, body = _http_post(url, headers, payload, cfg.timeout)
+            if 200 <= status_code < 300:
+                return True, "sent"
+            last_err = f"http {status_code}: {body[:120]}"
+        except Exception as e:  # noqa: BLE001
+            last_err = str(e)
+        if i < max(1, cfg.retries):
+            time.sleep(min(2 ** (i - 1), 5))
+    log.error("notify_slack_message FAILED: %s", last_err)
+    return False, last_err
+
+
 def notify_agent_terminal(*, agent_name: str, status: str, agent_id: str | None = None,
                           job_id: str | None = None, task_name: str | None = None,
                           started_at: str | None = None, completed_at: str | None = None,
