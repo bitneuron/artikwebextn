@@ -132,6 +132,11 @@ def init() -> None:
         _addcols(c, "financial_screenshots", {
             "source_hash": "TEXT", "confidence": "REAL", "fields_json": "TEXT",
             "account_id": "INTEGER", "history_id": "INTEGER", "archived": "INTEGER DEFAULT 0"})
+        # Manual edits to Tax/Income & Credit-Card-Interest: a source tag so UI-added rows
+        # survive a workbook re-import (workbook still wins on shared year/card keys). NULL =
+        # workbook-imported. Mirrors the 'manual-edit' contract used by financial_records.
+        _addcols(c, "financial_tax_income", {"source": "TEXT"})
+        _addcols(c, "financial_cc_interest", {"source": "TEXT"})
 
 
 def _addcols(c, table: str, cols: dict) -> None:
@@ -369,18 +374,24 @@ def run_import(path: str | None = None, replace: bool = True) -> dict:
 
     with _lock, _conn() as c:
         if replace:
-            for t in ("financial_tax_income", "financial_cc_interest"):
-                c.execute(f"DELETE FROM {t}")
-            # Preserve UI-edited cells for periods/items the workbook doesn't cover —
-            # workbook values still win on shared (item, period) keys via INSERT OR REPLACE.
+            # Preserve UI-added rows the workbook doesn't cover (source='manual-edit');
+            # workbook values still win on shared keys via INSERT OR REPLACE below.
+            c.execute("DELETE FROM financial_tax_income WHERE COALESCE(source,'') != 'manual-edit'")
+            c.execute("DELETE FROM financial_cc_interest WHERE COALESCE(source,'') != 'manual-edit'")
             c.execute("DELETE FROM financial_records WHERE COALESCE(source_sheet,'') != 'manual-edit'")
-            # Preserve screenshot-imported expense lines — only workbook rows are replaced.
+            # Preserve screenshot- and manually-added expense lines — only workbook rows are replaced.
             c.execute("DELETE FROM financial_monthly_expenses WHERE source IS NULL OR source='workbook'")
         c.executemany("INSERT OR REPLACE INTO financial_records "
                       "(dataset,item,category,liquid,year,quarter,value,is_total,source_sheet) "
                       "VALUES (?,?,?,?,?,?,?,?,?)", records)
-        c.executemany("INSERT OR REPLACE INTO financial_tax_income VALUES (?,?,?,?,?,?,?,?,?)", tax_rows)
-        c.executemany("INSERT OR REPLACE INTO financial_cc_interest VALUES (?,?,?,?,?)", cc_rows)
+        # Explicit column lists (leave `source` NULL for workbook rows) so the added source
+        # column can't shift positional inserts.
+        c.executemany("INSERT OR REPLACE INTO financial_tax_income "
+                      "(year,total_income,wages,capital_gain,dividend,interest,tax_refund,other_income,extra) "
+                      "VALUES (?,?,?,?,?,?,?,?,?)", tax_rows)
+        c.executemany("INSERT OR REPLACE INTO financial_cc_interest "
+                      "(card,purchase_apr,cash_advance_apr,balance_transfer_apr,note) "
+                      "VALUES (?,?,?,?,?)", cc_rows)
         c.executemany("INSERT INTO financial_monthly_expenses (account_group,description,amount,category,source) "
                       "VALUES (?,?,?,?,'workbook')", exp_rows)
         total = len(records) + len(tax_rows) + len(cc_rows) + len(exp_rows)
@@ -724,12 +735,14 @@ def assets_search(params: dict, dataset: str = "asset") -> dict:
 
 
 def tax_income() -> list[dict]:
+    init()
     with _conn() as c:
         return [dict(r) for r in c.execute(
-            "SELECT * FROM financial_tax_income ORDER BY year").fetchall()]
+            "SELECT * FROM financial_tax_income ORDER BY year DESC").fetchall()]
 
 
 def cc_interest() -> list[dict]:
+    init()
     with _conn() as c:
         return [dict(r) for r in c.execute(
             "SELECT * FROM financial_cc_interest ORDER BY card").fetchall()]
@@ -742,12 +755,12 @@ def monthly_expenses(month: str | None = None) -> dict:
     with _conn() as c:
         if month:
             rows = [dict(r) for r in c.execute(
-                "SELECT account_group, description, amount, category, month FROM financial_monthly_expenses "
+                "SELECT id, account_group, description, amount, category, month FROM financial_monthly_expenses "
                 "WHERE month=? ORDER BY amount", (month,)).fetchall()]
         else:
             rows = [dict(r) for r in c.execute(
-                "SELECT account_group, description, amount, category, month FROM financial_monthly_expenses "
-                "WHERE source IS NULL OR source='workbook' ORDER BY amount").fetchall()]
+                "SELECT id, account_group, description, amount, category, month FROM financial_monthly_expenses "
+                "WHERE source IS NULL OR source IN ('workbook','manual-edit') ORDER BY amount").fetchall()]
         months = [r[0] for r in c.execute(
             "SELECT DISTINCT month FROM financial_monthly_expenses "
             "WHERE month IS NOT NULL ORDER BY month DESC").fetchall()]
@@ -760,6 +773,165 @@ def monthly_expenses(month: str | None = None) -> dict:
     return {"lines": rows, "categories": {k: round(v, 2) for k, v in sorted(cats.items(), key=lambda x: -x[1])},
             "monthly_income": round(income, 2), "monthly_spend": round(spend, 2),
             "month": month, "months": months}
+
+
+# ── Editable Tax/Income · Credit-Card Interest · Monthly Expenses ─────────────
+# All three mirror the Assets/Liabilities inline-edit contract: UI edits are tagged
+# source='manual-edit' so they survive a workbook re-import, every change is audited,
+# and validation raises ValueError (→ 400 with a helpful message) on bad input.
+
+def _fnum(v, label: str, *, required: bool = False, non_negative: bool = False):
+    """Parse a user-entered money/number field. '' / None → None (unless required)."""
+    if v in (None, ""):
+        if required:
+            raise ValueError(f"{label} is required")
+        return None
+    try:
+        n = float(str(v).replace(",", "").replace("$", "").replace("%", "").strip())
+    except ValueError:
+        raise ValueError(f"'{v}' is not a valid number for {label}")
+    if n != n:  # NaN guard
+        raise ValueError(f"'{v}' is not a valid number for {label}")
+    if non_negative and n < 0:
+        raise ValueError(f"{label} cannot be negative")
+    return n
+
+
+_TAX_FIELDS = ["total_income", "wages", "capital_gain", "dividend",
+               "interest", "tax_refund", "other_income"]
+_TAX_LABELS = {"total_income": "Total Income", "wages": "Wages", "capital_gain": "Capital Gain",
+               "dividend": "Dividend", "interest": "Interest", "tax_refund": "Tax Refund",
+               "other_income": "Other Income"}
+
+
+def tax_income_save(year, fields: dict, actor: str = "") -> dict:
+    """Upsert one tax-year row (source='manual-edit'). `year` is the primary key."""
+    init()
+    try:
+        y = int(str(year).strip())
+    except (TypeError, ValueError):
+        raise ValueError("year is required and must be a 4-digit year")
+    if not 1990 <= y <= 2100:
+        raise ValueError("year must be between 1990 and 2100")
+    clean = {f: _fnum((fields or {}).get(f), _TAX_LABELS[f]) for f in _TAX_FIELDS}
+    with _lock, _conn() as c:
+        old = c.execute("SELECT * FROM financial_tax_income WHERE year=?", (y,)).fetchone()
+        c.execute("INSERT OR REPLACE INTO financial_tax_income "
+                  "(year,total_income,wages,capital_gain,dividend,interest,tax_refund,other_income,extra,source) "
+                  "VALUES (?,?,?,?,?,?,?,?,?,'manual-edit')",
+                  (y, clean["total_income"], clean["wages"], clean["capital_gain"], clean["dividend"],
+                   clean["interest"], clean["tax_refund"], clean["other_income"],
+                   old["extra"] if old else None))
+        _audit(c, "tax_income", y, "update" if old else "create", field=f"tax {y}",
+               old=(dict(old) if old else None), new=clean, source="finance-edit", actor=actor)
+    return {"ok": True, "year": y}
+
+
+def tax_income_delete(year, actor: str = "") -> dict:
+    init()
+    try:
+        y = int(str(year).strip())
+    except (TypeError, ValueError):
+        raise ValueError("a valid year is required")
+    with _lock, _conn() as c:
+        n = c.execute("DELETE FROM financial_tax_income WHERE year=?", (y,)).rowcount
+        if not n:
+            raise ValueError(f"no tax/income row for {y}")
+        _audit(c, "tax_income", y, "delete", field=f"tax {y}", source="finance-edit", actor=actor)
+    return {"ok": True, "deleted": n}
+
+
+_CC_FIELDS = ["purchase_apr", "cash_advance_apr", "balance_transfer_apr"]
+_CC_LABELS = {"purchase_apr": "Purchase APR", "cash_advance_apr": "Cash Advance APR",
+              "balance_transfer_apr": "Balance Transfer APR"}
+
+
+def cc_interest_save(card: str, fields: dict, orig_card: str | None = None, actor: str = "") -> dict:
+    """Upsert one credit-card APR row (source='manual-edit'). `card` is the primary key;
+    pass orig_card to rename an existing card."""
+    init()
+    card = (card or "").strip()[:120]
+    if not card:
+        raise ValueError("card name is required")
+    clean = {f: _fnum((fields or {}).get(f), _CC_LABELS[f], non_negative=True) for f in _CC_FIELDS}
+    note = str((fields or {}).get("note") or "").strip()[:300] or None
+    orig = (orig_card or "").strip()
+    with _lock, _conn() as c:
+        if orig and orig != card and c.execute(
+                "SELECT 1 FROM financial_cc_interest WHERE card=?", (card,)).fetchone():
+            raise ValueError(f"a card named '{card}' already exists")
+        old = c.execute("SELECT * FROM financial_cc_interest WHERE card=?", (orig or card,)).fetchone()
+        if orig and orig != card:
+            c.execute("DELETE FROM financial_cc_interest WHERE card=?", (orig,))
+        c.execute("INSERT OR REPLACE INTO financial_cc_interest "
+                  "(card,purchase_apr,cash_advance_apr,balance_transfer_apr,note,source) "
+                  "VALUES (?,?,?,?,?,'manual-edit')",
+                  (card, clean["purchase_apr"], clean["cash_advance_apr"],
+                   clean["balance_transfer_apr"], note))
+        _audit(c, "cc_interest", 0, "update" if old else "create", field=f"card {card}",
+               old=(dict(old) if old else None), new={**clean, "note": note}, source="finance-edit", actor=actor)
+    return {"ok": True, "card": card}
+
+
+def cc_interest_delete(card: str, actor: str = "") -> dict:
+    init()
+    card = (card or "").strip()
+    with _lock, _conn() as c:
+        n = c.execute("DELETE FROM financial_cc_interest WHERE card=?", (card,)).rowcount
+        if not n:
+            raise ValueError(f"no card named '{card}'")
+        _audit(c, "cc_interest", 0, "delete", field=f"card {card}", source="finance-edit", actor=actor)
+    return {"ok": True, "deleted": n}
+
+
+_EXPENSE_CATEGORIES = ["Housing", "Utilities", "Insurance", "Food", "Medical", "Education",
+                       "Shopping", "Travel", "Investments", "Entertainment", "Income", "Miscellaneous"]
+
+
+def expense_save(line_id, fields: dict, actor: str = "") -> dict:
+    """Add (line_id falsy) or update one monthly-expense line. New lines are tagged
+    source='manual-edit' so they persist across re-imports; `month` scopes the line to a
+    screenshot-imported month (blank = the workbook baseline view)."""
+    init()
+    fields = fields or {}
+    desc = str(fields.get("description") or "").strip()[:300]
+    if not desc:
+        raise ValueError("description is required")
+    amt = _fnum(fields.get("amount"), "amount", required=True)
+    cat = str(fields.get("category") or "Miscellaneous").strip()[:60] or "Miscellaneous"
+    grp = str(fields.get("account_group") or "").strip()[:120]
+    month = (str(fields.get("month") or "").strip() or None)
+    with _lock, _conn() as c:
+        if line_id:
+            row = c.execute("SELECT * FROM financial_monthly_expenses WHERE id=?", (int(line_id),)).fetchone()
+            if not row:
+                raise ValueError("expense line not found")
+            c.execute("UPDATE financial_monthly_expenses SET account_group=?, description=?, amount=?, "
+                      "category=? WHERE id=?", (grp, desc, amt, cat, int(line_id)))
+            _audit(c, "expense", int(line_id), "update", field="expense",
+                   old=f"{row['description']}={row['amount']}", new=f"{desc}={amt}",
+                   source="finance-edit", actor=actor)
+            return {"ok": True, "id": int(line_id)}
+        cur = c.execute("INSERT INTO financial_monthly_expenses "
+                        "(account_group,description,amount,category,month,source) "
+                        "VALUES (?,?,?,?,?,'manual-edit')", (grp, desc, amt, cat, month))
+        eid = int(cur.lastrowid)
+        _audit(c, "expense", eid, "create", field="expense", new=f"{desc}={amt}",
+               source="finance-edit", actor=actor)
+    return {"ok": True, "id": eid}
+
+
+def expense_delete(line_id, actor: str = "") -> dict:
+    init()
+    with _lock, _conn() as c:
+        row = c.execute("SELECT description, amount FROM financial_monthly_expenses WHERE id=?",
+                        (int(line_id),)).fetchone()
+        if not row:
+            raise ValueError("expense line not found")
+        c.execute("DELETE FROM financial_monthly_expenses WHERE id=?", (int(line_id),))
+        _audit(c, "expense", int(line_id), "delete", field="expense",
+               old=f"{row['description']}={row['amount']}", source="finance-edit", actor=actor)
+    return {"ok": True, "deleted": 1}
 
 
 # ── Payment Apps registry + screenshot→expense imports ───────────────────────

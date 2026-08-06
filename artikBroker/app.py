@@ -846,7 +846,14 @@ def _extract_etrade_holdings(data: dict) -> tuple:
         if not cost:
             pp = _num(p.get("pricePaid"))
             cost = round(pp * qty, 2) if (pp and qty) else round(mv - gain, 2)
-        holdings.append({"ticker": sym, "qty": qty, "cost_basis": round(cost, 2)})
+        # Recorded per-holding fields (for point-in-time / multi-snapshot analysis).
+        quick = p.get("Quick") or {}
+        price = _num(quick.get("lastTrade")) or (round(mv / qty, 4) if (mv and qty) else None)
+        holdings.append({"ticker": sym, "qty": qty, "cost_basis": round(cost, 2),
+                         "price": price, "market_value": round(mv, 2) if mv else None,
+                         "day_change": _num(p.get("daysGain")),
+                         "cusip": ((p.get("Product") or {}).get("cusip")) or None,
+                         "name": (p.get("symbolDescription") or "").strip() or None})
         tv += mv
         tg += gain
     return holdings, round(tv, 2), round(tg, 2)
@@ -1010,7 +1017,13 @@ def _extract_schwab_holdings(sec_account: dict) -> tuple:
         mv = _num(p.get("marketValue"))
         gain = _num(p.get("longOpenProfitLoss"))
         cost = round(avg * qty, 2) if (avg and qty) else round(mv - gain, 2)
-        holdings.append({"ticker": sym, "qty": qty, "cost_basis": round(cost, 2)})
+        inst = p.get("instrument") or {}
+        holdings.append({"ticker": sym, "qty": qty, "cost_basis": round(cost, 2),
+                         "price": round(mv / qty, 4) if (mv and qty) else None,
+                         "market_value": round(mv, 2) if mv else None,
+                         "day_change": _num(p.get("currentDayProfitLoss")),
+                         "cusip": inst.get("cusip") or None,
+                         "name": (inst.get("description") or "").strip() or None})
         tv += mv
         tg += gain
     return holdings, round(tv, 2), round(tg, 2)
@@ -1328,7 +1341,12 @@ def _extract_ibkr_holdings(positions: list) -> tuple:
         avg = _num(p.get("avgCost")) or _num(p.get("avgPrice"))
         gain = _num(p.get("unrealizedPnl"))
         cost = round(avg * qty, 2) if (avg and qty) else round(mv - gain, 2)
-        holdings.append({"ticker": sym, "qty": qty, "cost_basis": round(cost, 2)})
+        holdings.append({"ticker": sym, "qty": qty, "cost_basis": round(cost, 2),
+                         "price": _num(p.get("mktPrice")) or (round(mv / qty, 4) if (mv and qty) else None),
+                         "market_value": round(mv, 2) if mv else None,
+                         "day_change": None,   # IBKR position feed has no day P/L
+                         "cusip": None,
+                         "name": (p.get("contractDesc") or "").strip() or None})
         tv += mv
         tg += gain
     return holdings, round(tv, 2), round(tg, 2)
@@ -1885,6 +1903,44 @@ def finance_ccinterest():
 @app.get("/api/finance/expenses")
 def finance_expenses(month: str | None = None):
     return finance.monthly_expenses(month)
+
+
+# ── Editable Tax/Income · Credit-Card Interest · Monthly Expenses (admin-gated) ──
+@app.post("/api/finance/tax/save")
+async def finance_tax_save(request: Request):
+    b = await request.json()
+    return _fin_call(finance.tax_income_save, b.get("year"), b.get("fields") or {}, _fin_actor(request))
+
+
+@app.post("/api/finance/tax/delete")
+async def finance_tax_delete(request: Request):
+    b = await request.json()
+    return _fin_call(finance.tax_income_delete, b.get("year"), _fin_actor(request))
+
+
+@app.post("/api/finance/ccinterest/save")
+async def finance_cc_save(request: Request):
+    b = await request.json()
+    return _fin_call(finance.cc_interest_save, b.get("card") or "", b.get("fields") or {},
+                     b.get("orig_card"), _fin_actor(request))
+
+
+@app.post("/api/finance/ccinterest/delete")
+async def finance_cc_delete(request: Request):
+    b = await request.json()
+    return _fin_call(finance.cc_interest_delete, b.get("card") or "", _fin_actor(request))
+
+
+@app.post("/api/finance/expenses/save")
+async def finance_expense_save(request: Request):
+    b = await request.json()
+    return _fin_call(finance.expense_save, b.get("id"), b.get("fields") or {}, _fin_actor(request))
+
+
+@app.post("/api/finance/expenses/delete")
+async def finance_expense_delete(request: Request):
+    b = await request.json()
+    return _fin_call(finance.expense_delete, b.get("id"), _fin_actor(request))
 
 
 @app.post("/api/finance/records/batch")
@@ -3079,7 +3135,7 @@ def analyze_one(ticker: str, allow_llm: bool = True) -> dict:
         "ticker": t,
         "company": r.get("company"),
         "sector": r.get("sector"),
-        "price": round(r["price"], 2) if r.get("price") else None,
+        "price": round(r["price"], 2) if isinstance(r.get("price"), (int, float)) and r["price"] == r["price"] else None,
         "score": final,
         "rating": s.get("rating"),
         "status": _status(final),
@@ -3877,6 +3933,249 @@ def api_portfolio_dates(source: str = Query(None)):
     else:
         snaps = excel + _stored_snapshots()
     return {"snapshots": snaps, "sources": ["excel", "etrade", "schwab", "ibkr"]}
+
+
+@app.get("/api/portfolio/tickers")
+def api_portfolio_tickers():
+    """Portfolio holdings as TICKERS ONLY (no values, no tokens) — powers the News Collector
+    editor's "track my portfolio" picker. Returns each broker snapshot's tickers plus an
+    `all_tickers` union of the newest snapshot per account (= the entire current portfolio).
+    Admin-gated via the /api/portfolio prefix rule in _auth_gate."""
+    snaps = portfolio_store.list_snapshots()          # newest first (ORDER BY id DESC)
+    out = []
+    for s in snaps:
+        full = portfolio_store.get(s["id"]) or {}
+        tickers = sorted({(h.get("ticker") or "").strip().upper()
+                          for h in (full.get("holdings") or []) if (h.get("ticker") or "").strip()})
+        out.append({"key": f"pf:{s['id']}", "label": s.get("label") or s.get("source") or "Portfolio",
+                    "source": s.get("source"), "account": s.get("account_ending"),
+                    "date": (s.get("created_at") or "")[:10], "count": len(tickers), "tickers": tickers})
+    # "Entire portfolio" = union of the NEWEST snapshot per (source, account); `out` is newest-first.
+    latest, seen = [], set()
+    for s in out:
+        acct = (s["source"], s["account"])
+        if acct not in seen:
+            seen.add(acct)
+            latest.append(s)
+    all_tickers = sorted({t for s in latest for t in s["tickers"]})
+    return {"snapshots": out, "all_tickers": all_tickers, "account_count": len(latest)}
+
+
+# ── Multi-Snapshot Portfolio Analysis ────────────────────────────────────────
+# Combine several saved snapshots (E*TRADE / Schwab / IBKR / Excel) into one consolidated
+# portfolio (or compare them). The consolidation math lives in portfolio_consolidation.py;
+# these endpoints handle the picker data, ownership checks, live-price enrichment, an
+# audit trail of the snapshot IDs used, and an optional LLM narrative. Admin-gated via the
+# /api/portfolio prefix in _auth_gate.
+import portfolio_consolidation as _pcon  # noqa: E402
+
+_PC_SOURCE_LABELS = {"etrade": "E*TRADE", "schwab": "Charles Schwab",
+                     "ibkr": "Interactive Brokers", "excel": "Uploaded Excel"}
+
+
+@app.get("/api/portfolio/snapshots")
+def api_portfolio_snapshots_picker():
+    """Every saved snapshot for the multi-select picker: source · masked account · datetime ·
+    portfolio value. Broker snapshots come from portfolio_store; Excel from the CSV folder."""
+    out = []
+    for s in portfolio_store.list_snapshots():
+        out.append({
+            "key": f"pf:{s['id']}", "id": s["id"], "source": s.get("source"),
+            "source_label": _PC_SOURCE_LABELS.get(s.get("source"), s.get("source")),
+            "masked_account": ("••" + s["account_ending"]) if s.get("account_ending") else "••????",
+            "datetime": s.get("created_at"), "date": (s.get("created_at") or "")[:10],
+            "value": s.get("total_value"), "label": s.get("label")})
+    try:
+        for e in _list_portfolio_snapshots():
+            out.append({
+                "key": f"xl:{e['file']}", "id": e["file"], "source": "excel",
+                "source_label": "Uploaded Excel", "masked_account": e["folder"][:16],
+                "datetime": (e["date"] + "T00:00:00Z"), "date": e["date"],
+                "value": None, "label": f"Excel {e['date']}"})
+    except Exception:  # noqa: BLE001 — Excel folder may not exist on AWS
+        pass
+    out.sort(key=lambda x: (x.get("datetime") or ""), reverse=True)
+    return {"snapshots": out, "sources": list(_PC_SOURCE_LABELS.keys())}
+
+
+def _pc_load_excel_snapshot(relpath: str) -> dict | None:
+    try:
+        p = PORTFOLIO_DIR / relpath
+        if not p.is_file():
+            return None
+        acc = defaultdict(lambda: {"qty": 0.0, "cost": 0.0})
+        parse_portfolio_csv(p.read_text(encoding="utf-8", errors="replace"), acc)
+        holdings = [{"ticker": k, "qty": round(v["qty"], 4), "cost_basis": round(v["cost"], 2)}
+                    for k, v in acc.items() if v["qty"]]
+        m = re.search(r"(\d{4}-\d{2}-\d{2})", relpath)
+        date = m.group(1) if m else ""
+        return {"id": f"xl:{relpath}", "source": "excel", "account_ending": "",
+                "label": f"Excel {date}", "holdings": holdings,
+                "total_value": None, "total_gain": None,
+                "created_at": (date + "T00:00:00Z") if date else ""}
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _pc_load_snapshots(keys, request: Request):
+    """Load selected snapshots for consolidation with per-snapshot ownership checks.
+    Returns (snapshots, errors). Accepts 'pf:<id>' / numeric id / 'xl:<file>'."""
+    u = _user(request) if request is not None else None
+    snaps, errors = [], []
+    for raw in keys or []:
+        key = str(raw).strip()
+        if not key:
+            continue
+        if key.startswith("xl:"):
+            snap = _pc_load_excel_snapshot(key[3:])
+            if snap:
+                snaps.append(snap)
+            else:
+                errors.append({"key": key, "error": "Excel snapshot unavailable on this server"})
+            continue
+        try:
+            sid = int(key.split(":", 1)[1]) if ":" in key else int(key)
+        except (ValueError, IndexError):
+            errors.append({"key": key, "error": "invalid snapshot id"})
+            continue
+        snap = portfolio_store.get(sid)
+        if not snap:
+            errors.append({"key": key, "error": "snapshot not found"})
+            continue
+        # Ownership: only the owner or an admin may include a snapshot (don't leak existence).
+        if u and u.get("role") != "admin" and snap.get("user_id") not in (None, u.get("id")):
+            errors.append({"key": key, "error": "not found"})
+            continue
+        snaps.append(snap)
+    return snaps, errors
+
+
+def _pc_bulk_prices(tickers: list) -> dict:
+    """One batched yfinance request for last close per ticker — far more reliable than N
+    individual .info/history calls (which get rate-limited on cloud IPs). Options/complex
+    symbols (with spaces) are skipped. Returns {TICKER: price|None}."""
+    plain = [t for t in tickers if t and " " not in t]
+    prices = {t: None for t in tickers}
+    if not plain:
+        return prices
+    try:
+        df = yf.download(plain, period="5d", interval="1d", progress=False,
+                         group_by="ticker", threads=True, auto_adjust=False)
+    except Exception:  # noqa: BLE001
+        return prices
+    for t in plain:
+        try:
+            if len(plain) == 1:
+                ser = df["Close"].dropna()
+            else:
+                ser = df[t]["Close"].dropna() if t in df.columns.get_level_values(0) else None
+            if ser is not None and len(ser):
+                v = float(ser.iloc[-1])
+                prices[t] = v if v == v else None   # drop NaN
+        except Exception:  # noqa: BLE001
+            prices[t] = None
+    return prices
+
+
+def _pc_enrich(tickers):
+    """Price + name + sector per ticker (snapshots store none). Reliable price comes from a
+    single bulk yfinance request; name/sector are best-effort via the engine (concurrent),
+    falling back to Unavailable — never fabricated."""
+    tickers = list(tickers)
+    prices = _pc_bulk_prices(tickers)
+    out = {t: {"price": prices.get(t), "name": t, "sector": None} for t in tickers}
+
+    def meta(t):
+        try:
+            r = analyze_one(t, allow_llm=False) or {}
+        except Exception:  # noqa: BLE001
+            r = {}
+        return t, r
+    try:
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            for t, r in ex.map(meta, tickers):
+                if r.get("company"):
+                    out[t]["name"] = r["company"]
+                if r.get("sector"):
+                    out[t]["sector"] = r["sector"]
+                if out[t]["price"] is None and isinstance(r.get("price"), (int, float)):
+                    out[t]["price"] = r["price"]     # fall back to engine price if bulk missed it
+    except Exception:  # noqa: BLE001 — metadata is optional; prices already set
+        pass
+    return out
+
+
+def _pc_narrative(result: dict, question: str, mode: str) -> str | None:
+    """Optional LLM narrative grounded ONLY in the structured consolidation result."""
+    compact = {
+        "mode": result.get("mode"), "base_currency": result.get("base_currency"),
+        "summary": result.get("summary"), "reconciliation": result.get("reconciliation"),
+        "warnings": result.get("warnings"), "data_quality_notes": (result.get("data_quality") or {}).get("notes"),
+        "top_holdings": [{k: h.get(k) for k in ("symbol", "qty", "market_value", "cost_basis",
+                                                "gain", "gain_pct", "weight_pct", "sources")}
+                         for h in (result.get("holdings") or [])[:20]],
+        "allocation": result.get("allocation"), "risks": result.get("risks"),
+        "source_account_breakdown": result.get("source_account_breakdown"),
+        "per_snapshot": result.get("per_snapshot"), "transitions": result.get("transitions"),
+    }
+    prompt = (
+        "You are a portfolio analyst. Answer the user's question using ONLY the structured data "
+        "below — never invent figures. Values marked \"Unavailable\" must be reported as unavailable "
+        "(not zero). Note any reconciliation difference and mixed timestamps. Base currency: "
+        f"{result.get('base_currency')}. Analysis mode: {mode}.\n\nDATA:\n"
+        + json.dumps(compact, default=str)[:9000]
+        + f"\n\nQUESTION: {question}\n\nAnswer concisely and clearly for Slack/web display.")
+    akey, okey = _anthropic_key(), _openai_key()
+    try:
+        if akey:
+            return _summarize_anthropic(prompt, akey)
+        if okey:
+            return _summarize_openai(prompt, okey)
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
+@app.post("/api/portfolio/multi-analyze")
+async def api_portfolio_multi_analyze(request: Request):
+    """Consolidate or compare multiple selected snapshots. Body: {analysisMode, baseCurrency,
+    snapshotIds, userQuestion}. Selection is driven by explicit snapshotIds — never by parsing
+    the question. Returns the structured result plus an optional LLM narrative."""
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        body = {}
+    mode = (body.get("analysisMode") or "consolidate").strip().lower()
+    if mode not in ("consolidate", "compare"):
+        mode = "consolidate"
+    base = (body.get("baseCurrency") or "USD").strip().upper() or "USD"
+    keys = body.get("snapshotIds") or body.get("keys") or []
+    if isinstance(keys, str):
+        keys = [k.strip() for k in keys.split(",") if k.strip()]
+    question = (body.get("userQuestion") or "").strip()
+    if not keys:
+        return JSONResponse({"error": "Select at least one snapshot to analyze."}, status_code=400)
+
+    snaps, errors = _pc_load_snapshots(keys, request)
+    if not snaps:
+        return JSONResponse({"error": "No accessible snapshots in the selection.",
+                             "load_errors": errors}, status_code=400)
+
+    # Audit: record exactly which snapshots fed this analysis (reproducible / auditable).
+    actor = (_user(request) or {}).get("username") or "admin"
+    print(f"[portfolio-multi-analyze] actor={actor} mode={mode} base={base} "
+          f"snapshots={[s.get('id') for s in snaps]} errors={len(errors)}")
+
+    try:
+        result = _pcon.analyze(snaps, mode=mode, base_currency=base, enrich=_pc_enrich)
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": f"analysis failed: {e}"}, status_code=500)
+    result["suggested_mode"] = _pcon.suggest_mode(snaps)
+    result["load_errors"] = errors
+    result["analyzed_snapshot_ids"] = [s.get("id") for s in snaps]
+
+    narrative = _pc_narrative(result, question, mode) if question else None
+    return {"mode": mode, "base_currency": base, "result": result, "narrative": narrative}
 
 
 def _is_stored_key(key: str) -> bool:

@@ -12,6 +12,7 @@ so the /logs endpoint can tail it across restarts.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -24,6 +25,9 @@ import agents_store as store
 from news_runs import latest_run, run_history
 
 _LOG_DIR = store.DATA_DIR / "logs"
+# Full-config news runs are split into batches of this many tickers so each collector
+# subprocess finishes within its 900s timeout (a single 60-ticker pass gets killed ~27 in).
+NEWS_BATCH_SIZE = max(1, int(os.environ.get("NEWS_COLLECTOR_BATCH_SIZE", "10") or 10))
 _state_lock = threading.Lock()
 # agent_id -> {"running": bool, "started_at": iso, "run_id": str|None}
 _state: dict[str, dict] = {}
@@ -157,61 +161,90 @@ def run_async(agent_id: str, cfg: dict, trigger_source: str = "manual",
          last_error=None, trigger_source=trigger_source)
 
     def _worker():
-        rec = None
-        try:
-            rec = _run_blocking(agent_id, cfg, tickers_override=tickers_override)
-            _set(agent_id, running=False, last_record=rec, run_id=rec.get("run_id"),
-                 finished_at=_now())
-            # Persist last/next run hints on the agent config.
+        is_news = cfg.get("agent_type") == "News Intelligence"
+        digest_on = (is_news and tickers_override is None
+                     and bool(os.environ.get("NEWS_DIGEST_SLACK_WEBHOOK")))
+        # Batch only FULL-config news runs; ad-hoc override/search runs stay a single
+        # pass (and never post a digest). Each batch is its own <900s subprocess.
+        if is_news and tickers_override is None and len(run_tickers) > NEWS_BATCH_SIZE:
+            batches = [run_tickers[i:i + NEWS_BATCH_SIZE]
+                       for i in range(0, len(run_tickers), NEWS_BATCH_SIZE)]
+        else:
+            batches = [tickers_override]      # None → collector uses cfg tickers; else the override
+        total = len(batches)
+
+        last_rec, agg_errors = None, []
+        agg = {"articles_collected": 0, "articles_relevant": 0, "signals_generated": 0,
+               "signals_positive": 0, "signals_negative": 0}
+        for bi, batch in enumerate(batches, 1):
             try:
-                store.save_config(agent_id, {"last_run_at": rec.get("completed_at") or started})
+                rec = _run_blocking(agent_id, cfg, tickers_override=batch) or {}
+            except Exception as e:  # noqa: BLE001
+                rec = {"status": "failed", "errors": [str(e)]}
+            last_rec = rec
+            for k in agg:
+                v = rec.get(k)
+                if isinstance(v, (int, float)):
+                    agg[k] += v
+            agg_errors += rec.get("errors") or []
+            batch_tickers = list(batch) if batch else list(run_tickers)
+            # Per-batch broker-run history (each batch is a real subprocess run).
+            try:
+                _append_broker_run({
+                    "run_id": rec.get("run_id") or f"{int(time.time()*1000)}-{bi}",
+                    "agent_id": agent_id,
+                    "agent_name": cfg.get("agent_name", "Stock News Collector"),
+                    "trigger_source": trigger_source,
+                    "query": query or "",
+                    "tickers": batch_tickers,
+                    "started_at": started,
+                    "completed_at": rec.get("completed_at") or _now(),
+                    "status": rec.get("status", "unknown"),
+                    "articles_collected": rec.get("articles_collected"),
+                    "articles_relevant": rec.get("articles_relevant"),
+                    "signals_generated": rec.get("signals_generated"),
+                    "signals_positive": rec.get("signals_positive"),
+                    "signals_negative": rec.get("signals_negative"),
+                    "errors": rec.get("errors", []),
+                })
             except Exception:  # noqa: BLE001
                 pass
-        except Exception as e:  # noqa: BLE001
-            _set(agent_id, running=False, last_error=str(e), finished_at=_now())
-            rec = {"status": "failed", "errors": [str(e)]}
-        # Broker-side enriched history: attribute the run to this instance + trigger.
+            # Per-batch digest → Slack #artik-news (scoped to just this batch's tickers).
+            if digest_on:
+                try:
+                    import news_digest
+                    suffix = f" (batch {bi}/{total})" if total > 1 else ""
+                    ok, detail, dstats = news_digest.build_and_post(
+                        store.DATA_DIR, batch_tickers, only=batch_tickers,
+                        title=f"{cfg.get('agent_name', 'Stock News Collector')} — 24-Hour Digest{suffix}")
+                    print(f"[agent {agent_id}] digest {bi}/{total} → #artik-news: ok={ok} ({detail}) {dstats}")
+                except Exception as e:  # noqa: BLE001 — digest must never break a run
+                    print(f"[agent {agent_id}] digest {bi}/{total} error: {e}")
+
+        overall = ("timeout" if any("timeout" in str(e).lower() for e in agg_errors)
+                   else ("completed_with_errors" if agg_errors else "completed"))
+        agg_rec = {**agg, "status": overall, "errors": agg_errors[:10],
+                   "run_id": (last_rec or {}).get("run_id"), "completed_at": _now()}
+        _set(agent_id, running=False, last_record=agg_rec, run_id=agg_rec.get("run_id"),
+             last_error=("; ".join(str(e) for e in agg_errors) or None), finished_at=_now())
         try:
-            rec = rec or {}
-            _append_broker_run({
-                "run_id": rec.get("run_id") or f"{int(time.time()*1000)}",
-                "agent_id": agent_id,
-                "agent_name": cfg.get("agent_name", "Stock News Collector"),
-                "trigger_source": trigger_source,
-                "query": query or "",
-                "tickers": list(run_tickers),
-                "started_at": started,
-                "completed_at": rec.get("completed_at") or _now(),
-                "status": rec.get("status", "unknown"),
-                "articles_collected": rec.get("articles_collected"),
-                "articles_relevant": rec.get("articles_relevant"),
-                "signals_generated": rec.get("signals_generated"),
-                "signals_positive": rec.get("signals_positive"),
-                "signals_negative": rec.get("signals_negative"),
-                "errors": rec.get("errors", []),
-            })
+            store.save_config(agent_id, {"last_run_at": _now()})
         except Exception:  # noqa: BLE001
             pass
 
-        # ── generic agent lifecycle hook ────────────────────────────────────────
-        # Every managed agent run funnels through here on completion, so a single
-        # call covers all current and future agents (no per-agent code). Routes the
-        # terminal event to Artik Notifier → Slack #artik-notify. Never raises.
+        # ── generic agent lifecycle hook → Artik Notifier → Slack #artik-notify ──
+        # One aggregated terminal status per run (all batches). Never raises.
         try:
             from notifications import notify_agent_terminal
-            errors = rec.get("errors") or []
-            status = rec.get("status") or "completed"
-            if any("timeout" in str(e).lower() for e in errors):
-                status = "timeout"
             notify_agent_terminal(
                 agent_name=cfg.get("agent_name", "Stock News Collector"),
                 agent_id=agent_id,
-                job_id=rec.get("run_id") or state(agent_id).get("run_id") or agent_id,
-                task_name=query or f"{trigger_source} run",
-                status=status,
+                job_id=agg_rec.get("run_id") or state(agent_id).get("run_id") or agent_id,
+                task_name=(query or f"{trigger_source} run") + (f" · {total} batches" if total > 1 else ""),
+                status=overall,
                 started_at=started,
-                completed_at=rec.get("completed_at") or _now(),
-                error_message="; ".join(str(e) for e in errors) or None,
+                completed_at=agg_rec["completed_at"],
+                error_message="; ".join(str(e) for e in agg_errors) or None,
             )
         except Exception:  # noqa: BLE001 — notifications must never break a run
             pass

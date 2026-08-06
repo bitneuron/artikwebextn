@@ -12,3 +12,4 @@ openai==2.14.0
 boto3==1.42.14
 cryptography==46.0.3
 openpyxl==3.1.5   # ArtikFinance: read the financial statement workbook
+tzdata==2026.3    # zoneinfo tz database (America/Los_Angeles) on the slim image — news digest timestamps

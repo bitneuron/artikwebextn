@@ -71,6 +71,7 @@ for _k in ("NOTIFICATIONS_ENABLED", "ARTIK_NOTIFY_API_URL", "ARTIK_NOTIFY_API_KE
            "FMP_API_KEY", "FMP_BASE_URL",
            "FINNHUB_API_KEY", "FINNHUB_BASE_URL", "FINNHUB_CACHE_TTL",
            "TRADING_BRIDGE_KEY",
+           "NEWS_DIGEST_SLACK_WEBHOOK",
            "ADMIN_PASSWORD_RESET"):
     if os.environ.get(_k):
         envv[_k] = os.environ[_k]

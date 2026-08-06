@@ -376,6 +376,12 @@
   .src-row .nm { flex:1; font-size:13.5px; }
   .src-row .meta { font-size:11.5px; color:var(--mut); }
   .trust { font-variant-numeric:tabular-nums; }
+  /* Portfolio ticker chips in the News Collector editor */
+  .ag-tk { display:inline-block; padding:4px 9px; border:1px solid var(--line); border-radius:999px;
+           font-size:12px; font-weight:600; letter-spacing:.3px; cursor:pointer; user-select:none;
+           background:var(--panel,#161b22); color:var(--txt); transition:all .12s; }
+  .ag-tk:hover { border-color:var(--acc); }
+  .ag-tk.on { background:var(--acc); border-color:var(--acc); color:#fff; }
   .modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:20px;
                    border-top:1px solid var(--line); padding-top:16px; }
   .stat-row { display:flex; gap:22px; flex-wrap:wrap; margin:10px 0 16px; }
@@ -1065,25 +1071,34 @@
   <!-- PORTFOLIO VIEW (saved snapshots by date) -->
   <section id="view-portfolio" class="hidden">
     <div class="pf-bar">
-      <span class="up-label">Source:</span>
-      <select id="pf-source" onchange="pfSourceChanged(this.value)">
-        <option value="excel">Uploaded Excel</option>
-        <option value="etrade">E*TRADE</option>
-        <option value="schwab">Charles Schwab</option>
-        <option value="ibkr">Interactive Brokers</option>
-      </select>
-      <span class="up-label">📅 Snapshot:</span>
-      <select id="pf-date" onchange="loadPortfolio(this.value)"></select>
-      <input id="pf-search" placeholder="Search ticker…" oninput="applyPfView()" style="width:160px" />
-      <select id="pf-status" onchange="applyPfView()">
-        <option value="">All statuses</option>
-        <option value="BUY">🟢 BUY</option>
-        <option value="HOLD">🟡 HOLD</option>
-        <option value="SELL">🔴 SELL</option>
-      </select>
-      <button id="pf-refresh" class="ex-btn" onclick="refreshPortfolio()" title="Re-score holdings against live market data">🔄 Refresh</button>
+      <span class="up-label">Mode:</span>
+      <div class="pf-modeswitch" style="display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden">
+        <button id="pf-mode-single" class="ghost" style="border:0;border-radius:0;background:var(--acc);color:#fff" onclick="pmSetMode('single')" title="Analyze one snapshot">Single Snapshot</button>
+        <button id="pf-mode-multi" class="ghost" style="border:0;border-radius:0" onclick="pmSetMode('multi')" title="Combine or compare multiple snapshots across brokerages">Multi-Snapshot</button>
+      </div>
+      <span id="pf-single-controls" style="display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="up-label">Source:</span>
+        <select id="pf-source" onchange="pfSourceChanged(this.value)">
+          <option value="excel">Uploaded Excel</option>
+          <option value="etrade">E*TRADE</option>
+          <option value="schwab">Charles Schwab</option>
+          <option value="ibkr">Interactive Brokers</option>
+        </select>
+        <span class="up-label">📅 Snapshot:</span>
+        <select id="pf-date" onchange="loadPortfolio(this.value)"></select>
+        <input id="pf-search" placeholder="Search ticker…" oninput="applyPfView()" style="width:160px" />
+        <select id="pf-status" onchange="applyPfView()">
+          <option value="">All statuses</option>
+          <option value="BUY">🟢 BUY</option>
+          <option value="HOLD">🟡 HOLD</option>
+          <option value="SELL">🔴 SELL</option>
+        </select>
+        <button id="pf-refresh" class="ex-btn" onclick="refreshPortfolio()" title="Re-score holdings against live market data">🔄 Refresh</button>
+      </span>
       <span id="pf-meta" class="pf-meta"></span>
     </div>
+    <!-- Multi-Snapshot Portfolio Analysis (built by JS) -->
+    <div id="pf-multi" class="hidden"></div>
     <div id="ps-portfolio"></div>
     <div id="pf-totals"></div>
     <div id="pf-out"><div class="spin">Loading saved portfolios…</div></div>
@@ -1199,6 +1214,10 @@
       <button class="ghost" id="fin-reimport" onclick="finReimport()" title="Re-import the bundled workbook">↻ Re-import</button>
     </div>
     <div id="fin-out" style="margin-top:12px"><div class="spin">Loading…</div></div>
+    <!-- Persistent modal host so Add/Edit dialogs work on every Financial Statements page
+         (the Payment Apps / Assets views render their own inner #pay-modal; this one is used
+         by the Tax/Card-Interest/Expenses edit forms). -->
+    <div id="fin-modal-host"></div>
   </section>
 
   <!-- HISTORY VIEW (past searches, stored in this browser) -->
@@ -3186,7 +3205,7 @@ async function finLoad(page){
 function finYears(page){
   const sel=$('#fin-year'); const d=window._finData[page];
   const rows=(d&&(d.rows||d.points))||[];
-  const ys=[...new Set(rows.map(r=>r.year).filter(Boolean))].sort();
+  const ys=[...new Set(rows.map(r=>r.year).filter(Boolean))].sort((a,b)=>b-a);  // latest year first
   sel.style.display = ys.length>1 && ['cashflow','tax'].includes(page) ? '' : 'none';
   const cur=sel.value;
   sel.innerHTML='<option value="">All years</option>'+ys.map(y=>`<option value="${y}">${y}</option>`).join('');
@@ -3222,8 +3241,11 @@ function finLine(points, valueKey, color, label){
 }
 /* sortable + filterable data table (all Financial Statements tables) */
 window._finT={};
-function finDataTable(id, cols, rows){
-  window._finT[id]={cols, rows, q:'', k:null, dir:1};
+function finDataTable(id, cols, rows, opts){
+  opts=opts||{};
+  // opts.sort={key,dir} sets the DEFAULT active sort (dir -1 = descending, e.g. latest year
+  // first). The indicator renders immediately; a header click still toggles/overrides it.
+  window._finT[id]={cols, rows, q:'', k:(opts.sort&&opts.sort.key)||null, dir:(opts.sort&&opts.sort.dir)||1};
   return `<div class="card" style="overflow-x:auto">
     <input placeholder="🔍 Filter table…" style="max-width:260px;margin-bottom:8px;background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 10px;font-size:13px" oninput="finTQ('${id}',this.value)">
     <span class="pf-meta" id="ft-n-${id}" style="margin-left:8px"></span>
@@ -3238,7 +3260,9 @@ function finTBody(id){
       if(av==null&&bv==null) return 0; if(av==null) return 1; if(bv==null) return -1;
       return (typeof av==='number'&&typeof bv==='number' ? av-bv : String(av).localeCompare(String(bv)))*dir; }); }
   setTimeout(()=>{ const cnt=$('#ft-n-'+id); if(cnt) cnt.textContent=rows.length+' rows'; },0);
-  const head='<tr>'+t.cols.map(c=>`<th style="cursor:pointer;white-space:nowrap;user-select:none" title="Click to sort" onclick="finTSort('${id}','${c.key}')">${c.label}${t.k===c.key?(t.dir>0?' ▲':' ▼'):''}</th>`).join('')+'</tr>';
+  const head='<tr>'+t.cols.map(c=> c.nosort
+    ? `<th style="white-space:nowrap">${c.label}</th>`
+    : `<th style="cursor:pointer;white-space:nowrap;user-select:none" title="Click to sort" onclick="finTSort('${id}','${c.key}')">${c.label}${t.k===c.key?(t.dir>0?' ▲':' ▼'):''}</th>`).join('')+'</tr>';
   const body=rows.slice(0,500).map(r=>'<tr>'+t.cols.map(c=>{
     const v=r[c.key];
     const disp=c.render?c.render(r):(c.money?finMoney(v):escapeHtml(String(v??'—')));
@@ -3349,7 +3373,7 @@ function finRender(){
       ${(s.insights&&s.insights.length)?`<div class="card" style="margin-bottom:14px"><div class="up-label" style="margin-bottom:6px">💡 Insights</div>${s.insights.map(i=>'<div class="pf-meta" style="padding:2px 0">• '+escapeHtml(i)+'</div>').join('')}</div>`:''}
       ${finMatrixTable('nw', {
         label:'Metric', csvName:'networth_matrix.csv', totals:null,
-        periods:(d.points||[]).map(p=>p.period),
+        periods:(d.points||[]).map(p=>p.period).reverse(),   // latest period first
         itemOrder:['Assets','Liabilities','Net Worth'],
         rows:(d.points||[]).flatMap(p=>[
           {item:'Assets', category:null, period:p.period, value:p.assets},
@@ -3370,7 +3394,7 @@ function finRender(){
     out.innerHTML = `<div class="fin-chart"><div class="up-label" style="margin-bottom:8px">Cashflow Metrics · ${yr||'All periods'}</div>${finMultiLine(fSeries,'cf')}</div>
       ${finMatrixTable('cf', {
         label:'Cashflow', csvName:'cashflow_matrix.csv',
-        periods:(d.periods||[]).filter(inYr),
+        periods:(d.periods||[]).filter(inYr).reverse(),   // latest period first
         totals:null,                       // 'Total' is a data row from the sheet, not a computed sum
         itemOrder:d.items||[],
         rows:(d.rows||[]).filter(r=>!yr||r.year===yr)
@@ -3381,36 +3405,45 @@ function finRender(){
           {key:'value', label:'Value', money:1},
         ], listRows:rows})}`;
   } else if(page==='tax'){
-    const rows=(d.rows||[]).filter(r=>!yr||r.year===yr).slice().reverse();
-    const last=(d.rows||[])[d.rows.length-1]||{};
-    const pts=(d.rows||[]).map(r=>({period:String(r.year), total_income:r.total_income}));
+    const manage=window._finManage.tax;
+    const rows=(d.rows||[]).filter(r=>!yr||r.year===yr);          // backend already returns latest year first
+    const last=(d.rows||[])[0]||{};
+    const pts=(d.rows||[]).slice().reverse().map(r=>({period:String(r.year), total_income:r.total_income}));  // chart reads left→right oldest→newest
+    const cols=[
+      {key:'year', label:'Year', render:r=>'<b>'+r.year+'</b>'},
+      {key:'total_income', label:'Total Income', money:1},
+      {key:'wages', label:'Wages', money:1},
+      {key:'capital_gain', label:'Capital Gain', money:1},
+      {key:'dividend', label:'Dividend', money:1},
+      {key:'interest', label:'Interest', money:1},
+      {key:'tax_refund', label:'Refund', money:1},
+      {key:'other_income', label:'Other', money:1},
+    ];
+    if(manage) cols.push({key:'_act', label:'', nosort:true, render:r=>finRowActions('finTaxEdit('+r.year+')','finTaxDelete('+r.year+')')});
     out.innerHTML = `<div class="fin-cards">
         ${finCard('Latest Year', last.year||'—')}${finCard('Total Income', finMoney(last.total_income))}
         ${finCard('Wages', finMoney(last.wages))}${finCard('Capital Gains', finMoney(last.capital_gain))}
         ${finCard('Dividends', finMoney(last.dividend))}${finCard('Tax Refund', finMoney(last.tax_refund))}
       </div>
       <div class="fin-chart"><div class="up-label" style="margin-bottom:8px">Income Growth</div>${finLine(pts,'total_income','#a78bfa','Total Income')}</div>
-      ${finDataTable('tax', [
-        {key:'year', label:'Year', render:r=>'<b>'+r.year+'</b>'},
-        {key:'total_income', label:'Total Income', money:1},
-        {key:'wages', label:'Wages', money:1},
-        {key:'capital_gain', label:'Capital Gain', money:1},
-        {key:'dividend', label:'Dividend', money:1},
-        {key:'interest', label:'Interest', money:1},
-        {key:'tax_refund', label:'Refund', money:1},
-        {key:'other_income', label:'Other', money:1},
-      ], rows)}`;
+      ${finManageBar('tax','Add Tax Year','finTaxForm()')}
+      ${finDataTable('tax', cols, rows, {sort:{key:'year',dir:-1}})}`;
   } else if(page==='ccinterest'){
+    const manage=window._finManage.ccinterest;
     const pct=v=>v==null?'—':(v<1?(v*100).toFixed(2)+'%':v+'%');
-    out.innerHTML = `<div class="pf-meta" style="margin-bottom:8px">APR reference per card (from the workbook's Credit Card Interest sheet).</div>`+
-      finDataTable('cc', [
-        {key:'card', label:'Card', render:r=>'<b>'+escapeHtml(r.card)+'</b>'},
-        {key:'purchase_apr', label:'Purchase APR', render:r=>pct(r.purchase_apr)},
-        {key:'cash_advance_apr', label:'Cash Advance', render:r=>pct(r.cash_advance_apr)},
-        {key:'balance_transfer_apr', label:'Balance Transfer', render:r=>pct(r.balance_transfer_apr)},
-        {key:'note', label:'Note', render:r=>'<span class="muted">'+escapeHtml(r.note||'')+'</span>'},
-      ], d.rows||[]);
+    const cols=[
+      {key:'card', label:'Card', render:r=>'<b>'+escapeHtml(r.card)+'</b>'},
+      {key:'purchase_apr', label:'Purchase APR', render:r=>pct(r.purchase_apr)},
+      {key:'cash_advance_apr', label:'Cash Advance', render:r=>pct(r.cash_advance_apr)},
+      {key:'balance_transfer_apr', label:'Balance Transfer', render:r=>pct(r.balance_transfer_apr)},
+      {key:'note', label:'Note', render:r=>'<span class="muted">'+escapeHtml(r.note||'')+'</span>'},
+    ];
+    if(manage) cols.push({key:'_act', label:'', nosort:true, render:r=>finRowActions("finCcEdit('"+escAttr(r.card)+"')","finCcDelete('"+escAttr(r.card)+"')")});
+    out.innerHTML = `<div class="pf-meta" style="margin-bottom:8px">APR reference per card (from the workbook's Credit Card Interest sheet).</div>
+      ${finManageBar('ccinterest','Add Card','finCcForm()')}
+      ${finDataTable('cc', cols, d.rows||[], {sort:{key:'card',dir:1}})}`;
   } else if(page==='expenses'){
+    const manage=window._finManage.expenses;
     const save=(d.monthly_income&&d.monthly_spend)?((d.monthly_income-d.monthly_spend)/d.monthly_income*100):null;
     const monthSel=(d.months&&d.months.length)?`<div class="card" style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <span class="pf-meta">Viewing:</span>
@@ -3425,12 +3458,13 @@ function finRender(){
         ${finCard('Savings Rate', save!=null?save.toFixed(0)+'%':'—', save>=0?'#34d399':'#f87171')}
       </div>
       <div class="fin-chart"><div class="up-label" style="margin-bottom:8px">Spending by Category</div>${finBars(d.categories)}</div>
-      ${finDataTable('exp', [
+      ${finManageBar('expenses','Add Expense','finExpForm()')}
+      ${finDataTable('exp', (()=>{ const cols=[
         {key:'account_group', label:'Account', render:r=>'<span class="muted">'+escapeHtml(r.account_group||'')+'</span>'},
         {key:'description', label:'Description', render:r=>`<span style="display:inline-block;max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom" title="${escapeHtml(r.description)}">${escapeHtml((r.description||'').slice(0,80))}</span>`},
         {key:'category', label:'Category'},
         {key:'amount', label:'Amount', money:1, render:r=>`<span class="${r.amount>=0?'pos':'neg'}">${finMoney(r.amount)}</span>`},
-      ], d.lines||[])}`;
+      ]; if(manage) cols.push({key:'_act', label:'', nosort:true, render:r=>finRowActions('finExpEdit('+r.id+')','finExpDelete('+r.id+')')}); return cols; })(), d.lines||[], {sort:{key:'amount',dir:1}})}`;
   } else if(page==='apps'){
     out.innerHTML = finAppsHtml(d.apps||[]);
     payRenderPTab(); payLoadAccounts();
@@ -3457,6 +3491,134 @@ async function finReimport(){
   alert(r.ok&&d.ok?`Re-imported: ${d.records} records, ${d.tax_years} tax years, ${d.expense_lines} expense lines.`:(d.error||'import failed'));
   finLoad(window._finPage);
 }
+
+/* ═══════════ Editable Tax/Income · Card Interest · Monthly Expenses ═══════════ */
+window._finManage={};                                     // page -> manage-mode on?
+const FIN_EXP_CATS=["Housing","Utilities","Insurance","Food","Medical","Education",
+  "Shopping","Travel","Investments","Entertainment","Income","Miscellaneous"];
+function finManageToggle(page){ window._finManage[page]=!window._finManage[page]; finRender(); }
+function finManageBar(page, addLabel, addCall){
+  const on=window._finManage[page];
+  return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+    ${on?`<button class="ex-btn" onclick="${addCall}">＋ ${escapeHtml(addLabel)}</button>
+        <button class="ghost" onclick="finManageToggle('${page}')">Done</button>
+        <span class="pf-meta">Editing — use ✏️ to edit or 🗑 to delete a row.</span>`
+      :`<button class="ghost" onclick="finManageToggle('${page}')" title="Add, edit, or delete rows">✏️ Edit data</button>`}
+  </div>`;
+}
+function finRowActions(editCall, delCall){
+  return `<span style="white-space:nowrap">
+    <a title="Edit" onclick="${editCall}" style="cursor:pointer;margin-right:8px">✏️</a>
+    <a title="Delete" onclick="${delCall}" style="cursor:pointer">🗑</a></span>`;
+}
+function finEditReload(page){
+  if(page==='expenses'){ const m=(window._finData.expenses&&window._finData.expenses.month)||''; finExpMonth(m); return; }
+  delete window._finData[page]; finLoad(page);
+}
+async function finPost(url, body){
+  try{
+    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json().catch(()=>({}));
+    return r.ok?{ok:true,...d}:{ok:false,error:d.error||('HTTP '+r.status)};
+  }catch(e){ return {ok:false,error:String(e)}; }
+}
+/* Dedicated modal host (#fin-modal-host is always present on the Financial Statements tab,
+   unlike #pay-modal which only exists inside the Payment Apps / Assets sub-views). */
+function finModal(html){
+  const m=$('#fin-modal-host'); if(!m) return;
+  m.innerHTML=`<div onclick="if(event.target===this)finModalClose()" style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1200;display:grid;place-items:center;padding:16px">
+    <div class="card" style="max-width:520px;width:100%;max-height:88vh;overflow-y:auto">${html}</div></div>`;
+}
+function finModalClose(){ const m=$('#fin-modal-host'); if(m) m.innerHTML=''; }
+/* Field-spec driven Add/Edit modal with client-side validation + inline error messages.
+   cfg:{title, fields:[{key,label,type:'text'|'number'|'year'|'select',options?,required?,min?,lock?,hint?,placeholder?}], values, onSave(payload)->Promise<{ok,error?}>} */
+function finFormModal(cfg){
+  window._finForm=cfg;
+  const body=cfg.fields.map(fl=>{
+    const v=(cfg.values&&cfg.values[fl.key]!=null)?cfg.values[fl.key]:'';
+    const lock=fl.lock&&cfg.values&&cfg.values[fl.key]!=null;
+    const style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:8px 10px"+(lock?';opacity:.6':'');
+    let input;
+    if(fl.type==='select') input=`<select id="ff-${fl.key}" style="${style}">${(fl.options||[]).map(o=>`<option${String(v)===String(o)?' selected':''}>${escapeHtml(o)}</option>`).join('')}</select>`;
+    else input=`<input id="ff-${fl.key}" style="${style}" value="${escAttr(v)}" ${lock?'readonly':''} ${(fl.type==='number'||fl.type==='year')?'inputmode="decimal"':''} placeholder="${escAttr(fl.placeholder||'')}">`;
+    return `<label style="display:block;margin-bottom:10px"><span class="pf-meta">${escapeHtml(fl.label)}${fl.required?' <span style="color:#f59e0b">*</span>':''}</span>${input}${fl.hint?`<span class="pf-meta" style="display:block;font-size:11px;opacity:.75;margin-top:2px">${escapeHtml(fl.hint)}</span>`:''}</label>`;
+  }).join('');
+  finModal(`<div class="up-label" style="margin-bottom:12px">${escapeHtml(cfg.title)}</div>
+    <div id="ff-err" class="card" style="display:none;margin-bottom:10px;border-color:#f8717155;color:#f87171"></div>
+    ${body}
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <button class="ghost" onclick="finModalClose()">Cancel</button>
+      <button class="ex-btn" id="ff-save" onclick="finFormSubmit()">Save</button></div>`);
+  setTimeout(()=>{ const e=document.querySelector('#fin-modal-host input:not([readonly]),#fin-modal-host select'); if(e) e.focus(); },50);
+}
+function finFormErr(msg){ const e=$('#ff-err'); if(e){ e.textContent=msg; e.style.display=''; } }
+async function finFormSubmit(){
+  const cfg=window._finForm; if(!cfg) return;
+  const payload={};
+  for(const fl of cfg.fields){
+    const el=document.getElementById('ff-'+fl.key); let v=el?String(el.value).trim():'';
+    if(fl.required&&v===''){ finFormErr(`${fl.label} is required.`); if(el) el.focus(); return; }
+    if((fl.type==='number'||fl.type==='year')&&v!==''){
+      const n=Number(v.replace(/[$,%\s]/g,''));
+      if(isNaN(n)){ finFormErr(`"${v}" is not a valid number for ${fl.label}.`); if(el) el.focus(); return; }
+      if(fl.type==='year'&&(n<1990||n>2100||!Number.isInteger(n))){ finFormErr('Year must be a whole number between 1990 and 2100.'); if(el) el.focus(); return; }
+      if(fl.min!=null&&n<fl.min){ finFormErr(`${fl.label} must be ${fl.min} or greater.`); if(el) el.focus(); return; }
+    }
+    payload[fl.key]=v;
+  }
+  const btn=$('#ff-save'); if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  const res=await cfg.onSave(payload);
+  if(!res||!res.ok){ finFormErr((res&&res.error)||'Save failed.'); if(btn){ btn.disabled=false; btn.textContent='Save'; } return; }
+  finModalClose(); finEditReload(window._finPage);
+}
+/* Tax & Income */
+function finTaxForm(row){ row=row||{};
+  finFormModal({ title: row.year?`Edit ${row.year} — Tax & Income`:'Add Tax Year', values:row,
+    onSave:p=>finPost('/api/finance/tax/save',{year:p.year, fields:p}),
+    fields:[
+      {key:'year', label:'Year', type:'year', required:true, lock:true, placeholder:'2026', hint:'4-digit year (1990–2100)'},
+      {key:'total_income', label:'Total Income ($)', type:'number'},
+      {key:'wages', label:'Wages ($)', type:'number'},
+      {key:'capital_gain', label:'Capital Gain ($)', type:'number'},
+      {key:'dividend', label:'Dividend ($)', type:'number'},
+      {key:'interest', label:'Interest ($)', type:'number'},
+      {key:'tax_refund', label:'Tax Refund ($)', type:'number'},
+      {key:'other_income', label:'Other Income ($)', type:'number'},
+    ]});
+}
+function finTaxEdit(year){ const row=((window._finData.tax||{}).rows||[]).find(r=>r.year===year); finTaxForm(row); }
+async function finTaxDelete(year){ if(!confirm(`Delete all tax & income data for ${year}? This is audited and cannot be undone.`)) return;
+  const r=await finPost('/api/finance/tax/delete',{year}); if(!r.ok){ alert(r.error); return; } finEditReload('tax'); }
+/* Credit-Card Interest */
+function finCcForm(row){ row=row||{};
+  finFormModal({ title: row.card?`Edit ${row.card}`:'Add Card', values:row,
+    onSave:p=>finPost('/api/finance/ccinterest/save',{card:p.card, orig_card:row.card||'', fields:p}),
+    fields:[
+      {key:'card', label:'Card', type:'text', required:true, placeholder:'e.g. Chase Sapphire'},
+      {key:'purchase_apr', label:'Purchase APR (%)', type:'number', min:0, placeholder:'22.99'},
+      {key:'cash_advance_apr', label:'Cash Advance APR (%)', type:'number', min:0},
+      {key:'balance_transfer_apr', label:'Balance Transfer APR (%)', type:'number', min:0},
+      {key:'note', label:'Note', type:'text'},
+    ]});
+}
+function finCcEdit(card){ const row=((window._finData.ccinterest||{}).rows||[]).find(r=>r.card===card); finCcForm(row); }
+async function finCcDelete(card){ if(!confirm(`Delete card "${card}"? This is audited and cannot be undone.`)) return;
+  const r=await finPost('/api/finance/ccinterest/delete',{card}); if(!r.ok){ alert(r.error); return; } finEditReload('ccinterest'); }
+/* Monthly Expenses */
+function finExpForm(row){ row=row||{};
+  const month=(window._finData.expenses&&window._finData.expenses.month)||'';
+  finFormModal({ title: row.id?'Edit Expense':'Add Expense', values:row,
+    onSave:p=>finPost('/api/finance/expenses/save',{id:row.id||null, fields:{...p, month}}),
+    fields:[
+      {key:'description', label:'Description', type:'text', required:true},
+      {key:'amount', label:'Amount ($)', type:'number', required:true, hint:'Use a negative amount for spending, positive for income.'},
+      {key:'category', label:'Category', type:'select', options:FIN_EXP_CATS},
+      {key:'account_group', label:'Account', type:'text', placeholder:'e.g. Chase Checking'},
+    ]});
+}
+function finExpEdit(id){ const row=((window._finData.expenses||{}).lines||[]).find(r=>r.id===id); finExpForm(row); }
+async function finExpDelete(id){ if(!confirm('Delete this expense line? This is audited and cannot be undone.')) return;
+  const r=await finPost('/api/finance/expenses/delete',{id}); if(!r.ok){ alert(r.error); return; } finEditReload('expenses'); }
 
 /* ── Payment Apps — site launchers + screenshot→expense imports ─────────────── */
 async function finExpMonth(m){
@@ -3693,7 +3855,7 @@ function afMatrixCols(){
   let cols=(d.timeline||[]).map(t=>({label:t.period, year:t.year, quarter:t.quarter, total:t.total}));
   if(ed) ed.newPeriods.forEach(p=>{
     if(!cols.some(c=>c.year===p.year&&c.quarter===p.quarter)) cols.push({label:p.label, year:p.year, quarter:p.quarter, total:null}); });
-  cols.sort((a,b)=>(a.year+((a.quarter||4)/10))-(b.year+((b.quarter||4)/10)));
+  cols.sort((a,b)=>(b.year+((b.quarter||4)/10))-(a.year+((a.quarter||4)/10)));   // latest period first
   return cols;
 }
 function afMatrixHtml(){
@@ -3852,7 +4014,7 @@ async function afEditSave(){
 }
 function afExportMatrixCsv(){
   const d=afD(); if(!d) return;
-  const periods=(d.timeline||[]).map(t=>t.period);
+  const periods=(d.timeline||[]).map(t=>t.period).reverse();   // latest period first (matches on-screen matrix)
   const cell={}, meta={};
   (d.rows||[]).forEach(r=>{ (cell[r.item]=cell[r.item]||{})[r.period]=r.value; meta[r.item]=r.category; });
   const esc=v=>{ v=String(v??''); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
@@ -5867,6 +6029,237 @@ async function refreshPortfolio(){
   }
 }
 
+/* ═══════════ Multi-Snapshot Portfolio Analysis ═══════════
+   Combine (or compare) multiple saved snapshots across brokerages as one portfolio. */
+window._pm = { snaps: [], sel: new Set(), amode: 'consolidate', loaded: false };
+function pmSetMode(m){
+  const multi = m === 'multi';
+  $('#pf-mode-single').style.cssText = 'border:0;border-radius:0;'+(multi?'':'background:var(--acc);color:#fff');
+  $('#pf-mode-multi').style.cssText  = 'border:0;border-radius:0;'+(multi?'background:var(--acc);color:#fff':'');
+  $('#pf-single-controls').style.display = multi ? 'none' : 'inline-flex';
+  ['#ps-portfolio','#pf-totals','#pf-out'].forEach(s=>{ const e=$(s); if(e) e.style.display = multi?'none':''; });
+  const mp = $('#pf-multi'); if(mp) mp.classList.toggle('hidden', !multi);
+  if(multi && !window._pm.loaded) pmInit();
+}
+async function pmInit(){
+  const mp = $('#pf-multi');
+  mp.innerHTML = '<div class="spin">Loading snapshots…</div>';
+  try{
+    const d = await (await fetch('/api/portfolio/snapshots')).json();
+    window._pm.snaps = d.snapshots || [];
+    window._pm.loaded = true;
+    pmRenderShell();
+  }catch(e){ mp.innerHTML = '<div class="err">Failed to load snapshots: '+escapeHtml(String(e))+'</div>'; }
+}
+function pmDateTime(iso){
+  if(!iso) return '—';
+  const d = new Date(iso); if(isNaN(d)) return String(iso).slice(0,16).replace('T',' ');
+  const p=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function pmMoney(v){ return (v==null||v==='Unavailable') ? '<span class="muted">Unavailable</span>' : '$'+Math.round(v).toLocaleString(); }
+function pmPct(v){ return (v==null||v==='Unavailable') ? '<span class="muted">Unavailable</span>' : ((v>=0?'+':'')+v+'%'); }
+function pmSigned(v){ if(v==null||v==='Unavailable') return '<span class="muted">Unavailable</span>';
+  const c=v>=0?'pos':'neg'; return `<span class="${c}">${v>=0?'+':'−'}$${Math.abs(Math.round(v)).toLocaleString()}</span>`; }
+function pmRenderShell(){
+  const snaps = window._pm.snaps;
+  if(!snaps.length){ $('#pf-multi').innerHTML = '<div class="card">No saved snapshots yet. Create one from the E*TRADE / Schwab / IBKR pages, then return here.</div>'; return; }
+  // group by source
+  const groups = {};
+  snaps.forEach(s=>{ (groups[s.source_label] = groups[s.source_label]||[]).push(s); });
+  const dates = [...new Set(snaps.map(s=>s.date).filter(Boolean))].sort().reverse();
+  const groupHtml = Object.entries(groups).map(([lbl, arr])=>`
+    <div style="margin-bottom:10px">
+      <div class="up-label" style="margin-bottom:4px">${escapeHtml(lbl)}</div>
+      ${arr.map(pmRow).join('')}
+    </div>`).join('');
+  $('#pf-multi').innerHTML = `
+    <div class="card" style="margin-bottom:10px">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+        <b>Select snapshots</b>
+        <span style="flex:1"></span>
+        <button class="ghost" onclick="pmSelectLatestPerSource()" title="One most-recent snapshot from each brokerage">Latest per source</button>
+        <select id="pm-date-sel" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 8px">${dates.map(d=>`<option value="${d}">${d}</option>`).join('')}</select>
+        <button class="ghost" onclick="pmSelectAllOnDate()" title="Select every snapshot on the chosen date">Select all on date</button>
+        <button class="ghost" onclick="pmClear()">Clear</button>
+      </div>
+      ${groupHtml}
+    </div>
+    <div id="pm-chips" style="margin-bottom:8px"></div>
+    <div class="card" style="margin-bottom:10px">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+        <span class="up-label">Analysis:</span>
+        <div style="display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden">
+          <button id="pm-am-consolidate" class="ghost" style="border:0;border-radius:0;background:var(--acc);color:#fff" onclick="pmSetAnalysisMode('consolidate')" title="Combine into one portfolio">Consolidate</button>
+          <button id="pm-am-compare" class="ghost" style="border:0;border-radius:0" onclick="pmSetAnalysisMode('compare')" title="Keep separate and diff them">Compare</button>
+        </div>
+        <span id="pm-suggest" class="pf-meta"></span>
+      </div>
+      <textarea id="pm-q" rows="2" placeholder="Ask about the selected portfolio snapshots… e.g. Compare or consolidate E*TRADE and Schwab on August 2." style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:8px 10px"></textarea>
+      <div style="display:flex;justify-content:flex-end;margin-top:8px">
+        <button id="pm-run" class="ex-btn" onclick="pmAnalyze()" disabled style="opacity:.5">Analyze</button>
+      </div>
+    </div>
+    <div id="pm-out"></div>`;
+  pmRefreshSelectionUI();
+}
+function pmRow(s){
+  const on = window._pm.sel.has(s.key);
+  return `<div id="pm-row-${pmEsc(s.key)}" onclick="pmToggleSnap('${pmEsc(s.key)}')" class="pm-snaprow${on?' on':''}"
+      style="display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid ${on?'var(--acc)':'var(--line)'};border-radius:8px;margin-bottom:6px;cursor:pointer;background:${on?'rgba(79,140,255,.08)':'transparent'}">
+    <span style="font-size:15px">${on?'☑':'☐'}</span>
+    <span style="flex:1">${escapeHtml(s.source_label)} · <b>${escapeHtml(s.masked_account||'')}</b> · ${escapeHtml(pmDateTime(s.datetime))} · ${s.value!=null?('$'+Math.round(s.value).toLocaleString()):'<span class="muted">value n/a</span>'}</span>
+  </div>`;
+}
+function pmEsc(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function pmToggleSnap(key){ const s=window._pm.sel; s.has(key)?s.delete(key):s.add(key); pmRefreshSelectionUI(); }
+function pmClear(){ window._pm.sel.clear(); pmRefreshSelectionUI(); }
+function pmSelectLatestPerSource(){
+  const byS={}; window._pm.snaps.forEach(s=>{ if(!byS[s.source]||(s.datetime||'')>(byS[s.source].datetime||'')) byS[s.source]=s; });
+  window._pm.sel = new Set(Object.values(byS).map(s=>s.key)); pmRefreshSelectionUI();
+}
+function pmSelectAllOnDate(){
+  const d = ($('#pm-date-sel')||{}).value; if(!d) return;
+  window._pm.snaps.filter(s=>s.date===d).forEach(s=>window._pm.sel.add(s.key)); pmRefreshSelectionUI();
+}
+function pmSetAnalysisMode(m){
+  window._pm.amode = m;
+  $('#pm-am-consolidate').style.cssText='border:0;border-radius:0;'+(m==='consolidate'?'background:var(--acc);color:#fff':'');
+  $('#pm-am-compare').style.cssText='border:0;border-radius:0;'+(m==='compare'?'background:var(--acc);color:#fff':'');
+}
+function pmRefreshSelectionUI(){
+  // row highlight
+  window._pm.snaps.forEach(s=>{ const el=$('#pm-row-'+CSS.escape(s.key)); if(el){ const on=window._pm.sel.has(s.key);
+    el.className='pm-snaprow'+(on?' on':''); el.style.borderColor=on?'var(--acc)':'var(--line)';
+    el.style.background=on?'rgba(79,140,255,.08)':'transparent'; el.querySelector('span').textContent=on?'☑':'☐'; } });
+  // chips
+  const sel=[...window._pm.sel]; const map={}; window._pm.snaps.forEach(s=>map[s.key]=s);
+  const chips = sel.map(k=>{ const s=map[k]; if(!s) return '';
+    return `<span class="pm-chip" style="display:inline-flex;align-items:center;gap:6px;background:var(--acc);color:#fff;border-radius:999px;padding:4px 10px;margin:0 6px 6px 0;font-size:12px">
+      ${escapeHtml(s.source_label)} ${escapeHtml(s.masked_account||'')} · ${escapeHtml(s.date||'')}
+      <a onclick="event.stopPropagation();pmToggleSnap('${pmEsc(s.key)}')" style="cursor:pointer;font-weight:700">✕</a></span>`; }).join('');
+  const cw=$('#pm-chips'); if(cw) cw.innerHTML = sel.length? `<span class="pf-meta" style="margin-right:6px">Selected (${sel.length}):</span>${chips}` : '<span class="pf-meta">No snapshots selected.</span>';
+  // suggested mode hint (multiple dates for one account → compare)
+  const acctDates={}; sel.forEach(k=>{ const s=map[k]; if(s){ const a=s.source+'|'+s.masked_account; (acctDates[a]=acctDates[a]||new Set()).add(s.date); } });
+  const dup=Object.values(acctDates).some(set=>set.size>1);
+  const sg=$('#pm-suggest'); if(sg) sg.innerHTML = dup? '⚠ Multiple dates for one account — <b>Compare</b> suggested (Consolidate may double-count).' : '';
+  // analyze button gating
+  const run=$('#pm-run'); if(run){ run.disabled = sel.length===0; run.style.opacity = sel.length? '1':'.5'; }
+}
+async function pmAnalyze(){
+  const sel=[...window._pm.sel]; if(!sel.length) return;
+  const run=$('#pm-run'); run.disabled=true; run.textContent='Analyzing…';
+  $('#pm-out').innerHTML='<div class="spin">Consolidating snapshots and pricing holdings live… (~up to a minute for large portfolios)</div>';
+  try{
+    const res=await fetch('/api/portfolio/multi-analyze',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({analysisMode:window._pm.amode, baseCurrency:'USD', snapshotIds:sel, userQuestion:($('#pm-q').value||'').trim()})});
+    const d=await res.json();
+    if(!res.ok){ $('#pm-out').innerHTML='<div class="err">'+escapeHtml(d.error||'analysis failed')+'</div>'; return; }
+    pmRenderResult(d);
+  }catch(e){ $('#pm-out').innerHTML='<div class="err">'+escapeHtml(String(e))+'</div>'; }
+  finally{ run.disabled=false; run.textContent='Analyze'; }
+}
+function pmTable(cols, rows){
+  return `<div class="card" style="overflow-x:auto"><table class="mini" style="width:100%">
+    <tr>${cols.map(c=>`<th style="white-space:nowrap;${c.r?'text-align:right':''}">${c.label}</th>`).join('')}</tr>
+    ${rows.map(r=>`<tr>${cols.map(c=>`<td style="${c.r?'text-align:right;':''}white-space:nowrap">${c.render(r)}</td>`).join('')}</tr>`).join('')}
+  </table></div>`;
+}
+function pmAllocBars(items){
+  if(!items||!items.length) return '<div class="pf-meta">—</div>';
+  const max=Math.max(...items.map(i=>i.pct||0),1);
+  return items.slice(0,10).map(i=>`<div class="fin-bar"><span class="lbl">${escapeHtml(String(i.label))}</span>
+    <div class="track"><div class="fill" style="width:${((i.pct||0)/max*100).toFixed(1)}%"></div></div>
+    <span style="min-width:120px">${pmMoney(i.value)} · ${i.pct}%</span></div>`).join('');
+}
+function pmRenderResult(d){
+  const r=d.result||{};
+  if(r.mode==='compare'){ pmRenderCompare(d); return; }
+  const s=r.summary||{}, dq=r.data_quality||{}, rc=r.reconciliation||{};
+  const warn = (r.warnings||[]).map(w=>`<div class="card" style="border-color:#f59e0b55;background:rgba(245,158,11,.08);margin-bottom:8px">⚠ ${escapeHtml(w)}</div>`).join('');
+  const narr = d.narrative? `<div class="card" style="margin-bottom:10px"><div class="up-label" style="margin-bottom:6px">🤖 Analysis</div><div style="white-space:pre-wrap">${escapeHtml(d.narrative)}</div></div>`:'';
+  // 1 scope
+  const scope = pmTable(
+    [{label:'Source',render:x=>escapeHtml(x.source||'')},{label:'Account',render:x=>escapeHtml(x.masked_account||'')},
+     {label:'Snapshot time',render:x=>escapeHtml(pmDateTime(x.timestamp))},{label:'Recorded value',r:1,render:x=>pmMoney(x.recorded_value)},
+     {label:'Positions',r:1,render:x=>x.positions}], r.scope||[]);
+  // 2 summary cards
+  const cards = `<div class="fin-cards">
+    ${finCardSafe('Combined Value', s.market_value)}${finCardSafe('Cost Basis', s.cost_basis)}
+    ${finCardSafe('Unrealized P/L', s.unrealized_gain, s.unrealized_gain_pct)}${finCardSafe('Day Change', s.day_change)}
+    ${finCardSafe('Cash', s.cash)}${finCardSafe('Invested', s.invested_value)}
+    ${finCardPlain('Securities', s.n_unique_securities)}${finCardPlain('Accounts · Snapshots', (s.n_accounts+' · '+s.n_snapshots))}
+  </div>`;
+  // 3 holdings
+  const holdings = pmTable([
+    {label:'Symbol',render:h=>'<b>'+escapeHtml(h.symbol)+'</b>'},
+    {label:'Name',render:h=>`<span class="muted">${escapeHtml((h.name||'').slice(0,26))}</span>`},
+    {label:'Qty',r:1,render:h=>Number(h.qty).toLocaleString()},
+    {label:'Price',r:1,render:h=>pmMoney(h.price)},
+    {label:'Value',r:1,render:h=>pmMoney(h.market_value)},
+    {label:'Cost',r:1,render:h=>pmMoney(h.cost_basis)},
+    {label:'Gain',r:1,render:h=>pmSigned(h.gain)},
+    {label:'Gain%',r:1,render:h=>pmPct(h.gain_pct)},
+    {label:'Weight',r:1,render:h=>pmPct(h.weight_pct)},
+    {label:'Sources',render:h=>escapeHtml((h.sources||[]).map(x=>x.source+' '+x.account).join(', '))},
+  ], r.holdings||[]);
+  // 4 source/account breakdown
+  const brk = pmTable([{label:'Source',render:b=>escapeHtml(b.source)},{label:'Account',render:b=>escapeHtml(b.account)},
+    {label:'Value',r:1,render:b=>pmMoney(b.market_value)},{label:'Cost',r:1,render:b=>pmMoney(b.cost_basis)},
+    {label:'Weight',r:1,render:b=>pmPct(b.weight_pct)}], r.source_account_breakdown||[]);
+  // 5 allocation
+  const al=r.allocation||{};
+  const alloc = `<div class="fin-chart"><div class="up-label">By sector</div>${pmAllocBars(al.by_sector)}</div>
+    <div class="fin-chart"><div class="up-label">By asset class</div>${pmAllocBars(al.by_asset_class)}</div>
+    <div class="fin-chart"><div class="up-label">By brokerage</div>${pmAllocBars(al.by_source)}</div>
+    <div class="fin-chart"><div class="up-label">By account</div>${pmAllocBars(al.by_account)}</div>`;
+  // 6 risks
+  const rk=r.risks||{}, con=rk.concentration||{};
+  const dupList=(rk.duplicated_across_accounts||[]).map(x=>`${escapeHtml(x.symbol)} (${escapeHtml((x.accounts||[]).join(', '))})`).join('; ')||'none';
+  const risks = `<div class="card"><div class="up-label" style="margin-bottom:6px">Risks & opportunities</div>
+    <div class="pf-meta">Top-1 weight: ${pmPct(con.top1_pct)} · Top-5 weight: ${pmPct(con.top5_pct)}</div>
+    ${(con.flags||[]).map(f=>`<div style="color:#f59e0b">• ${escapeHtml(f)}</div>`).join('')}
+    <div style="margin-top:6px"><b>Biggest gains:</b> ${(rk.biggest_gains||[]).map(g=>escapeHtml(g.symbol)+' '+pmSignedTxt(g.gain)).join(', ')||'—'}</div>
+    <div><b>Biggest losses:</b> ${(rk.biggest_losses||[]).map(g=>escapeHtml(g.symbol)+' '+pmSignedTxt(g.gain)).join(', ')||'—'}</div>
+    <div><b>Duplicated across accounts:</b> ${dupList}</div></div>`;
+  // 7 data quality + reconciliation
+  const dqn=(dq.notes||[]).concat(dq.conflicting_mappings&&dq.conflicting_mappings.length?['Conflicting mappings: '+JSON.stringify(dq.conflicting_mappings)]:[]);
+  const dqBox = `<div class="card"><div class="up-label" style="margin-bottom:6px">Data quality & reconciliation</div>
+    <div class="pf-meta">Price basis: ${escapeHtml(dq.price_basis||'—')} · timestamps: ${escapeHtml((dq.price_timestamps||[]).join(', ')||'—')}</div>
+    <div class="pf-meta">Missing fields: ${escapeHtml((dq.missing_fields||[]).join(', ')||'none')}</div>
+    ${dqn.map(n=>`<div class="pf-meta">• ${escapeHtml(String(n))}</div>`).join('')}
+    <div style="margin-top:8px"><b>Reconciliation:</b> recorded ${pmMoney(rc.sum_recorded_value)} vs consolidated ${pmMoney(rc.consolidated_market_value)} → diff ${pmSigned(rc.difference)} (${pmPct(rc.difference_pct)})</div>
+    <div class="pf-meta">${escapeHtml(rc.explanation||'')}</div></div>`;
+  $('#pm-out').innerHTML = warn+narr
+    + pmSection('1 · Analysis scope', scope)
+    + pmSection('2 · Consolidated summary', cards)
+    + pmSection('3 · Combined holdings ('+(r.holdings||[]).length+')', holdings)
+    + pmSection('4 · Source & account breakdown', brk)
+    + pmSection('5 · Allocation & concentration', alloc)
+    + pmSection('6 · Risks & opportunities', risks)
+    + pmSection('7 · Data quality & reconciliation', dqBox);
+}
+function pmRenderCompare(d){
+  const r=d.result||{};
+  const narr = d.narrative? `<div class="card" style="margin-bottom:10px"><div class="up-label" style="margin-bottom:6px">🤖 Analysis</div><div style="white-space:pre-wrap">${escapeHtml(d.narrative)}</div></div>`:'';
+  const scope = pmTable([{label:'Source',render:x=>escapeHtml(x.source||'')},{label:'Account',render:x=>escapeHtml(x.masked_account||'')},
+    {label:'Snapshot time',render:x=>escapeHtml(pmDateTime(x.timestamp))},{label:'Recorded value',r:1,render:x=>pmMoney(x.recorded_value)},
+    {label:'Positions',r:1,render:x=>x.positions}], r.scope||[]);
+  const trans = (r.transitions||[]).map(t=>`<div class="card" style="margin-bottom:8px">
+    <div class="up-label">${escapeHtml(pmDateTime(t.from))} → ${escapeHtml(pmDateTime(t.to))} <span class="pf-meta">${escapeHtml(t.to_account||'')}</span></div>
+    <div>Value change: ${pmSigned(t.value_change)} (${pmPct(t.value_change_pct)})</div>
+    <div><b>New:</b> ${escapeHtml((t.new_positions||[]).join(', ')||'none')} · <b>Closed:</b> ${escapeHtml((t.closed_positions||[]).join(', ')||'none')}</div>
+    <div><b>Quantity changes:</b> ${(t.quantity_changes||[]).map(c=>escapeHtml(c.symbol)+' '+(c.qty_change>0?'+':'')+c.qty_change).join(', ')||'none'}</div>
+    <div class="pf-meta">${escapeHtml(t.note||'')}</div></div>`).join('');
+  $('#pm-out').innerHTML = narr + pmSection('1 · Analysis scope', scope) + pmSection('2 · Changes between snapshots', trans||'<div class="card pf-meta">Select at least two snapshots to compare.</div>');
+}
+function pmSection(title, html){ return `<div style="margin:14px 0 6px"><div class="up-label" style="margin-bottom:6px">${escapeHtml(title)}</div>${html}</div>`; }
+function pmSignedTxt(v){ if(v==null||v==='Unavailable') return 'Unavailable'; return (v>=0?'+$':'−$')+Math.abs(Math.round(v)).toLocaleString(); }
+function finCardSafe(l,v,pct){
+  const sub=(pct!=null&&pct!=='Unavailable')?`<div class="sub">${pmPct(pct)}</div>`:'';
+  return `<div class="card"><div class="pf-meta">${l}</div><div class="v">${pmMoney(v)}</div>${sub}</div>`; }
+function finCardPlain(l,v){ return `<div class="card"><div class="pf-meta">${l}</div><div class="v">${escapeHtml(String(v))}</div></div>`; }
+
 function num(x){ const n=parseFloat(x); return isNaN(n)?null:n; }
 function money(x){ const n=num(x); return n==null?'—':'$'+Math.round(n).toLocaleString(); }
 function plSaved(plv, plp){
@@ -6129,7 +6522,12 @@ async function editAgent(id, isNew){
       </div></div>
     <div class="fld"><label>Comma-separated tickers</label>
       <textarea id="f-tickers">${(a.tickers||[]).join(', ')}</textarea>
-      <div class="muted" style="font-size:11.5px;margin-top:4px">Auto-filled from the statement above — edit freely to override.</div></div>
+      <div class="inline" style="gap:8px;margin-top:6px;flex-wrap:wrap">
+        <button type="button" class="ex-btn" onclick="agLoadPortfolio()">📁 Add from portfolio</button>
+        <span id="ag-pf-note" class="muted" style="font-size:12px"></span>
+      </div>
+      <div id="ag-pf-panel" class="hidden" style="margin-top:8px;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--bg)"></div>
+      <div class="muted" style="font-size:11.5px;margin-top:6px">Track your <b>entire portfolio</b>, <b>selected holdings</b>, or type any <b>brand-new ticker</b> directly. Auto-fills from the statement above too — edit freely to override.</div></div>
 
     <h4>Schedule</h4>
     <div class="fld inline">
@@ -6189,6 +6587,67 @@ async function resolveAgentQuery(id){
     $('#f-tickers').value = (d.tickers||[]).join(', ');
     note.textContent = `${(d.tickers||[]).length} stocks · via ${d.provider}${d.summary?' · '+d.summary:''}`;
   } catch(e){ note.textContent = '⚠ '+e; }
+}
+
+// ── Track-my-portfolio picker: entire portfolio · selected holdings · (brand-new tickers
+//    are just typed into the box). Tickers-only; merges into #f-tickers without duplicates.
+async function agLoadPortfolio(){
+  const note=$('#ag-pf-note'), panel=$('#ag-pf-panel');
+  if(panel && !panel.classList.contains('hidden')){ panel.classList.add('hidden'); note.textContent=''; return; }  // toggle closed
+  note.textContent='Loading portfolio…';
+  try{
+    const r=await fetch('/api/portfolio/tickers'); const d=await r.json();
+    if(!r.ok){ note.textContent='⚠ '+(d.error||'could not load portfolio'); return; }
+    window._agPf=d; window._agPfSel=new Set();
+    if(!(d.snapshots||[]).length){
+      note.textContent='No portfolio snapshots yet — take one on the Portfolio / E*TRADE / Schwab page first.';
+      panel.classList.add('hidden'); return;
+    }
+    note.textContent='';
+    panel.innerHTML=agPfHtml(); panel.classList.remove('hidden');
+  }catch(e){ note.textContent='⚠ '+e; }
+}
+function agPfHtml(){
+  const d=window._agPf, sel=window._agPfSel;
+  const chip=t=>`<span class="ag-tk${sel.has(t)?' on':''}" data-t="${t}" onclick="agPfToggle('${t}')">${t}</span>`;
+  const accts=(d.snapshots||[]).map((s,i)=>`
+    <div style="margin-bottom:10px">
+      <div class="inline" style="justify-content:space-between;gap:8px;flex-wrap:wrap">
+        <b style="font-size:12.5px">${escapeHtml(s.label)} <span class="muted" style="font-weight:400">· ${s.count} holdings · ${escapeHtml(s.date||'')}</span></b>
+        <button type="button" class="ghost" style="padding:3px 9px;font-size:12px" onclick="agPfAddAccount(${i})">Add all</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${(s.tickers||[]).map(chip).join('')||'<span class="muted">no tickers</span>'}</div>
+    </div>`).join('');
+  return `<div class="inline" style="justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <b style="font-size:13px">📊 Entire portfolio · ${(d.all_tickers||[]).length} unique across ${d.account_count||0} account${d.account_count===1?'':'s'}</b>
+      <button type="button" class="ex-btn" style="padding:4px 10px;font-size:12px" onclick="agPfUseAll()">Use entire portfolio</button></div>
+    <div class="muted" style="font-size:11.5px;margin-bottom:8px">Click tickers to pick a subset, or “Add all” per account. Selected tickers are added to the tracked list.</div>
+    ${accts}
+    <div class="inline" style="gap:8px;margin-top:4px;flex-wrap:wrap">
+      <button type="button" class="ex-btn" style="padding:4px 10px;font-size:12px" onclick="agPfAddSelected()">Add selected (<span id="ag-pf-seln">0</span>)</button>
+      <button type="button" class="ghost" style="padding:4px 10px;font-size:12px" onclick="agPfClearSel()">Clear selection</button>
+    </div>`;
+}
+function agPfToggle(t){
+  const s=window._agPfSel; s.has(t)?s.delete(t):s.add(t);
+  document.querySelectorAll(`#ag-pf-panel .ag-tk[data-t="${t}"]`).forEach(el=>el.classList.toggle('on', s.has(t)));
+  const n=$('#ag-pf-seln'); if(n) n.textContent=s.size;
+}
+function agPfClearSel(){ const s=window._agPfSel; s.clear();
+  document.querySelectorAll('#ag-pf-panel .ag-tk.on').forEach(el=>el.classList.remove('on'));
+  const n=$('#ag-pf-seln'); if(n) n.textContent=0; }
+function agPfUseAll(){ agPfMerge((window._agPf||{}).all_tickers||[]); }
+function agPfAddAccount(i){ agPfMerge(((window._agPf||{}).snapshots||[])[i]?.tickers||[]); }
+function agPfAddSelected(){
+  if(!window._agPfSel||!window._agPfSel.size){ $('#ag-pf-note').textContent='Click one or more tickers first.'; return; }
+  agPfMerge([...window._agPfSel]);
+}
+function agPfMerge(list){
+  const cur=($('#f-tickers').value||'').split(',').map(x=>x.trim().toUpperCase()).filter(Boolean);
+  const set=new Set(cur); let added=0;
+  (list||[]).forEach(t=>{ t=String(t).trim().toUpperCase(); if(t&&!set.has(t)){ set.add(t); added++; } });
+  $('#f-tickers').value=[...set].join(', ');
+  $('#ag-pf-note').textContent=`Added ${added} ticker${added===1?'':'s'} · ${set.size} tracked total.`;
 }
 
 async function saveAgent(id){
