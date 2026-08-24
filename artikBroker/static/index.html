@@ -7209,28 +7209,68 @@ async function etradeDetail(key, kind){
   } else {
     let pos=(((d.PortfolioResponse||{}).AccountPortfolio||[])[0]||{}).Position||[];
     if(!Array.isArray(pos)) pos=[pos];
-    const money=v=>v==null||v===''?'—':(typeof v==='number'?v.toLocaleString(undefined,{style:'currency',currency:'USD'}):etEsc(v));
-    const gainCell=p=>{ const g=p.totalGain, pct=p.totalGainPct; if(g==null&&pct==null) return '—';
-      const up=(Number(g)||0)>=0; const c=up?'#34d399':'#f87171';
-      return `<span style="color:${c}">${money(g)}${pct!=null?` (${etEsc(Number(pct).toFixed(2))}%)`:''}</span>`; };
-    const totalVal=pos.reduce((s,p)=>s+(Number(p.marketValue)||0),0);
-    const totalGain=pos.reduce((s,p)=>s+(Number(p.totalGain)||0),0);
-    summary = pos.length ? `<table class="mini" style="margin-top:8px;width:100%">
-      <tr><th>Symbol</th><th>Qty</th><th>Last</th><th>Cost basis</th><th>Mkt value</th><th>Gain</th></tr>`+
-      pos.map(p=>{ const q=(p.Quick||{}); return `<tr>
-        <td><b>${etEsc((p.Product||{}).symbol||p.symbolDescription||'')}</b></td>
-        <td>${etEsc(p.quantity ?? '')}</td>
-        <td>${money(q.lastTrade)}</td>
-        <td>${money(p.pricePaid ?? p.costPerShare)}</td>
-        <td>${money(p.marketValue)}</td>
-        <td>${gainCell(p)}</td></tr>`; }).join('')+
-      `<tr style="border-top:1px solid var(--line);font-weight:600">
-        <td>Total</td><td></td><td></td><td></td><td>${money(totalVal)}</td>
-        <td style="color:${totalGain>=0?'#34d399':'#f87171'}">${money(totalGain)}</td></tr></table>`
-      : '<div class="pf-meta" style="margin-top:8px">No open positions in this account.</div>';
+    window._etPos=window._etPos||{}; window._etPos[key]=pos;
+    summary = `<div id="et-hold-${key}">${etRenderHoldings(key)}</div>`;
   }
   box.innerHTML = summary + `<details style="margin-top:8px"><summary class="pf-meta">Raw JSON</summary>
     <pre style="white-space:pre-wrap;font-size:11px;max-height:280px;overflow:auto">${etEsc(JSON.stringify(d,null,2))}</pre></details>`;
+}
+
+const ET_HOLD_COLS=[
+  {key:'symbol', label:'Symbol'},
+  {key:'qty', label:'Qty', num:1},
+  {key:'last', label:'Last', num:1},
+  {key:'cost', label:'Cost basis', num:1},
+  {key:'value', label:'Mkt value', num:1},
+  {key:'gain', label:'Gain', num:1},
+];
+function etHoldVal(p, col){
+  switch(col){
+    case 'symbol': return ((p.Product||{}).symbol||p.symbolDescription||'').toString().toUpperCase();
+    case 'qty': return Number(p.quantity)||0;
+    case 'last': return Number((p.Quick||{}).lastTrade)||0;
+    case 'cost': return Number(p.pricePaid ?? p.costPerShare)||0;
+    case 'value': return Number(p.marketValue)||0;
+    case 'gain': return Number(p.totalGain)||0;
+    default: return 0;
+  }
+}
+function etHoldSort(key, col){
+  window._etSort=window._etSort||{};
+  const cur=window._etSort[key]||{col:null,dir:1};
+  if(cur.col===col) cur.dir*=-1; else { cur.col=col; cur.dir=1; }
+  window._etSort[key]=cur;
+  const el=$('#et-hold-'+key); if(el) el.innerHTML=etRenderHoldings(key);
+}
+function etRenderHoldings(key){
+  let pos=(window._etPos&&window._etPos[key])||[];
+  window._etSort=window._etSort||{};
+  const st=window._etSort[key]||{col:null,dir:1};
+  if(st.col){ const col=st.col, dir=st.dir;
+    pos=[...pos].sort((a,b)=>{ const av=etHoldVal(a,col), bv=etHoldVal(b,col);
+      return typeof av==='string' ? (av<bv?-dir:av>bv?dir:0) : (av-bv)*dir; });
+  }
+  const money=v=>v==null||v===''?'—':(typeof v==='number'?v.toLocaleString(undefined,{style:'currency',currency:'USD'}):etEsc(v));
+  const gainCell=p=>{ const g=p.totalGain, pct=p.totalGainPct; if(g==null&&pct==null) return '—';
+    const up=(Number(g)||0)>=0; const c=up?'#34d399':'#f87171';
+    return `<span style="color:${c}">${money(g)}${pct!=null?` (${etEsc(Number(pct).toFixed(2))}%)`:''}</span>`; };
+  const totalVal=pos.reduce((s,p)=>s+(Number(p.marketValue)||0),0);
+  const totalGain=pos.reduce((s,p)=>s+(Number(p.totalGain)||0),0);
+  const arr=c=>st.col===c?`<span class="arr">${st.dir>0?'▲':'▼'}</span>`:'';
+  const th=c=>`<th class="sortable${c.num?' num':''}" onclick="etHoldSort('${key}','${c.key}')">${c.label}${arr(c.key)}</th>`;
+  return pos.length ? `<table class="mini" style="margin-top:8px;width:100%">
+    <tr>${ET_HOLD_COLS.map(th).join('')}</tr>`+
+    pos.map(p=>{ const q=(p.Quick||{}); return `<tr>
+      <td><b>${etEsc((p.Product||{}).symbol||p.symbolDescription||'')}</b></td>
+      <td>${etEsc(p.quantity ?? '')}</td>
+      <td>${money(q.lastTrade)}</td>
+      <td>${money(p.pricePaid ?? p.costPerShare)}</td>
+      <td>${money(p.marketValue)}</td>
+      <td>${gainCell(p)}</td></tr>`; }).join('')+
+    `<tr style="border-top:1px solid var(--line);font-weight:600">
+      <td>Total</td><td></td><td></td><td></td><td>${money(totalVal)}</td>
+      <td style="color:${totalGain>=0?'#34d399':'#f87171'}">${money(totalGain)}</td></tr></table>`
+    : '<div class="pf-meta" style="margin-top:8px">No open positions in this account.</div>';
 }
 
 /* ── shared brokerage renderers (E*TRADE + Schwab return the same /pnl & /orders shape) ── */
@@ -7470,14 +7510,48 @@ async function schwabDetail(key){
   try { d=await (await fetch('/api/schwab/accounts/'+encodeURIComponent(key)+'/portfolio')).json(); }
   catch(e){ box.innerHTML='<div class="err">'+etEsc(e)+'</div>'; return; }
   if(d.error){ box.innerHTML='<div class="err">'+etEsc(d.error)+'</div>'; return; }
-  const money=v=>v==null?'—':(typeof v==='number'?v.toLocaleString(undefined,{style:'currency',currency:'USD'}):etEsc(v));
-  const h=d.holdings||[];
-  box.innerHTML = (h.length ? `<table class="mini" style="margin-top:8px;width:100%">
-    <tr><th>Symbol</th><th>Qty</th><th>Cost basis</th></tr>`+
-    h.map(x=>`<tr><td><b>${etEsc(x.ticker)}</b></td><td>${etEsc(x.qty)}</td><td>${money(x.cost_basis)}</td></tr>`).join('')+
-    `<tr style="border-top:1px solid var(--line);font-weight:600"><td>Total value</td><td></td><td>${money(d.total_value)}</td></tr></table>`
-    : '<div class="pf-meta" style="margin-top:8px">No open positions in this account.</div>')
+  window._swHold=window._swHold||{}; window._swHold[key]={holdings:d.holdings||[], total_value:d.total_value};
+  box.innerHTML = `<div id="sw-hold-${key}">${swRenderHoldings(key)}</div>`
     + '<div class="pf-meta" style="margin-top:6px">Click <b>Analyze Portfolio</b> to score these live on the Portfolio page.</div>';
+}
+
+const SW_HOLD_COLS=[
+  {key:'symbol', label:'Symbol'},
+  {key:'qty', label:'Qty', num:1},
+  {key:'cost', label:'Cost basis', num:1},
+];
+function swHoldVal(x, col){
+  switch(col){
+    case 'symbol': return (x.ticker||'').toString().toUpperCase();
+    case 'qty': return Number(x.qty)||0;
+    case 'cost': return Number(x.cost_basis)||0;
+    default: return 0;
+  }
+}
+function swHoldSort(key, col){
+  window._swSort=window._swSort||{};
+  const cur=window._swSort[key]||{col:null,dir:1};
+  if(cur.col===col) cur.dir*=-1; else { cur.col=col; cur.dir=1; }
+  window._swSort[key]=cur;
+  const el=$('#sw-hold-'+key); if(el) el.innerHTML=swRenderHoldings(key);
+}
+function swRenderHoldings(key){
+  const rec=(window._swHold&&window._swHold[key])||{holdings:[], total_value:null};
+  let h=rec.holdings||[];
+  window._swSort=window._swSort||{};
+  const st=window._swSort[key]||{col:null,dir:1};
+  if(st.col){ const col=st.col, dir=st.dir;
+    h=[...h].sort((a,b)=>{ const av=swHoldVal(a,col), bv=swHoldVal(b,col);
+      return typeof av==='string' ? (av<bv?-dir:av>bv?dir:0) : (av-bv)*dir; });
+  }
+  const money=v=>v==null?'—':(typeof v==='number'?v.toLocaleString(undefined,{style:'currency',currency:'USD'}):etEsc(v));
+  const arr=c=>st.col===c?`<span class="arr">${st.dir>0?'▲':'▼'}</span>`:'';
+  const th=c=>`<th class="sortable${c.num?' num':''}" onclick="swHoldSort('${key}','${c.key}')">${c.label}${arr(c.key)}</th>`;
+  return h.length ? `<table class="mini" style="margin-top:8px;width:100%">
+    <tr>${SW_HOLD_COLS.map(th).join('')}</tr>`+
+    h.map(x=>`<tr><td><b>${etEsc(x.ticker)}</b></td><td>${etEsc(x.qty)}</td><td>${money(x.cost_basis)}</td></tr>`).join('')+
+    `<tr style="border-top:1px solid var(--line);font-weight:600"><td>Total value</td><td></td><td>${money(rec.total_value)}</td></tr></table>`
+    : '<div class="pf-meta" style="margin-top:8px">No open positions in this account.</div>';
 }
 
 async function schwabAnalyze(key, ending){
