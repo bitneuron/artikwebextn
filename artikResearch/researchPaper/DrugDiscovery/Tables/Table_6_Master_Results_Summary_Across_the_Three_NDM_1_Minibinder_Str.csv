@@ -1,0 +1,7 @@
+Table 6: Master Results Summary Across the Three NDM-1 Minibinder Strategies
+Strategy,Intended Mechanism,Baseline Objective,Final Objective,Raw Score /100,Length (aa)
+1. Metal-engaging,Single-donor active-site clamp,0.814476,1.654622,96.981,58
+2. Allosteric,Zinc-safe L10/Asn220 loop clamp,0.578058,1.830660,92.296,76
+3. Sequestering,Relocation-scoring pose; capture unresolved,0.596382,1.863375,91.848,63
+
+Note. Baseline and Final are Arbor development-search objective values (1 + campaign-adjusted score/100); values above 1.0 indicate that both the common structural gate and the strategy-specific mechanism gate passed.

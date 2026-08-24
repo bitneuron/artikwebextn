@@ -1,0 +1,78 @@
+REFERENCES
+From an AI Drug-Discovery Idea to Mechanism-Aware NDM-1 Minibinders
+======================================================================
+
+Author lists below are reproduced exactly as documented by the ClearVoice AI research portal's own citation lists, which give the first author followed by "et al." without disclosing a complete author string for most entries. No author names have been added, inferred, or invented beyond what the source portal itself supplied.
+
+Abramson, J., et al. (2024). Accurate structure prediction of biomolecular interactions with AlphaFold 3. Nature.
+
+Anstine, D. M., et al. (2025). AIMNet2: A neural network potential to meet your neutral, charged, organic, and elemental-organic needs. Chemical Science.
+
+Batatia, I., et al. (2022). MACE: Higher order equivariant message passing neural networks for fast and accurate force fields. Advances in Neural Information Processing Systems (NeurIPS).
+
+Chai Discovery Team, et al. (2024). Chai-1: Decoding the molecular interactions of life. bioRxiv. (Preprint)
+
+Corbett, D., et al. (2017). Potentiation of antibiotic activity by a novel cationic peptide: Potency and spectrum of activity of SPR741. Antimicrobial Agents and Chemotherapy.
+
+Corso, G., et al. (2023). DiffDock: Diffusion steps, twists, and turns for molecular docking. International Conference on Learning Representations (ICLR).
+
+Feng, H., et al. (2017). The mechanism of NDM-1-catalyzed carbapenem hydrolysis is distinct from that of penicillin or cephalosporin hydrolysis. Nature Communications.
+
+Feng, W., et al. (2024). Generation of 3D molecules in pockets via a language model. Nature Machine Intelligence.
+
+Genheden, S., et al. (2020). AiZynthFinder: A fast, robust and flexible open-source software for retrosynthetic planning. Journal of Cheminformatics.
+
+González, L. J., et al. (2016). Membrane anchoring stabilizes and favors secretion of New Delhi metallo-β-lactamase. Nature Chemical Biology.
+
+Housden, N. G., et al. (2010). Directed epitope delivery across the Escherichia coli outer membrane through the porin OmpF. Proceedings of the National Academy of Sciences (PNAS).
+
+Jin, J., Hu, Y., Qiu, K., et al. (2026). Toward generalist autonomous research via hypothesis-tree refinement. arXiv:2606.11926.
+
+Kang, J. S., et al. (2018). Virtual screening and experimental testing of B1 metallo-β-lactamase inhibitors. Journal of Chemical Information and Modeling.
+
+King, A. M., et al. (2014). Aspergillomarasmine A overcomes metallo-β-lactamase antibiotic resistance. Nature.
+
+King, D. T., et al. (2012). New Delhi metallo-β-lactamase: Structural insights into β-lactam recognition and inhibition. Journal of the American Chemical Society.
+
+Kumarasamy, K. K., et al. (2010). Emergence of a new antibiotic resistance mechanism in India, Pakistan, and the UK. The Lancet Infectious Diseases.
+
+Ma, B., et al. (2019). The antimicrobial peptide thanatin disrupts the bacterial outer membrane and inactivates the NDM-1 metallo-β-lactamase. Nature Communications.
+
+Merchant, A., et al. (2023). Scaling deep learning for materials discovery. Nature.
+
+Mulligan, V. K., et al. (2021). Computationally designed peptide macrocycle inhibitors of New Delhi metallo-β-lactamase 1. Proceedings of the National Academy of Sciences (PNAS).
+
+Passaro, S., et al. (2025). Boltz-2: Towards accurate and efficient binding affinity prediction. bioRxiv. (Preprint)
+
+Peptide2Mol: A diffusion model for generating small molecules as peptide mimics for targeted protein binding. (2025). arXiv. (Preprint; author not specified by source)
+
+Peukert, C., et al. (2023). Trojan horse siderophore conjugates induce Pseudomonas aeruginosa suicide and qualify the TonB protein as a novel antibiotic target. Journal of Medicinal Chemistry.
+
+Poirel, L., et al. (2011). Genetic features of blaNDM-1-positive Enterobacteriaceae. Antimicrobial Agents and Chemotherapy.
+
+Potron, A., Poirel, L., & Nordmann, P. (2011). Plasmid-mediated transfer of the bla(NDM-1) gene in Gram-negative rods. FEMS Microbiology Letters.
+
+Prunotto, A., et al. (2020). Molecular bases of the membrane association mechanism potentiating antibiotic resistance by New Delhi metallo-β-lactamase 1. ACS Infectious Diseases.
+
+Rivière, G., et al. (2026). Allosteric inhibition of NDM-1 by thanatin preserves the di-zinc center while restricting dynamics. bioRxiv. (Preprint; not peer reviewed)
+
+RUC-NLPIR. (n.d.). Arbor [Computer software]. GitHub. https://github.com/RUC-NLPIR/Arbor
+
+Spratt, B. G. (1977). Properties of the penicillin-binding proteins of Escherichia coli K12. European Journal of Biochemistry.
+
+Stewart, A. C., et al. (2017). Clinical variants of New Delhi metallo-β-lactamase are evolving to overcome zinc scarcity. ACS Infectious Diseases.
+
+Sychantha, D., et al. (2021). Aspergillomarasmine A inhibits metallo-β-lactamases by selectively sequestering Zn2+. Journal of Biological Chemistry.
+
+Tu, Z., et al. (2025). ASKCOS: An open source software suite for synthesis planning. arXiv. (Preprint)
+
+Yong, D., et al. (2009). Characterization of a new metallo-β-lactamase gene, blaNDM-1, and a novel erythromycin esterase gene carried on a unique genetic structure in Klebsiella pneumoniae. Antimicrobial Agents and Chemotherapy.
+
+Zeni, C., et al. (2025). A generative model for inorganic materials design. Nature.
+
+Zhang, H., & Hao, Q. (2011). Crystal structure of NDM-1 reveals a common β-lactam hydrolysis mechanism. FASEB Journal.
+
+Zhou, G., et al. (2023). Uni-Mol: A universal 3D molecular representation learning framework. International Conference on Learning Representations (ICLR).
+
+Zhu, J., et al. (2023). DiffBindFR: An SE(3) equivariant network for flexible protein-ligand docking. arXiv. (Preprint)
+

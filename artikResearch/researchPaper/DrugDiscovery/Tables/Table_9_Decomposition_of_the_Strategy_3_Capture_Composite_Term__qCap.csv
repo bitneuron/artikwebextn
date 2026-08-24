@@ -1,0 +1,8 @@
+Table 9: Decomposition of the Strategy 3 Capture Composite Term (qCapture)
+Sub-term,Value,Interpretation
+Donor proximity (qBcoord),0.60653,One donor reached Zn2
+Bidentate geometry (qBgeom),≈6.4 × 10⁻¹²,Effectively zero; two-donor geometry not achieved
+Local pocket (qPocket),1.00000,High-confidence local environment
+Composite (qCapture),0.47294,"Positive under the current gate, but chemically incomplete"
+
+Note. qCapture = 0.45·qBcoord + 0.35·qBgeom + 0.20·qPocket.

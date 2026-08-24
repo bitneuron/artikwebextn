@@ -1,0 +1,5 @@
+"Table 8: Strategy 2 Rank Comparison, Including a Deliberately Pruned High-Scoring Model"
+Rank / Node,Arbor Objective,Decision Evidence
+1 · 2.1.3,1.830660,A209/A220 clamp; PdirectZn = 0; merged (final lead)
+2 · 1.1.1,1.793155,L3 diagnostic; residual ensemble zinc risk
+3 · 2.1.4,1.768233,Compressed clamp; PdirectZn = 1.0; pruned

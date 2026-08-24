@@ -1,0 +1,7 @@
+Table 5: Arbor Search Statistics by Strategy
+Strategy,Session ID / Duration,Tree Nodes,Scored Evaluations,Accepted Merges,Failed Runs
+S1: Metal-engaging,run_20260702_052041 · 5h25m09s,15,9,5,0
+S2: Allosteric,run_20260702_135712 · 6h01m03s,17,8,4,0
+S3: Sequestering,run_20260703_062722 · 3h12m35s,22,6,12 (cumulative)*,3
+
+"Note. *Total accepted merge events across all three sessions equal 12; per-session merge counts as displayed in the source archive are 5 (S1), 4 (S2), and 3 (S3). Duration and node counts are taken directly from the preserved Arbor session exports."

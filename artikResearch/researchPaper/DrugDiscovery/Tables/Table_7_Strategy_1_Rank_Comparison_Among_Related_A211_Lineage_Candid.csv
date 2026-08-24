@@ -1,0 +1,7 @@
+Table 7: Strategy 1 Rank Comparison Among Related A211-Lineage Candidates
+Rank / Node,Arbor Objective,Key Distinction
+1 · 1.1.1.7,1.654622,"58 aa, one donor, merged (final lead)"
+2 · 1.1.1.6,1.622729,"58 aa, two donors, over-chelation penalty"
+3 · 1.1.1.4,1.585964,"61 aa, one donor, lower length reward"
+
+Note. All three ranked candidates derive from the same A211-supported lineage; their structural similarity strengthens the local design lesson but does not constitute independent replication.

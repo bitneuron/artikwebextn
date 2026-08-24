@@ -1,0 +1,8 @@
+Table 4: Summary of the Evaluator Quality-Assurance Program
+Verification Question,Evidence Used,Outcome
+Can the remote pipeline execute the intended jobs?,"Health/capability checks, dry runs, real submissions, polling, downloaded artifacts, preserved execution reports",Verified on tested paths
+Are target and binder identities preserved?,"Binder-only extraction, target sequence comparison, chain counts, length checks, residue maps, identity-aware selectors",Verified
+Are target and zinc constraints actually honored?,"Post-run target RMSD, zinc counts, zinc displacement, coordination geometry, warnings",Measured post-run
+Can an attractive model fail for the right reason?,Insulin pose disagreement; Strategy 1 donor failure; Strategy 3 incomplete state panel,Correct rejections observed
+Can a mechanism-consistent fixture pass?,"Strategy 2 target preservation, zinc avoidance, loop contacts, confidence, identity exclusions",Positive case observed
+Has biological activity been validated?,"No binding, inhibition, zinc-transfer, cellular, delivery, or toxicity experiment in the QA archive",Not established

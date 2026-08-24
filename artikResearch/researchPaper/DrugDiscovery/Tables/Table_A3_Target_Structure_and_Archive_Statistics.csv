@@ -1,0 +1,17 @@
+Table A3: Target Structure and Archive Statistics
+Statistic,Value
+NDM-1 target chain length,232 residues
+Catalytic zinc ions modeled,"2 (Zn1: His120, His122, His189; Zn2: Asp124, Cys208, His250)"
+L3 loop range / sequence,A65–A73 / LDMPGFGAV
+L10 loop range / sequence,A210–A230 / IKDSKAKSLGNLGDADTEHYA
+qBlock reference structures (carbapenem-bound NDM-1),7
+QA-preserved successful execution reports,"19 (4 RFdiffusion3, 4 LigandMPNN, 11 AlphaFold 3)"
+Displayed Arbor hypothesis-tree nodes (3 strategies),54 (3 root contracts + 51 proposed research nodes)
+Scored Arbor leaf evaluations,23
+Accepted Arbor merge events,12
+Preserved Arbor infrastructure failures,3 (all Strategy 3)
+Combined Arbor session elapsed time,14 h 39 min
+Final lead sequence lengths,"58 aa (S1), 76 aa (S2), 63 aa (S3)"
+Approximate final lead molecular masses,"~6.4 kDa (S1), ~8.4 kDa (S2), ~6.9 kDa (S3)"
+Top-ranked AF3 result bundles retained for comparison,9 (3 per strategy)
+Knowledge Library project video walkthroughs,16 (6 final report + 10 chronological diary)

@@ -1,0 +1,6 @@
+Table 11: Cross-Strategy Evidence Comparison
+Evidence Question,Strategy 1 (Metal-Engaging),Strategy 2 (Allosteric),Strategy 3 (Sequestering)
+Confident predicted complex?,Yes; ipTM 0.88,Yes; ipTM 0.87,Yes; ipTM 0.89
+Intended local geometry achieved?,Partly; one zinc donor,"Partly; loop clamp, one second-shell contact",Weak; one of two intended capture donors
+Primary unresolved risk,Coordination energetics and selectivity,Whether an actual allosteric (dynamic) effect exists,Bidentate capture and relocation mechanism
+Disposition,Advance through computational de-risking,Highest-priority computational lead,Mechanism hold; redesign required

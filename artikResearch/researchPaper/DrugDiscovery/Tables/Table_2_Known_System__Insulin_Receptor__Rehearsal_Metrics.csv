@@ -1,0 +1,8 @@
+Table 2: Known-System (Insulin-Receptor) Rehearsal Metrics
+Comparison,RMSD (Å),Interpretation
+Standalone binder (AF3 vs. generated fold),0.8255,Good fold-level agreement
+Unconstrained target,14.0379,Large receptor drift
+Constrained target,0.3334,Template conditioning restored target geometry
+Constrained binder pose,47.2323,Generator complex pose not reproduced
+
+Note. AF3 = AlphaFold 3. RMSD = root-mean-square deviation.

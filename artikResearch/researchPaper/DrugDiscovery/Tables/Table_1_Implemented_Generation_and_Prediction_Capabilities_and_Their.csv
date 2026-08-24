@@ -1,0 +1,6 @@
+Table 1: Implemented Generation and Prediction Capabilities and Their Evidence Status
+Capability,Role in the Implemented Platform,Evidence Status
+RFdiffusion3,"Target-, hotspot-, and chemical-context-conditioned protein backbone generation",Executed in QA and final campaigns
+LigandMPNN,Binder sequence design while preserving target and ligand/metal context,Executed in QA and final campaigns
+AlphaFold 3,Independent fold and target-complex prediction used by the evaluator,Executed in QA and final campaigns
+BindCraft,Alternative binder-generation wrapper in the platform and workbench,Implemented; no completed QA execution or final lead

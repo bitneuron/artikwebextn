@@ -1,0 +1,5 @@
+Table 3: NDM-1 Mechanism-Challenge Fixture Outcomes
+Fixture,Key Evidence,Predetermined Expectation,Observed Outcome
+Strategy 1 (expected rejection),ipTM 0.69; donor–Zn 3.0557 Å; 0 supported donors < 2.8 Å,Mechanism gate fails,Failed; score 0/100 (correct)
+Strategy 2 (expected positive),ipTM 0.86; 9/12 L3/L10 contacts; 0 direct donor–Zn contacts,Mechanism gate passes,Passed; score 92.482/100 (correct)
+Strategy 3 (expected panel rejection),Capture donors 2.113–2.324 Å; product-state donor 4.679 Å,Combined mechanism fails,Failed (correct)

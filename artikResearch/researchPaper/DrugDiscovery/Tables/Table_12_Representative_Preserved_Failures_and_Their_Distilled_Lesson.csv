@@ -1,0 +1,5 @@
+Table 12: Representative Preserved Failures and Their Distilled Lessons
+Node,What Happened,What the Search Learned,Status
+S1 · 1.1.1.1,"Donor–Zn improved to 2.295 Å and passed the metal gate, but Gcore failed; score 0.755063 vs. 0.814476 baseline",Solving donor reach without preserving scaffold confidence is not an improvement,Done (retained as negative evidence)
+S2 · 4.1.1,Unconstrained sequence resampling introduced a cysteine zinc donor; PdirectZn → 1.0; score fell to 1.670814,Geometry-level zinc safety does not survive unconstrained sequence resampling,Done (retained as negative evidence)
+S3 · 2.1.1.1,Live RFdiffusion3 job disappeared during polling (HTTP 404) before artifacts or a score were produced,"No mechanism conclusion is justified; infrastructure, not chemistry, failed",Needs retry

@@ -1,0 +1,5 @@
+Table A4: What Each Final Lead's Score Does and Does Not Support
+Strategy,Supported Interpretation,Not Supported by This Result
+1. Metal-engaging,A predicted 58-residue complex placing one supported zinc donor at 2.509 Å under a passed structural and mechanism gate,"Measured coordination chemistry, binding affinity, catalytic inhibition, or metal selectivity"
+2. Allosteric,"A predicted 76-residue, zinc-safe, loop-adjacent complex with strong interface confidence and no direct binder–zinc contact","Demonstrated conformational/dynamic allostery, which requires methods such as NMR or HDX-MS not used here"
+3. Sequestering,A predicted 63-residue encounter complex passing an incomplete four-state gate with high confidence,"Resolved bidentate zinc-capture geometry, zinc-transfer chemistry, or NDM-1 core-preservation during transfer"

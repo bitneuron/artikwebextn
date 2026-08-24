@@ -1,0 +1,9 @@
+"Table A2: Example Merged Arbor Node (Strategy 1, Node 1.1.1.7)"
+Field,Content
+Node address,1.1.1.7 (score 1.654622; status: merged)
+Parent,1.1.1 · Canonical Zn-ligand hotspot clamp
+Hypothesis,"At the working 55–60-residue A211-supported scaffold, biasing away from unsupported over-chelation may keep one useful donor while restoring zinc realism."
+Observable,"Beat 1.622729, or improve DME/raw score at approximately 58 residues while preserving Gcore and GME."
+Result,Length remained 58; Gcore and GME remained 1; donor count moved 2 → 1; qChelate moved 0.5 → 1.0; live development score reached 1.654622.
+Insight,A very small sampler adjustment improved single-donor zinc realism; stronger conservative changes overcorrected.
+Code reference,coordinator/n1-1-1-7-mechanism-single-donor-zinc-real-4b3a5cf9

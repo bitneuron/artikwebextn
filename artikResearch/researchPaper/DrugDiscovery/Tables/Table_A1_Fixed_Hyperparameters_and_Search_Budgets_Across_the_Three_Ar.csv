@@ -1,0 +1,17 @@
+Table A1: Fixed Hyperparameters and Search Budgets Across the Three Arbor Sessions
+Parameter,Value
+"RFdiffusion3 generation seed (live dev path, all sessions)",1000
+"AlphaFold 3 model seed (live dev path, all sessions)",1
+Caching policy,Cache by normalized solution_payload.json hash; identical payload reuses existing live evidence
+Editable scope (all sessions),solution_payload.json only
+Protected artifacts (all sessions),"baseline_payload.json, eval.sh, eval.py, finalist_replicates.py, payload_builder.py, design_selectors.py, objective.py, research_config.yaml, research_docs/**, qa_tests/**, scorer/eval machinery"
+Held-out (Etest) evaluation used during search,No (all sessions; live development objective only)
+Strategy 1 search-scope preference,Effect-leaning
+Strategy 2 execution mode,Sequential (one candidate experiment at a time)
+Strategy 3 cycle budget,Exactly 9 Arbor cycles
+Strategy 3 maximum intended search depth,3
+Strategy 3 search-scope preference,"Mixed (scientifically grounded, score-prioritized)"
+"Agent runtime (coordinator and executor roles, all sessions)",gpt-5.5 via OpenAI OAuth
+Scientific/GPU compute layer,Modal on-demand serverless GPU services
+
+Note. Values are taken directly from the Arbor task-contract text and session metadata preserved in the source portal's session exports for each strategy.
