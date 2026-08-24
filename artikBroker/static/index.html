@@ -7203,7 +7203,7 @@ async function etradeDetail(key, kind){
       Net account value: <b>${etEsc(rtv.totalAccountValue ?? c.netCash ?? '—')}</b> ·
       Cash available: <b>${etEsc(c.cashAvailableForInvestment ?? '—')}</b></div>`;
   } else if(kind==='pnl'){
-    summary=brkRenderPnl(d);
+    summary=brkRenderPnl(d, 'et-'+key);
   } else if(kind==='orders'){
     summary=brkRenderOrders(d);
   } else {
@@ -7277,8 +7277,57 @@ function etRenderHoldings(key){
 function brkMoney(v){ return v==null||v===''?'—':Number(v).toLocaleString(undefined,{style:'currency',currency:'USD'}); }
 function brkGain(g,pct){ if(g==null&&pct==null) return '—'; const c=(Number(g)||0)>=0?'#34d399':'#f87171';
   return `<span style="color:${c}">${brkMoney(g)}${pct!=null?` (${Number(pct).toFixed(2)}%)`:''}</span>`; }
-function brkRenderPnl(d){
-  const t=d.totals||{}, pos=d.positions||[];
+const BRK_PNL_COLS=[
+  {key:'symbol', label:'Symbol'},
+  {key:'qty', label:'Qty', num:1},
+  {key:'paid', label:'Paid', num:1},
+  {key:'last', label:'Last', num:1},
+  {key:'value', label:'Mkt Value', num:1},
+  {key:'daygain', label:"Day's Gain", num:1},
+  {key:'totalgain', label:'Total Gain', num:1},
+  {key:'pct', label:'% Port', num:1},
+];
+function brkPnlVal(p, col){
+  switch(col){
+    case 'symbol': return (p.symbol||'').toString().toUpperCase();
+    case 'qty': return Number(p.quantity)||0;
+    case 'paid': return Number(p.pricePaid)||0;
+    case 'last': return Number(p.lastTrade)||0;
+    case 'value': return Number(p.marketValue)||0;
+    case 'daygain': return Number(p.daysGain)||0;
+    case 'totalgain': return Number(p.totalGain)||0;
+    case 'pct': return Number(p.pctOfPortfolio)||0;
+    default: return 0;
+  }
+}
+function brkPnlSort(id, col){
+  window._pnlSort=window._pnlSort||{};
+  const cur=window._pnlSort[id]||{col:null,dir:1};
+  if(cur.col===col) cur.dir*=-1; else { cur.col=col; cur.dir=1; }
+  window._pnlSort[id]=cur;
+  const el=$('#pnl-tbl-'+id); if(el) el.innerHTML=brkPnlTable(id);
+}
+function brkPnlTable(id){
+  window._pnlData=window._pnlData||{}; window._pnlSort=window._pnlSort||{};
+  let pos=(window._pnlData[id]&&window._pnlData[id].positions)||[];
+  const st=window._pnlSort[id]||{col:null,dir:1};
+  if(st.col){ const col=st.col, dir=st.dir;
+    pos=[...pos].sort((a,b)=>{ const av=brkPnlVal(a,col), bv=brkPnlVal(b,col);
+      return typeof av==='string' ? (av<bv?-dir:av>bv?dir:0) : (av-bv)*dir; });
+  }
+  const arr=c=>st.col===c?`<span class="arr">${st.dir>0?'▲':'▼'}</span>`:'';
+  const th=c=>`<th class="sortable${c.num?' num':''}" onclick="brkPnlSort('${id}','${c.key}')">${c.label}${arr(c.key)}</th>`;
+  return pos.length?`<table class="mini" style="margin-top:8px;width:100%">
+      <tr>${BRK_PNL_COLS.map(th).join('')}</tr>`+
+      pos.map(p=>`<tr><td><b>${etEsc(p.symbol)}</b></td><td class="num">${etEsc(p.quantity??'')}</td>
+        <td class="num">${brkMoney(p.pricePaid)}</td><td class="num">${brkMoney(p.lastTrade)}</td><td class="num">${brkMoney(p.marketValue)}</td>
+        <td class="num">${brkGain(p.daysGain,p.daysGainPct)}</td><td class="num">${brkGain(p.totalGain,p.totalGainPct)}</td>
+        <td class="num">${p.pctOfPortfolio!=null?Number(p.pctOfPortfolio).toFixed(1)+'%':'—'}</td></tr>`).join('')+'</table>'
+    :'<div class="pf-meta" style="margin-top:8px">No open positions.</div>';
+}
+function brkRenderPnl(d, id){
+  const t=d.totals||{};
+  window._pnlData=window._pnlData||{}; window._pnlData[id]=d;
   const card=(l,v)=>`<div class="card"><div class="pf-meta">${l}</div><div style="font-size:17px;font-weight:700">${v}</div></div>`;
   return `<div class="fin-cards" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-top:8px">
       ${card('Market Value',brkMoney(t.totalMarketValue))}
@@ -7286,14 +7335,8 @@ function brkRenderPnl(d){
       ${card('Total Gain',brkGain(t.totalGainLoss,t.totalGainLossPct))}
       ${card('Cost Basis',brkMoney(t.totalPricePaid))}
       ${card('Cash',brkMoney(t.cashBalance))}
-    </div>`+
-    (pos.length?`<table class="mini" style="margin-top:8px;width:100%">
-      <tr><th>Symbol</th><th>Qty</th><th>Paid</th><th>Last</th><th>Mkt Value</th><th>Day's Gain</th><th>Total Gain</th><th>% Port</th></tr>`+
-      pos.map(p=>`<tr><td><b>${etEsc(p.symbol)}</b></td><td>${etEsc(p.quantity??'')}</td>
-        <td>${brkMoney(p.pricePaid)}</td><td>${brkMoney(p.lastTrade)}</td><td>${brkMoney(p.marketValue)}</td>
-        <td>${brkGain(p.daysGain,p.daysGainPct)}</td><td>${brkGain(p.totalGain,p.totalGainPct)}</td>
-        <td>${p.pctOfPortfolio!=null?Number(p.pctOfPortfolio).toFixed(1)+'%':'—'}</td></tr>`).join('')+'</table>'
-    :'<div class="pf-meta" style="margin-top:8px">No open positions.</div>');
+    </div>
+    <div id="pnl-tbl-${id}">${brkPnlTable(id)}</div>`;
 }
 function brkRenderOrders(d){
   const os=d.orders||[];
@@ -7407,7 +7450,7 @@ async function swExtra(key, kind){
   try { d=await (await fetch('/api/schwab/accounts/'+encodeURIComponent(key)+'/'+kind)).json(); }
   catch(e){ box.innerHTML='<div class="err">'+etEsc(e)+'</div>'; return; }
   if(d.error){ box.innerHTML='<div class="err">'+etEsc(d.error)+'</div>'; return; }
-  box.innerHTML = kind==='pnl' ? brkRenderPnl(d) : brkRenderOrders(d);
+  box.innerHTML = kind==='pnl' ? brkRenderPnl(d, 'sw-'+key) : brkRenderOrders(d);
 }
 
 // ── Charles Schwab brokerage connection (OAuth 2.0, redirect-based) ────────────
