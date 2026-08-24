@@ -7262,14 +7262,14 @@ function etRenderHoldings(key){
     <tr>${ET_HOLD_COLS.map(th).join('')}</tr>`+
     pos.map(p=>{ const q=(p.Quick||{}); return `<tr>
       <td><b>${etEsc((p.Product||{}).symbol||p.symbolDescription||'')}</b></td>
-      <td>${etEsc(p.quantity ?? '')}</td>
-      <td>${money(q.lastTrade)}</td>
-      <td>${money(p.pricePaid ?? p.costPerShare)}</td>
-      <td>${money(p.marketValue)}</td>
-      <td>${gainCell(p)}</td></tr>`; }).join('')+
+      <td class="num">${etEsc(p.quantity ?? '')}</td>
+      <td class="num">${money(q.lastTrade)}</td>
+      <td class="num">${money(p.pricePaid ?? p.costPerShare)}</td>
+      <td class="num">${money(p.marketValue)}</td>
+      <td class="num">${gainCell(p)}</td></tr>`; }).join('')+
     `<tr style="border-top:1px solid var(--line);font-weight:600">
-      <td>Total</td><td></td><td></td><td></td><td>${money(totalVal)}</td>
-      <td style="color:${totalGain>=0?'#34d399':'#f87171'}">${money(totalGain)}</td></tr></table>`
+      <td>Total</td><td></td><td></td><td></td><td class="num">${money(totalVal)}</td>
+      <td class="num" style="color:${totalGain>=0?'#34d399':'#f87171'}">${money(totalGain)}</td></tr></table>`
     : '<div class="pf-meta" style="margin-top:8px">No open positions in this account.</div>';
 }
 
@@ -7549,8 +7549,8 @@ function swRenderHoldings(key){
   const th=c=>`<th class="sortable${c.num?' num':''}" onclick="swHoldSort('${key}','${c.key}')">${c.label}${arr(c.key)}</th>`;
   return h.length ? `<table class="mini" style="margin-top:8px;width:100%">
     <tr>${SW_HOLD_COLS.map(th).join('')}</tr>`+
-    h.map(x=>`<tr><td><b>${etEsc(x.ticker)}</b></td><td>${etEsc(x.qty)}</td><td>${money(x.cost_basis)}</td></tr>`).join('')+
-    `<tr style="border-top:1px solid var(--line);font-weight:600"><td>Total value</td><td></td><td>${money(rec.total_value)}</td></tr></table>`
+    h.map(x=>`<tr><td><b>${etEsc(x.ticker)}</b></td><td class="num">${etEsc(x.qty)}</td><td class="num">${money(x.cost_basis)}</td></tr>`).join('')+
+    `<tr style="border-top:1px solid var(--line);font-weight:600"><td>Total value</td><td></td><td class="num">${money(rec.total_value)}</td></tr></table>`
     : '<div class="pf-meta" style="margin-top:8px">No open positions in this account.</div>';
 }
 
