@@ -1,5 +1,5 @@
 REFERENCES
-From an AI Drug-Discovery Idea to Mechanism-Aware NDM-1 Minibinders
+Mechanism-Partitioned Optimization via Gate-Constrained AI Agent Search: De Novo NDM-1 Minibinder Design
 ======================================================================
 
 Author lists below are reproduced exactly as documented by the ClearVoice AI research portal's own citation lists, which give the first author followed by "et al." without disclosing a complete author string for most entries. No author names have been added, inferred, or invented beyond what the source portal itself supplied.
