@@ -24,4 +24,5 @@ frontend/dist/
 
 # Infra
 infra/cdk.out/
+infra/cdk.out.*/
 infra/.venv/
