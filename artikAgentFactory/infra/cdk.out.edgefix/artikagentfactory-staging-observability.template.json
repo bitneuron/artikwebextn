@@ -1,0 +1,488 @@
+{
+ "Resources": {
+  "AlarmTopicD01E77F9": {
+   "Type": "AWS::SNS::Topic",
+   "Properties": {
+    "TopicName": "artikagentfactory-staging-alarms"
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-staging-observability/AlarmTopic/Resource"
+   }
+  },
+  "WebServiceUnhealthyB7068680": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmActions": [
+     {
+      "Ref": "AlarmTopicD01E77F9"
+     }
+    ],
+    "ComparisonOperator": "GreaterThanThreshold",
+    "Dimensions": [
+     {
+      "Name": "ClusterName",
+      "Value": {
+       "Fn::ImportValue": "artikagentfactory-staging-compute:ExportsOutputRefClusterEB0386A796A0E3FE"
+      }
+     },
+     {
+      "Name": "ServiceName",
+      "Value": {
+       "Fn::ImportValue": "artikagentfactory-staging-compute:ExportsOutputFnGetAttWebService7F8A1763NameD4F59687"
+      }
+     }
+    ],
+    "EvaluationPeriods": 2,
+    "MetricName": "CPUUtilization",
+    "Namespace": "AWS/ECS",
+    "Period": 300,
+    "Statistic": "Average",
+    "Threshold": 90,
+    "TreatMissingData": "notBreaching"
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-staging-observability/WebServiceUnhealthy/Resource"
+   }
+  },
+  "RunQueueDepth8D3770AE": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmActions": [
+     {
+      "Ref": "AlarmTopicD01E77F9"
+     }
+    ],
+    "ComparisonOperator": "GreaterThanThreshold",
+    "Dimensions": [
+     {
+      "Name": "QueueName",
+      "Value": {
+       "Fn::ImportValue": "artikagentfactory-staging-data:ExportsOutputFnGetAttAgentRunQueue68043E53QueueNameC2FDE009"
+      }
+     }
+    ],
+    "EvaluationPeriods": 2,
+    "MetricName": "ApproximateNumberOfMessagesVisible",
+    "Namespace": "AWS/SQS",
+    "Period": 300,
+    "Statistic": "Maximum",
+    "Threshold": 50,
+    "TreatMissingData": "notBreaching"
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-staging-observability/RunQueueDepth/Resource"
+   }
+  },
+  "RunQueueOldestMessageAF36FE41": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmActions": [
+     {
+      "Ref": "AlarmTopicD01E77F9"
+     }
+    ],
+    "ComparisonOperator": "GreaterThanThreshold",
+    "Dimensions": [
+     {
+      "Name": "QueueName",
+      "Value": {
+       "Fn::ImportValue": "artikagentfactory-staging-data:ExportsOutputFnGetAttAgentRunQueue68043E53QueueNameC2FDE009"
+      }
+     }
+    ],
+    "EvaluationPeriods": 2,
+    "MetricName": "ApproximateAgeOfOldestMessage",
+    "Namespace": "AWS/SQS",
+    "Period": 300,
+    "Statistic": "Maximum",
+    "Threshold": 600,
+    "TreatMissingData": "notBreaching"
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-staging-observability/RunQueueOldestMessage/Resource"
+   }
+  },
+  "RunDlqNotEmptyD2FC61FF": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmActions": [
+     {
+      "Ref": "AlarmTopicD01E77F9"
+     }
+    ],
+    "ComparisonOperator": "GreaterThanThreshold",
+    "Dimensions": [
+     {
+      "Name": "QueueName",
+      "Value": {
+       "Fn::ImportValue": "artikagentfactory-staging-data:ExportsOutputFnGetAttAgentRunDlqB21FF479QueueName952BC171"
+      }
+     }
+    ],
+    "EvaluationPeriods": 1,
+    "MetricName": "ApproximateNumberOfMessagesVisible",
+    "Namespace": "AWS/SQS",
+    "Period": 300,
+    "Statistic": "Maximum",
+    "Threshold": 0,
+    "TreatMissingData": "notBreaching"
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-staging-observability/RunDlqNotEmpty/Resource"
+   }
+  },
+  "NotifyDlqNotEmpty1957D2DD": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmActions": [
+     {
+      "Ref": "AlarmTopicD01E77F9"
+     }
+    ],
+    "ComparisonOperator": "GreaterThanThreshold",
+    "Dimensions": [
+     {
+      "Name": "QueueName",
+      "Value": {
+       "Fn::ImportValue": "artikagentfactory-staging-data:ExportsOutputFnGetAttSlackNotifyDlqD7B66379QueueNameFF1745ED"
+      }
+     }
+    ],
+    "EvaluationPeriods": 1,
+    "MetricName": "ApproximateNumberOfMessagesVisible",
+    "Namespace": "AWS/SQS",
+    "Period": 300,
+    "Statistic": "Maximum",
+    "Threshold": 0,
+    "TreatMissingData": "notBreaching"
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-staging-observability/NotifyDlqNotEmpty/Resource"
+   }
+  },
+  "DatabaseHighCpuBF8D04C8": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmActions": [
+     {
+      "Ref": "AlarmTopicD01E77F9"
+     }
+    ],
+    "ComparisonOperator": "GreaterThanThreshold",
+    "Dimensions": [
+     {
+      "Name": "DBInstanceIdentifier",
+      "Value": {
+       "Fn::ImportValue": "artikagentfactory-staging-data:ExportsOutputRefDatabaseB269D8BB88F4B1C4"
+      }
+     }
+    ],
+    "EvaluationPeriods": 2,
+    "MetricName": "CPUUtilization",
+    "Namespace": "AWS/RDS",
+    "Period": 300,
+    "Statistic": "Average",
+    "Threshold": 80,
+    "TreatMissingData": "notBreaching"
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-staging-observability/DatabaseHighCpu/Resource"
+   }
+  },
+  "DatabaseLowStorage136FF46B": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmActions": [
+     {
+      "Ref": "AlarmTopicD01E77F9"
+     }
+    ],
+    "ComparisonOperator": "LessThanThreshold",
+    "Dimensions": [
+     {
+      "Name": "DBInstanceIdentifier",
+      "Value": {
+       "Fn::ImportValue": "artikagentfactory-staging-data:ExportsOutputRefDatabaseB269D8BB88F4B1C4"
+      }
+     }
+    ],
+    "EvaluationPeriods": 2,
+    "MetricName": "FreeStorageSpace",
+    "Namespace": "AWS/RDS",
+    "Period": 300,
+    "Statistic": "Average",
+    "Threshold": 2000000000,
+    "TreatMissingData": "notBreaching"
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-staging-observability/DatabaseLowStorage/Resource"
+   }
+  },
+  "DatabaseHighConnections7CB55DD6": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmActions": [
+     {
+      "Ref": "AlarmTopicD01E77F9"
+     }
+    ],
+    "ComparisonOperator": "GreaterThanThreshold",
+    "Dimensions": [
+     {
+      "Name": "DBInstanceIdentifier",
+      "Value": {
+       "Fn::ImportValue": "artikagentfactory-staging-data:ExportsOutputRefDatabaseB269D8BB88F4B1C4"
+      }
+     }
+    ],
+    "EvaluationPeriods": 2,
+    "MetricName": "DatabaseConnections",
+    "Namespace": "AWS/RDS",
+    "Period": 300,
+    "Statistic": "Average",
+    "Threshold": 80,
+    "TreatMissingData": "notBreaching"
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-staging-observability/DatabaseHighConnections/Resource"
+   }
+  },
+  "TrailS30071F172": {
+   "Type": "AWS::S3::Bucket",
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-staging-observability/Trail/S3/Resource"
+   }
+  },
+  "TrailS3PolicyE42170FE": {
+   "Type": "AWS::S3::BucketPolicy",
+   "Properties": {
+    "Bucket": {
+     "Ref": "TrailS30071F172"
+    },
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "s3:*",
+       "Condition": {
+        "Bool": {
+         "aws:SecureTransport": "false"
+        }
+       },
+       "Effect": "Deny",
+       "Principal": {
+        "AWS": "*"
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "TrailS30071F172",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "TrailS30071F172",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": "s3:GetBucketAcl",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "cloudtrail.amazonaws.com"
+       },
+       "Resource": {
+        "Fn::GetAtt": [
+         "TrailS30071F172",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": "s3:PutObject",
+       "Condition": {
+        "StringEquals": {
+         "s3:x-amz-acl": "bucket-owner-full-control"
+        }
+       },
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "cloudtrail.amazonaws.com"
+       },
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          {
+           "Fn::GetAtt": [
+            "TrailS30071F172",
+            "Arn"
+           ]
+          },
+          "/AWSLogs/515966528039/*"
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-staging-observability/Trail/S3/Policy/Resource"
+   }
+  },
+  "TrailLogGroup4CBE3AF5": {
+   "Type": "AWS::Logs::LogGroup",
+   "Properties": {
+    "RetentionInDays": 365
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-staging-observability/Trail/LogGroup/Resource"
+   }
+  },
+  "TrailLogsRole83B70503": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "cloudtrail.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-staging-observability/Trail/LogsRole/Resource"
+   }
+  },
+  "TrailLogsRoleDefaultPolicy563657A5": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "TrailLogGroup4CBE3AF5",
+         "Arn"
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "TrailLogsRoleDefaultPolicy563657A5",
+    "Roles": [
+     {
+      "Ref": "TrailLogsRole83B70503"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-staging-observability/Trail/LogsRole/DefaultPolicy/Resource"
+   }
+  },
+  "Trail022F0CF2": {
+   "Type": "AWS::CloudTrail::Trail",
+   "Properties": {
+    "CloudWatchLogsLogGroupArn": {
+     "Fn::GetAtt": [
+      "TrailLogGroup4CBE3AF5",
+      "Arn"
+     ]
+    },
+    "CloudWatchLogsRoleArn": {
+     "Fn::GetAtt": [
+      "TrailLogsRole83B70503",
+      "Arn"
+     ]
+    },
+    "EnableLogFileValidation": true,
+    "EventSelectors": [],
+    "IncludeGlobalServiceEvents": true,
+    "IsLogging": true,
+    "IsMultiRegionTrail": false,
+    "S3BucketName": {
+     "Ref": "TrailS30071F172"
+    },
+    "TrailName": "artikagentfactory-staging-trail"
+   },
+   "DependsOn": [
+    "TrailLogsRoleDefaultPolicy563657A5",
+    "TrailLogsRole83B70503",
+    "TrailS3PolicyE42170FE"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-staging-observability/Trail/Resource"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/0WPzQ6CMBCEn8V7WRUS7+rBiweC3k0tCCulS/oTQpq+uxQwnObbmcxmN4X0lMFhxweTiLJNJL7BPywXLZuslzfKgH9Sj4JdP2qGwIQkVw7cigb8WXLdxWyGNbOao5x6UeZehMBMBv7iRFvZaK60SE4SxbjZyxyYpHo64E71TZPrY/7nwJB34AuSVbRn3bas/RBYPtqG1D6DY/zzaxAT7ZTFroJi0R+P9w00BAEAAA=="
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-staging-observability/CDKMetadata/Default"
+   }
+  }
+ },
+ "Parameters": {
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}

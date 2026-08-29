@@ -1,0 +1,108 @@
+{
+  "/artikagentfactory-production-cloudfront-waf": [
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-production-cloudfront-waf/WebAcl": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "WebAcl"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-production-cloudfront-waf/Custom::CrossRegionExportWriterCustomResourceProvider": [
+    {
+      "type": "aws:cdk:is-custom-resource-handler-customResourceProvider",
+      "data": true
+    }
+  ],
+  "/artikagentfactory-production-cloudfront-waf/BootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "BootstrapVersion"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-production-cloudfront-waf/CheckBootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CheckBootstrapVersion"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-production-cloudfront-waf/CDKMetadata/Default": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CDKMetadata"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-production-cloudfront-waf/Custom::CrossRegionExportWriterCustomResourceProvider/Role": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CustomCrossRegionExportWriterCustomResourceProviderRoleC951B1E1"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-production-cloudfront-waf/Custom::CrossRegionExportWriterCustomResourceProvider/Handler": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CustomCrossRegionExportWriterCustomResourceProviderHandlerD8786E8A"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-production-cloudfront-waf/ExportsWriteruswest209BD44F0/Resource/Default": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsWriteruswest209BD44F0A7CF058B"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ]
+}

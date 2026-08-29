@@ -1,0 +1,102 @@
+{
+ "Resources": {
+  "WebAcl": {
+   "Type": "AWS::WAFv2::WebACL",
+   "Properties": {
+    "DefaultAction": {
+     "Allow": {}
+    },
+    "Rules": [
+     {
+      "Name": "AWSManagedRulesCommonRuleSet",
+      "OverrideAction": {
+       "None": {}
+      },
+      "Priority": 0,
+      "Statement": {
+       "ManagedRuleGroupStatement": {
+        "Name": "AWSManagedRulesCommonRuleSet",
+        "VendorName": "AWS"
+       }
+      },
+      "VisibilityConfig": {
+       "CloudWatchMetricsEnabled": true,
+       "MetricName": "artikagentfactory-staging-common",
+       "SampledRequestsEnabled": true
+      }
+     },
+     {
+      "Action": {
+       "Block": {}
+      },
+      "Name": "RateLimit",
+      "Priority": 1,
+      "Statement": {
+       "RateBasedStatement": {
+        "AggregateKeyType": "IP",
+        "Limit": 2000
+       }
+      },
+      "VisibilityConfig": {
+       "CloudWatchMetricsEnabled": true,
+       "MetricName": "artikagentfactory-staging-ratelimit",
+       "SampledRequestsEnabled": true
+      }
+     }
+    ],
+    "Scope": "REGIONAL",
+    "VisibilityConfig": {
+     "CloudWatchMetricsEnabled": true,
+     "MetricName": "artikagentfactory-staging-waf",
+     "SampledRequestsEnabled": true
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-staging-edge/WebAcl"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/zPSMzIz1jNQTCwv1k1OydbNyUzSqw4uSUzO1gEKxZcnppUZ6Tmn5YWnJjk6+9TqBFSWZOTn6RvrGYJ0ZRVnZuoWleaVZOam6gVBaABP+nwsUgAAAA=="
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-staging-edge/CDKMetadata/Default"
+   }
+  }
+ },
+ "Parameters": {
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}

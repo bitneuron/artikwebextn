@@ -1,0 +1,591 @@
+{
+  "/artikagentfactory-staging-data": [
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    },
+    {
+      "type": "aws:cdk:warning",
+      "data": "No cross-stack-reference strength configured, defaulting to \"strong\". We recommend you set feature flag \"@aws-cdk/core:defaultCrossStackReferences\" to \"both\", then deploy everywhere, then set it to \"weak\". Alternatively, set it to \"strong\" explicitly to lock in the current producer-protecting behavior. (See: https://github.com/aws/aws-cdk/blob/main/packages/aws-cdk-lib/README.md#reference-strength) [ack: @aws-cdk/core:crossStackReferencesDefaultStrong]",
+      "trace": [
+        "Annotations.addMessage (/var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/core/lib/annotations.js:1:3506)",
+        "Annotations.addWarningV2 (/var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/core/lib/annotations.js:1:2194)",
+        "resolveValue (/var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/core/lib/private/refs.js:1:6980)",
+        "resolveReferences (/var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/core/lib/private/refs.js:1:4848)",
+        "prepareApp (/var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/core/lib/private/prepare-app.js:1:1503)",
+        "synthesize (/var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/core/lib/private/synthesis.js:1:2625)",
+        "App.synth (/var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/core/lib/stage.js:1:5061)",
+        "App.synth (/var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/core/lib/app.js:1:5050)",
+        "/private/var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/tmpqjy8c8fn/lib/program.js:1:55650",
+        "Kernel._Kernel_ensureSync (/private/var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/tmpqjy8c8fn/lib/program.js:1:71267)",
+        "Kernel.invoke (/private/var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/tmpqjy8c8fn/lib/program.js:1:55595)",
+        "KernelHost.processRequest (/private/var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/tmpqjy8c8fn/lib/program.js:1:228006)",
+        "KernelHost.run (/private/var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/tmpqjy8c8fn/lib/program.js:1:226990)",
+        "Immediate._onImmediate (/private/var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/tmpqjy8c8fn/lib/program.js:1:227034)",
+        "process.processImmediate (node:internal/timers:511:21)"
+      ]
+    },
+    {
+      "type": "aws:cdk:stack-tags",
+      "data": [
+        {
+          "key": "Environment",
+          "value": "staging"
+        },
+        {
+          "key": "Project",
+          "value": "artikAgentFactory"
+        }
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/DatabaseEndpoint": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DatabaseEndpoint"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/ExportsBucketName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsBucketName"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/BootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "BootstrapVersion"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/CheckBootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CheckBootstrapVersion"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/AppLogGroup/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "AppLogGroup7D8CD952"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/DataKmsKey/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DataKmsKey0EEAC826"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/DbCredentialsSecret/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DbCredentialsSecret4110FA1D"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/Database/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DatabaseB269D8BB"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/AgentRunDlq/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "AgentRunDlqB21FF479"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/AgentRunQueue/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "AgentRunQueue68043E53"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/SlackNotifyDlq/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "SlackNotifyDlqD7B66379"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/SlackNotifyQueue/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "SlackNotifyQueue2DFC99B5"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/ExportsBucket/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsBucket5A12738B"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/SlackWebhookUrlSecret/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "SlackWebhookUrlSecretBAFDE743"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/AnthropicApiKeySecret/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "AnthropicApiKeySecret77C8E53B"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/AppSecretSecret/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "AppSecretSecretF7CED462"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/InitialAdminPasswordSecret/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "InitialAdminPasswordSecret96EFB21A"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/CDKMetadata/Default": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CDKMetadata"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/Exports/Output{\"Fn::GetAtt\":[\"AppLogGroup7D8CD952\",\"Arn\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttAppLogGroup7D8CD952Arn3582BE94"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/Exports/Output{\"Ref\":\"DbCredentialsSecret4110FA1D\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefDbCredentialsSecret4110FA1DC5536844"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/Exports/Output{\"Ref\":\"AnthropicApiKeySecret77C8E53B\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefAnthropicApiKeySecret77C8E53B998DB1DE"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/Exports/Output{\"Ref\":\"AppSecretSecretF7CED462\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefAppSecretSecretF7CED462B3E2650C"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/Exports/Output{\"Ref\":\"InitialAdminPasswordSecret96EFB21A\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefInitialAdminPasswordSecret96EFB21A6EDA2E22"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/Exports/Output{\"Ref\":\"SlackWebhookUrlSecretBAFDE743\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefSlackWebhookUrlSecretBAFDE74322A35AFE"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/Exports/Output{\"Fn::GetAtt\":[\"AgentRunQueue68043E53\",\"Arn\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttAgentRunQueue68043E53Arn71078A91"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/Exports/Output{\"Fn::GetAtt\":[\"SlackNotifyQueue2DFC99B5\",\"Arn\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttSlackNotifyQueue2DFC99B5ArnB1119827"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/Exports/Output{\"Fn::GetAtt\":[\"ExportsBucket5A12738B\",\"Arn\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttExportsBucket5A12738BArn6FAD0B2A"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/Exports/Output{\"Fn::GetAtt\":[\"AgentRunDlqB21FF479\",\"Arn\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttAgentRunDlqB21FF479ArnC832B006"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/Exports/Output{\"Fn::GetAtt\":[\"SlackNotifyDlqD7B66379\",\"Arn\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttSlackNotifyDlqD7B66379Arn4B6FED20"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/Exports/Output{\"Ref\":\"AppLogGroup7D8CD952\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefAppLogGroup7D8CD9527CC48D3E"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/Exports/Output{\"Ref\":\"AgentRunQueue68043E53\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefAgentRunQueue68043E5349D1D2B4"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/Exports/Output{\"Ref\":\"SlackNotifyQueue2DFC99B5\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefSlackNotifyQueue2DFC99B5E1DF38E5"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/Exports/Output{\"Fn::GetAtt\":[\"DatabaseB269D8BB\",\"Endpoint.Address\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttDatabaseB269D8BBEndpointAddressA4DBD059"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/Exports/Output{\"Fn::GetAtt\":[\"DatabaseB269D8BB\",\"Endpoint.Port\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttDatabaseB269D8BBEndpointPort3ACB3F51"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/Exports/Output{\"Fn::GetAtt\":[\"AgentRunQueue68043E53\",\"QueueName\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttAgentRunQueue68043E53QueueNameC2FDE009"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/Exports/Output{\"Fn::GetAtt\":[\"AgentRunDlqB21FF479\",\"QueueName\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttAgentRunDlqB21FF479QueueName952BC171"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/Exports/Output{\"Fn::GetAtt\":[\"SlackNotifyDlqD7B66379\",\"QueueName\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttSlackNotifyDlqD7B66379QueueNameFF1745ED"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/Exports/Output{\"Ref\":\"DatabaseB269D8BB\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefDatabaseB269D8BB88F4B1C4"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/DataKmsKey/Alias/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DataKmsKeyAlias434DF865"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/DbCredentialsSecret/Attachment/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DbCredentialsSecretAttachment3AE5624A"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/Database/SubnetGroup/Default": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DatabaseSubnetGroup7D60F180"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-data/ExportsBucket/Policy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsBucketPolicyF65C412E"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ]
+}

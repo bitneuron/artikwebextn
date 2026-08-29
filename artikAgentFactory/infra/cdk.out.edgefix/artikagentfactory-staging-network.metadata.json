@@ -1,0 +1,759 @@
+{
+  "/artikagentfactory-staging-network": [
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    },
+    {
+      "type": "aws:cdk:stack-tags",
+      "data": [
+        {
+          "key": "Environment",
+          "value": "staging"
+        },
+        {
+          "key": "Project",
+          "value": "artikAgentFactory"
+        }
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/BootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "BootstrapVersion"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/CheckBootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CheckBootstrapVersion"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "Vpc8378EB38"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/IGW": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcIGWD7BA715C"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/VPCGW": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcVPCGWBF912B6E"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/AlbSecurityGroup/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "AlbSecurityGroup86A59E99"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/EcsWebSecurityGroup/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "EcsWebSecurityGroup61FA289B"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/EcsWebSecurityGroup/from artikagentfactorystagingnetworkAlbSecurityGroup515B80B7:8420": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "EcsWebSecurityGroupfromartikagentfactorystagingnetworkAlbSecurityGroup515B80B7842059CE3291"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/EcsWorkerSecurityGroup/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "EcsWorkerSecurityGroup6B970AC6"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/DbSecurityGroup/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DbSecurityGroupE9D701AD"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/DbSecurityGroup/from artikagentfactorystagingnetworkEcsWebSecurityGroup12B7AA19:5432": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DbSecurityGroupfromartikagentfactorystagingnetworkEcsWebSecurityGroup12B7AA195432F144AC99"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/DbSecurityGroup/from artikagentfactorystagingnetworkEcsWorkerSecurityGroupA13E4FEC:5432": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DbSecurityGroupfromartikagentfactorystagingnetworkEcsWorkerSecurityGroupA13E4FEC54322C9F9077"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/CDKMetadata/Default": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CDKMetadata"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Exports/Output{\"Ref\":\"VpcprivatedataSubnet1Subnet9638AA76\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefVpcprivatedataSubnet1Subnet9638AA76576225C8"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Exports/Output{\"Ref\":\"VpcprivatedataSubnet2Subnet85309E02\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefVpcprivatedataSubnet2Subnet85309E021EB0F8E3"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Exports/Output{\"Fn::GetAtt\":[\"DbSecurityGroupE9D701AD\",\"GroupId\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttDbSecurityGroupE9D701ADGroupId7A7C114A"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Exports/Output{\"Ref\":\"VpcprivateecsSubnet1Subnet80A3EB7D\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefVpcprivateecsSubnet1Subnet80A3EB7DFEA0F1DC"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Exports/Output{\"Ref\":\"VpcprivateecsSubnet2SubnetCA5ECF90\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefVpcprivateecsSubnet2SubnetCA5ECF90A162717E"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Exports/Output{\"Fn::GetAtt\":[\"EcsWebSecurityGroup61FA289B\",\"GroupId\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttEcsWebSecurityGroup61FA289BGroupIdFC8BDB14"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Exports/Output{\"Fn::GetAtt\":[\"AlbSecurityGroup86A59E99\",\"GroupId\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttAlbSecurityGroup86A59E99GroupIdE3A37BC7"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Exports/Output{\"Ref\":\"VpcpublicSubnet1Subnet2BB74ED7\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefVpcpublicSubnet1Subnet2BB74ED74EB42ADC"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Exports/Output{\"Ref\":\"VpcpublicSubnet2SubnetE34B022A\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefVpcpublicSubnet2SubnetE34B022AC8BB6627"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Exports/Output{\"Ref\":\"Vpc8378EB38\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefVpc8378EB38272D6E3A"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Exports/Output{\"Fn::GetAtt\":[\"EcsWorkerSecurityGroup6B970AC6\",\"GroupId\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttEcsWorkerSecurityGroup6B970AC6GroupId30E0C8D8"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/publicSubnet1/Subnet": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcpublicSubnet1Subnet2BB74ED7"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        ".../var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/aws-ec2/lib/vpc.js:1:268 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/publicSubnet1/RouteTable": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcpublicSubnet1RouteTable15C15F8E"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        ".../var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/aws-ec2/lib/vpc.js:1:268 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/publicSubnet1/RouteTableAssociation": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcpublicSubnet1RouteTableAssociation4E83B6E4"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        ".../var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/aws-ec2/lib/vpc.js:1:268 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/publicSubnet1/DefaultRoute": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcpublicSubnet1DefaultRouteB88F9E93"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        ".../var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/aws-ec2/lib/vpc.js:1:208 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib, jsii runtime..."
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/publicSubnet1/EIP": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcpublicSubnet1EIP411541E6"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/publicSubnet1/NATGateway": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcpublicSubnet1NATGatewayA036E8A6"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/publicSubnet2/Subnet": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcpublicSubnet2SubnetE34B022A"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        ".../var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/aws-ec2/lib/vpc.js:1:268 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/publicSubnet2/RouteTable": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcpublicSubnet2RouteTableC5A6DF77"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        ".../var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/aws-ec2/lib/vpc.js:1:268 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/publicSubnet2/RouteTableAssociation": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcpublicSubnet2RouteTableAssociationCCE257FF"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        ".../var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/aws-ec2/lib/vpc.js:1:268 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/publicSubnet2/DefaultRoute": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcpublicSubnet2DefaultRoute732F0BEB"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        ".../var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/aws-ec2/lib/vpc.js:1:208 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib, jsii runtime..."
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/private-ecsSubnet1/Subnet": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcprivateecsSubnet1Subnet80A3EB7D"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        ".../var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/aws-ec2/lib/vpc.js:1:270 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/private-ecsSubnet1/RouteTable": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcprivateecsSubnet1RouteTable16D99FB0"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        ".../var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/aws-ec2/lib/vpc.js:1:270 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/private-ecsSubnet1/RouteTableAssociation": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcprivateecsSubnet1RouteTableAssociationA5DC7593"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        ".../var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/aws-ec2/lib/vpc.js:1:270 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/private-ecsSubnet1/DefaultRoute": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcprivateecsSubnet1DefaultRouteD206BC4C"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/private-ecsSubnet2/Subnet": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcprivateecsSubnet2SubnetCA5ECF90"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        ".../var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/aws-ec2/lib/vpc.js:1:270 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/private-ecsSubnet2/RouteTable": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcprivateecsSubnet2RouteTable13888436"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        ".../var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/aws-ec2/lib/vpc.js:1:270 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/private-ecsSubnet2/RouteTableAssociation": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcprivateecsSubnet2RouteTableAssociation5B4D8FCE"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        ".../var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/aws-ec2/lib/vpc.js:1:270 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/private-ecsSubnet2/DefaultRoute": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcprivateecsSubnet2DefaultRoute31E5BA7D"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/private-dataSubnet1/Subnet": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcprivatedataSubnet1Subnet9638AA76"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        ".../var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/aws-ec2/lib/vpc.js:1:272 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/private-dataSubnet1/RouteTable": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcprivatedataSubnet1RouteTable304546DC"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        ".../var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/aws-ec2/lib/vpc.js:1:272 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/private-dataSubnet1/RouteTableAssociation": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcprivatedataSubnet1RouteTableAssociationC484D6C4"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        ".../var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/aws-ec2/lib/vpc.js:1:272 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/private-dataSubnet2/Subnet": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcprivatedataSubnet2Subnet85309E02"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        ".../var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/aws-ec2/lib/vpc.js:1:272 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/private-dataSubnet2/RouteTable": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcprivatedataSubnet2RouteTable4B43529F"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        ".../var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/aws-ec2/lib/vpc.js:1:272 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/private-dataSubnet2/RouteTableAssociation": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcprivatedataSubnet2RouteTableAssociation00B8E4FF"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        ".../var/folders/l7/wy7n9tl146n8vjgp39pjnj9c0000gn/T/jsii-kernel-iqY50A/node_modules/aws-cdk-lib/aws-ec2/lib/vpc.js:1:272 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/SecretsManagerEndpoint/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcSecretsManagerEndpoint93E49F69"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/CloudWatchLogsEndpoint/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcCloudWatchLogsEndpointA6195533"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/SqsEndpoint/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcSqsEndpointF1A4587A"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/S3Endpoint/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcS3Endpoint4A3DE4B5"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/SecretsManagerEndpoint/SecurityGroup/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcSecretsManagerEndpointSecurityGroup9A5498C7"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/CloudWatchLogsEndpoint/SecurityGroup/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcCloudWatchLogsEndpointSecurityGroupE044298A"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-network/Vpc/SqsEndpoint/SecurityGroup/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "VpcSqsEndpointSecurityGroup77E600AF"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ]
+}

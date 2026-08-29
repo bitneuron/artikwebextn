@@ -1,0 +1,259 @@
+name: artikAgentFactory CI/CD
+
+# Deploy jobs are gated on the `AWS_DEPLOY_ROLE_ARN` repository variable (Settings ->
+# Secrets and variables -> Actions -> Variables). Until the user runs the one-time IAM
+# bootstrap (see infra/README.md / plan §10) and sets that variable, this workflow
+# still runs test/build/synth on every push and PR, but every deploy job is skipped —
+# it never fails or fabricates a deployment. Deploy jobs assume an IAM role via GitHub
+# OIDC (no long-lived AWS keys stored in GitHub).
+#
+# The manual production-approval gate (plan §12) is implemented via the `production`
+# GitHub Environment below — add required reviewers to that environment in
+# Settings -> Environments -> production once the repo is ready to ship to prod.
+#
+# Automatic rollback on a bad deploy is handled at the infra level, not by a CI step:
+# every ECS service in infra/stacks/compute_stack.py sets
+# `circuit_breaker=ecs.DeploymentCircuitBreaker(rollback=True)`, so ECS itself reverts
+# to the previous task definition if new tasks fail health checks; `cdk deploy`
+# likewise triggers CloudFormation's native stack rollback on failure.
+
+on:
+  push:
+    branches: [main]
+    paths: ["artikAgentFactory/**", ".github/workflows/artikagentfactory-ci-cd.yml"]
+  pull_request:
+    paths: ["artikAgentFactory/**"]
+  workflow_dispatch: {}
+
+env:
+  AWS_REGION: us-west-2
+  ECR_REPOSITORY: artikagentfactory
+
+jobs:
+  # ── Test / build / audit — run on every push and PR, no AWS access needed ────────
+
+  backend-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: artikAgentFactory/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python -m pytest -q
+
+  backend-lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: artikAgentFactory/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: ruff check app
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: artikAgentFactory/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm run build
+
+  dependency-audit:
+    runs-on: ubuntu-latest
+    # Advisory, not a merge blocker: flags CVEs without failing the pipeline on a
+    # freshly-disclosed advisory that has no fix yet. Findings are visible in the logs.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pip-audit
+      - run: pip-audit -r artikAgentFactory/backend/requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - working-directory: artikAgentFactory/frontend
+        run: npm install
+      - working-directory: artikAgentFactory/frontend
+        run: npm audit --audit-level=high
+
+  cdk-synth:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: artikAgentFactory/infra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: python -m venv .venv && .venv/bin/pip install -r requirements.txt
+      - run: npx --yes cdk@2 synth --quiet
+        env:
+          CDK_DEFAULT_ACCOUNT: "000000000000" # placeholder — synth needs no real account
+          CDK_DEFAULT_REGION: us-west-2
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-build]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: artikAgentFactory
+          push: false
+          tags: artikagentfactory:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── Deploy — gated on AWS_DEPLOY_ROLE_ARN being configured (see header comment) ──
+
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: [backend-test, backend-lint, frontend-build, cdk-synth, docker-build]
+    if: github.ref == 'refs/heads/main' && vars.AWS_DEPLOY_ROLE_ARN != ''
+    environment: staging
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      image_tag: ${{ steps.tag.outputs.image_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: tag
+        run: echo "image_tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: cdk deploy registry + staging stacks
+        working-directory: artikAgentFactory/infra
+        run: |
+          python -m venv .venv && .venv/bin/pip install -r requirements.txt
+          npx --yes cdk@2 deploy artikagentfactory-registry \
+            "artikagentfactory-staging-*" \
+            --require-approval never --concurrency 4
+      - name: Log in to ECR
+        run: aws ecr get-login-password --region ${{ env.AWS_REGION }} \
+          | docker login --username AWS --password-stdin \
+            "${{ steps.account.outputs.id }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+        id: ecr-login
+      - id: account
+        run: echo "id=$(aws sts get-caller-identity --query Account --output text)" >> "$GITHUB_OUTPUT"
+      - name: Build, scan, and push image
+        working-directory: artikAgentFactory
+        run: |
+          REGISTRY="${{ steps.account.outputs.id }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}"
+          docker build -t "$REGISTRY:${{ steps.tag.outputs.image_tag }}" -t "$REGISTRY:latest" .
+          docker push "$REGISTRY:${{ steps.tag.outputs.image_tag }}"
+          docker push "$REGISTRY:latest"
+          # ECR scans on push (image_scan_on_push=True in registry_stack.py); wait
+          # briefly and surface findings without failing the deploy on advisory-only
+          # results — a human reviews the ECR console for anything CRITICAL/HIGH.
+          sleep 15
+          aws ecr describe-image-scan-findings \
+            --repository-name "${{ env.ECR_REPOSITORY }}" \
+            --image-id imageTag="${{ steps.tag.outputs.image_tag }}" \
+            --region ${{ env.AWS_REGION }} || true
+      - name: Force new ECS deployment (staging)
+        run: |
+          aws ecs update-service --cluster artikagentfactory-staging-cluster \
+            --service artikagentfactory-staging-WebService --force-new-deployment \
+            --region ${{ env.AWS_REGION }} || true
+          aws ecs update-service --cluster artikagentfactory-staging-cluster \
+            --service artikagentfactory-staging-RunWorkerService --force-new-deployment \
+            --region ${{ env.AWS_REGION }} || true
+
+  smoke-test-staging:
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: vars.AWS_DEPLOY_ROLE_ARN != '' && vars.STAGING_APP_URL != ''
+    steps:
+      - name: Health check
+        run: curl --fail --silent --show-error "${{ vars.STAGING_APP_URL }}/api/health"
+      - name: Auth gate is live (protected route rejects unauthenticated request)
+        run: |
+          status=$(curl --silent --output /dev/null --write-out "%{http_code}" "${{ vars.STAGING_APP_URL }}/api/agents")
+          if [ "$status" != "401" ]; then
+            echo "expected 401 from an unauthenticated request, got $status"
+            exit 1
+          fi
+
+  deploy-production:
+    runs-on: ubuntu-latest
+    needs: smoke-test-staging
+    if: vars.AWS_DEPLOY_ROLE_ARN != ''
+    # Add required reviewers to the "production" environment in repo Settings to make
+    # this the manual approval gate called for in plan §12 — the job pauses here until
+    # approved.
+    environment: production
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: cdk deploy production stacks
+        working-directory: artikAgentFactory/infra
+        run: |
+          python -m venv .venv && .venv/bin/pip install -r requirements.txt
+          npx --yes cdk@2 deploy "artikagentfactory-production-*" \
+            --require-approval never --concurrency 4
+      - name: Force new ECS deployment (production) — pulls the :latest image just promoted from staging
+        run: |
+          aws ecs update-service --cluster artikagentfactory-production-cluster \
+            --service artikagentfactory-production-WebService --force-new-deployment \
+            --region ${{ env.AWS_REGION }} || true
+          aws ecs update-service --cluster artikagentfactory-production-cluster \
+            --service artikagentfactory-production-RunWorkerService --force-new-deployment \
+            --region ${{ env.AWS_REGION }} || true
+
+  post-deploy-validation:
+    runs-on: ubuntu-latest
+    needs: deploy-production
+    if: vars.AWS_DEPLOY_ROLE_ARN != '' && vars.PRODUCTION_APP_URL != ''
+    steps:
+      - name: Health check
+        run: curl --fail --silent --show-error "${{ vars.PRODUCTION_APP_URL }}/api/health"
+      - name: Auth gate is live
+        run: |
+          status=$(curl --silent --output /dev/null --write-out "%{http_code}" "${{ vars.PRODUCTION_APP_URL }}/api/agents")
+          if [ "$status" != "401" ]; then
+            echo "expected 401 from an unauthenticated request, got $status"
+            exit 1
+          fi
+          echo "Production deploy validated. Confirming exactly one Slack notification fires for a test run is a manual post-deploy step once the Slack secret is configured (plan §M)."

@@ -1,0 +1,21 @@
+{
+  "version": "54.0.0",
+  "files": {
+    "748ed28f4acf82886e8dd93ee738947f589aabf7bf6d9c22d98882342e9c5622": {
+      "displayName": "artikagentfactory-production-compute Template",
+      "source": {
+        "path": "artikagentfactory-production-compute.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "515966528039-us-west-2-a75e3b05": {
+          "bucketName": "cdk-hnb659fds-assets-515966528039-us-west-2",
+          "objectKey": "748ed28f4acf82886e8dd93ee738947f589aabf7bf6d9c22d98882342e9c5622.json",
+          "region": "us-west-2",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::515966528039:role/cdk-hnb659fds-file-publishing-role-515966528039-us-west-2"
+        }
+      }
+    }
+  },
+  "dockerImages": {}
+}

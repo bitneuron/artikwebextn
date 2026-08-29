@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; }
+
+@layer base {
+  html, body { @apply h-full; }
+  body {
+    @apply bg-void text-ink antialiased font-body;
+    background-image: var(--tw-gradient-hero, none);
+  }
+  h1, h2, h3, h4 { @apply font-display; }
+  ::selection { @apply bg-blue/30 text-white; }
+
+  /* subtle grain overlay for depth, applied once on the app shell root */
+  .grain::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+}
+
+@layer components {
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition disabled:opacity-40 disabled:pointer-events-none; }
+  .btn-primary { @apply btn bg-grad-brand text-white shadow-glow hover:brightness-110 active:brightness-95; }
+  .btn-ghost { @apply btn border border-border text-ink hover:bg-surface-2 hover:border-border-hover; }
+  .btn-danger { @apply btn border border-bad/30 text-bad hover:bg-bad/10; }
+  .btn-sm { @apply !px-3 !py-1.5 !text-xs; }
+
+  .card { @apply rounded-2xl border border-border bg-surface shadow-card; }
+  .card-hover { @apply transition hover:border-border-hover hover:bg-surface-2; }
+
+  .input {
+    @apply w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-ink outline-none
+    placeholder:text-ink-mute focus:border-blue/50 focus:ring-2 focus:ring-blue/20 transition;
+  }
+  .label { @apply block text-xs font-semibold uppercase tracking-wide text-ink-mute mb-1.5; }
+  .select { @apply input appearance-none pr-8; }
+  .textarea { @apply input min-h-[6rem] resize-y; }
+
+  .badge { @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold font-mono tracking-wide; }
+  .badge-blue { @apply badge bg-blue/15 text-blue-400; }
+  .badge-violet { @apply badge bg-violet/15 text-violet-400; }
+  .badge-ok { @apply badge bg-ok/15 text-ok; }
+  .badge-warn { @apply badge bg-warn/15 text-warn; }
+  .badge-bad { @apply badge bg-bad/15 text-bad; }
+  .badge-mute { @apply badge bg-white/5 text-ink-dim; }
+
+  .live-dot { @apply relative inline-block h-2 w-2 rounded-full bg-ok animate-pulse-live; }
+
+  .skeleton { @apply relative overflow-hidden rounded-lg bg-surface-2; }
+  .skeleton::after {
+    content: "";
+    @apply absolute inset-0;
+    background-image: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+    background-size: 400px 100%;
+    animation: shimmer 1.6s linear infinite;
+  }
+}

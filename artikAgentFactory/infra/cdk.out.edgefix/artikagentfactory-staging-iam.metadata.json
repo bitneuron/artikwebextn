@@ -1,0 +1,245 @@
+{
+  "/artikagentfactory-staging-iam": [
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    },
+    {
+      "type": "aws:cdk:stack-tags",
+      "data": [
+        {
+          "key": "Environment",
+          "value": "staging"
+        },
+        {
+          "key": "Project",
+          "value": "artikAgentFactory"
+        }
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-iam/BootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "BootstrapVersion"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-iam/CheckBootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CheckBootstrapVersion"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-iam/TaskExecutionRole/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "TaskExecutionRole250D2532"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-iam/WebTaskRole/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "WebTaskRoleA6676EAB"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-iam/WorkerTaskRole/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "WorkerTaskRole013F226A"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-iam/SchedulerRole/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "SchedulerRole59E73443"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-iam/MigrationTaskRole/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "MigrationTaskRole7F23D565"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-iam/MonitoringRole/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "MonitoringRole90457BF9"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-iam/CDKMetadata/Default": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CDKMetadata"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-iam/Exports/Output{\"Fn::GetAtt\":[\"TaskExecutionRole250D2532\",\"Arn\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttTaskExecutionRole250D2532Arn61CC7A98"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-iam/Exports/Output{\"Fn::GetAtt\":[\"WebTaskRoleA6676EAB\",\"Arn\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttWebTaskRoleA6676EABArn1E57A5AA"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-iam/Exports/Output{\"Fn::GetAtt\":[\"WorkerTaskRole013F226A\",\"Arn\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttWorkerTaskRole013F226AArnCC93AE7B"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-iam/TaskExecutionRole/DefaultPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "TaskExecutionRoleDefaultPolicyA84DD1B0"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-iam/WebTaskRole/DefaultPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "WebTaskRoleDefaultPolicy89171791"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-iam/WorkerTaskRole/DefaultPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "WorkerTaskRoleDefaultPolicy4DD5AEA2"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-iam/SchedulerRole/DefaultPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "SchedulerRoleDefaultPolicy66F774B8"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-iam/MigrationTaskRole/DefaultPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "MigrationTaskRoleDefaultPolicy72DAE31B"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ]
+}

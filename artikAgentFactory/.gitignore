@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Backend runtime/dev artifacts — never commit these
+backend/*.db
+backend/*.db-shm
+backend/*.db-wal
+backend/.dev_secret
+backend/.env
+backend/frontend_dist/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Infra
+infra/cdk.out/
+infra/.venv/

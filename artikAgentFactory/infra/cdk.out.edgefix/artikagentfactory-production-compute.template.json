@@ -1,0 +1,946 @@
+{
+ "Resources": {
+  "ClusterEB0386A7": {
+   "Type": "AWS::ECS::Cluster",
+   "Properties": {
+    "ClusterName": "artikagentfactory-production-cluster",
+    "ClusterSettings": [
+     {
+      "Name": "containerInsights",
+      "Value": "enabled"
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "Environment",
+      "Value": "production"
+     },
+     {
+      "Key": "Project",
+      "Value": "artikAgentFactory"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-production-compute/Cluster/Resource"
+   }
+  },
+  "WebTaskDefDC37DBDB": {
+   "Type": "AWS::ECS::TaskDefinition",
+   "Properties": {
+    "ContainerDefinitions": [
+     {
+      "Environment": [
+       {
+        "Name": "ENVIRONMENT",
+        "Value": "production"
+       },
+       {
+        "Name": "EXECUTION_BACKEND",
+        "Value": "sqs"
+       },
+       {
+        "Name": "SECRETS_BACKEND",
+        "Value": "aws"
+       },
+       {
+        "Name": "SLACK_CHANNEL",
+        "Value": "#artik-agent-notify"
+       },
+       {
+        "Name": "SECRETS_PREFIX",
+        "Value": "artikagentfactory/production"
+       },
+       {
+        "Name": "INITIAL_ADMIN_EMAIL",
+        "Value": "admin@artikagentfactory-production.internal"
+       },
+       {
+        "Name": "INITIAL_ADMIN_USERNAME",
+        "Value": "admin"
+       },
+       {
+        "Name": "RUN_QUEUE_URL",
+        "Value": {
+         "Fn::ImportValue": "artikagentfactory-production-data:ExportsOutputRefAgentRunQueue68043E5349D1D2B4"
+        }
+       },
+       {
+        "Name": "NOTIFY_QUEUE_URL",
+        "Value": {
+         "Fn::ImportValue": "artikagentfactory-production-data:ExportsOutputRefSlackNotifyQueue2DFC99B5E1DF38E5"
+        }
+       },
+       {
+        "Name": "DB_HOST",
+        "Value": {
+         "Fn::ImportValue": "artikagentfactory-production-data:ExportsOutputFnGetAttDatabaseB269D8BBEndpointAddressA4DBD059"
+        }
+       },
+       {
+        "Name": "DB_PORT",
+        "Value": {
+         "Fn::ImportValue": "artikagentfactory-production-data:ExportsOutputFnGetAttDatabaseB269D8BBEndpointPort3ACB3F51"
+        }
+       },
+       {
+        "Name": "DB_NAME",
+        "Value": "artikagentfactory"
+       },
+       {
+        "Name": "WORKER_ROLE",
+        "Value": ""
+       }
+      ],
+      "Essential": true,
+      "HealthCheck": {
+       "Command": [
+        "CMD-SHELL",
+        "curl -f http://localhost:8420/api/health || exit 1"
+       ],
+       "Interval": 30,
+       "Retries": 3,
+       "Timeout": 5
+      },
+      "Image": {
+       "Fn::Join": [
+        "",
+        [
+         {
+          "Fn::Select": [
+           4,
+           {
+            "Fn::Split": [
+             ":",
+             {
+              "Fn::ImportValue": "artikagentfactory-registry:ExportsOutputFnGetAttRepository22E53BBDArn3AD4E30B"
+             }
+            ]
+           }
+          ]
+         },
+         ".dkr.ecr.",
+         {
+          "Fn::Select": [
+           3,
+           {
+            "Fn::Split": [
+             ":",
+             {
+              "Fn::ImportValue": "artikagentfactory-registry:ExportsOutputFnGetAttRepository22E53BBDArn3AD4E30B"
+             }
+            ]
+           }
+          ]
+         },
+         ".",
+         {
+          "Ref": "AWS::URLSuffix"
+         },
+         "/",
+         {
+          "Fn::ImportValue": "artikagentfactory-registry:ExportsOutputRefRepository22E53BBD9A9E013B"
+         },
+         ":latest"
+        ]
+       ]
+      },
+      "LogConfiguration": {
+       "LogDriver": "awslogs",
+       "Options": {
+        "awslogs-group": {
+         "Fn::ImportValue": "artikagentfactory-production-data:ExportsOutputRefAppLogGroup7D8CD9527CC48D3E"
+        },
+        "awslogs-stream-prefix": "web",
+        "awslogs-region": "us-west-2"
+       }
+      },
+      "Name": "web",
+      "PortMappings": [
+       {
+        "ContainerPort": 8420,
+        "Protocol": "tcp"
+       }
+      ],
+      "Secrets": [
+       {
+        "Name": "APP_SECRET",
+        "ValueFrom": {
+         "Fn::ImportValue": "artikagentfactory-production-data:ExportsOutputRefAppSecretSecretF7CED462B3E2650C"
+        }
+       },
+       {
+        "Name": "ANTHROPIC_API_KEY",
+        "ValueFrom": {
+         "Fn::ImportValue": "artikagentfactory-production-data:ExportsOutputRefAnthropicApiKeySecret77C8E53B998DB1DE"
+        }
+       },
+       {
+        "Name": "INITIAL_ADMIN_PASSWORD",
+        "ValueFrom": {
+         "Fn::ImportValue": "artikagentfactory-production-data:ExportsOutputRefInitialAdminPasswordSecret96EFB21A6EDA2E22"
+        }
+       },
+       {
+        "Name": "DB_USERNAME",
+        "ValueFrom": {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::ImportValue": "artikagentfactory-production-data:ExportsOutputRefDbCredentialsSecret4110FA1DC5536844"
+           },
+           ":username::"
+          ]
+         ]
+        }
+       },
+       {
+        "Name": "DB_PASSWORD",
+        "ValueFrom": {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::ImportValue": "artikagentfactory-production-data:ExportsOutputRefDbCredentialsSecret4110FA1DC5536844"
+           },
+           ":password::"
+          ]
+         ]
+        }
+       }
+      ]
+     }
+    ],
+    "Cpu": "512",
+    "ExecutionRoleArn": {
+     "Fn::ImportValue": "artikagentfactory-production-iam:ExportsOutputFnGetAttTaskExecutionRole250D2532Arn61CC7A98"
+    },
+    "Family": "artikagentfactory-production-web",
+    "Memory": "1024",
+    "NetworkMode": "awsvpc",
+    "RequiresCompatibilities": [
+     "FARGATE"
+    ],
+    "Tags": [
+     {
+      "Key": "Environment",
+      "Value": "production"
+     },
+     {
+      "Key": "Project",
+      "Value": "artikAgentFactory"
+     }
+    ],
+    "TaskRoleArn": {
+     "Fn::ImportValue": "artikagentfactory-production-iam:ExportsOutputFnGetAttWebTaskRoleA6676EABArn1E57A5AA"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-production-compute/WebTaskDef/Resource"
+   }
+  },
+  "WebService7F8A1763": {
+   "Type": "AWS::ECS::Service",
+   "Properties": {
+    "Cluster": {
+     "Ref": "ClusterEB0386A7"
+    },
+    "DeploymentConfiguration": {
+     "Alarms": {
+      "AlarmNames": [],
+      "Enable": false,
+      "Rollback": false
+     },
+     "DeploymentCircuitBreaker": {
+      "Enable": true,
+      "Rollback": true
+     },
+     "MaximumPercent": 200,
+     "MinimumHealthyPercent": 100
+    },
+    "DesiredCount": 2,
+    "EnableECSManagedTags": false,
+    "HealthCheckGracePeriodSeconds": 60,
+    "LaunchType": "FARGATE",
+    "LoadBalancers": [
+     {
+      "ContainerName": "web",
+      "ContainerPort": 8420,
+      "TargetGroupArn": {
+       "Ref": "AlbHttpListenerWebTargetsGroup62465FD4"
+      }
+     }
+    ],
+    "NetworkConfiguration": {
+     "AwsvpcConfiguration": {
+      "AssignPublicIp": "DISABLED",
+      "SecurityGroups": [
+       {
+        "Fn::ImportValue": "artikagentfactory-production-network:ExportsOutputFnGetAttEcsWebSecurityGroup61FA289BGroupIdFC8BDB14"
+       }
+      ],
+      "Subnets": [
+       {
+        "Fn::ImportValue": "artikagentfactory-production-network:ExportsOutputRefVpcprivateecsSubnet1Subnet80A3EB7DFEA0F1DC"
+       },
+       {
+        "Fn::ImportValue": "artikagentfactory-production-network:ExportsOutputRefVpcprivateecsSubnet2SubnetCA5ECF90A162717E"
+       }
+      ]
+     }
+    },
+    "Tags": [
+     {
+      "Key": "Environment",
+      "Value": "production"
+     },
+     {
+      "Key": "Project",
+      "Value": "artikAgentFactory"
+     }
+    ],
+    "TaskDefinition": {
+     "Ref": "WebTaskDefDC37DBDB"
+    }
+   },
+   "DependsOn": [
+    "AlbHttpListener00C8B33E",
+    "AlbHttpListenerWebTargetsGroup62465FD4"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-production-compute/WebService/Service"
+   }
+  },
+  "WebServiceTaskCountTarget578D9A62": {
+   "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
+   "Properties": {
+    "MaxCapacity": 6,
+    "MinCapacity": 2,
+    "ResourceId": {
+     "Fn::Join": [
+      "",
+      [
+       "service/",
+       {
+        "Ref": "ClusterEB0386A7"
+       },
+       "/",
+       {
+        "Fn::GetAtt": [
+         "WebService7F8A1763",
+         "Name"
+        ]
+       }
+      ]
+     ]
+    },
+    "RoleARN": "arn:aws:iam::515966528039:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService",
+    "ScalableDimension": "ecs:service:DesiredCount",
+    "ServiceNamespace": "ecs"
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-production-compute/WebService/TaskCount/Target/Resource"
+   }
+  },
+  "WebServiceTaskCountTargetWebCpuScaling94DE1699": {
+   "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
+   "Properties": {
+    "PolicyName": "artikagentfactoryproductioncomputeWebServiceTaskCountTargetWebCpuScaling180C5E6E",
+    "PolicyType": "TargetTrackingScaling",
+    "ScalingTargetId": {
+     "Ref": "WebServiceTaskCountTarget578D9A62"
+    },
+    "TargetTrackingScalingPolicyConfiguration": {
+     "PredefinedMetricSpecification": {
+      "PredefinedMetricType": "ECSServiceAverageCPUUtilization"
+     },
+     "TargetValue": 60
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-production-compute/WebService/TaskCount/Target/WebCpuScaling/Resource"
+   }
+  },
+  "Alb16C2F182": {
+   "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+   "Properties": {
+    "LoadBalancerAttributes": [
+     {
+      "Key": "deletion_protection.enabled",
+      "Value": "false"
+     }
+    ],
+    "Name": "artikagentfactory-production-alb",
+    "Scheme": "internet-facing",
+    "SecurityGroups": [
+     {
+      "Fn::ImportValue": "artikagentfactory-production-network:ExportsOutputFnGetAttAlbSecurityGroup86A59E99GroupIdE3A37BC7"
+     }
+    ],
+    "Subnets": [
+     {
+      "Fn::ImportValue": "artikagentfactory-production-network:ExportsOutputRefVpcpublicSubnet1Subnet2BB74ED74EB42ADC"
+     },
+     {
+      "Fn::ImportValue": "artikagentfactory-production-network:ExportsOutputRefVpcpublicSubnet2SubnetE34B022AC8BB6627"
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "Environment",
+      "Value": "production"
+     },
+     {
+      "Key": "Project",
+      "Value": "artikAgentFactory"
+     }
+    ],
+    "Type": "application"
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-production-compute/Alb/Resource"
+   }
+  },
+  "AlbHttpListener00C8B33E": {
+   "Type": "AWS::ElasticLoadBalancingV2::Listener",
+   "Properties": {
+    "DefaultActions": [
+     {
+      "TargetGroupArn": {
+       "Ref": "AlbHttpListenerWebTargetsGroup62465FD4"
+      },
+      "Type": "forward"
+     }
+    ],
+    "LoadBalancerArn": {
+     "Ref": "Alb16C2F182"
+    },
+    "Port": 80,
+    "Protocol": "HTTP"
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-production-compute/Alb/HttpListener/Resource"
+   }
+  },
+  "AlbHttpListenerWebTargetsGroup62465FD4": {
+   "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+   "Properties": {
+    "HealthCheckPath": "/api/health",
+    "Port": 8420,
+    "Protocol": "HTTP",
+    "Tags": [
+     {
+      "Key": "Environment",
+      "Value": "production"
+     },
+     {
+      "Key": "Project",
+      "Value": "artikAgentFactory"
+     }
+    ],
+    "TargetGroupAttributes": [
+     {
+      "Key": "stickiness.enabled",
+      "Value": "false"
+     }
+    ],
+    "TargetType": "ip",
+    "VpcId": {
+     "Fn::ImportValue": "artikagentfactory-production-network:ExportsOutputRefVpc8378EB38272D6E3A"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-production-compute/Alb/HttpListener/WebTargetsGroup/Resource"
+   }
+  },
+  "RunWorkerTaskDef0CC1A398": {
+   "Type": "AWS::ECS::TaskDefinition",
+   "Properties": {
+    "ContainerDefinitions": [
+     {
+      "Environment": [
+       {
+        "Name": "ENVIRONMENT",
+        "Value": "production"
+       },
+       {
+        "Name": "EXECUTION_BACKEND",
+        "Value": "sqs"
+       },
+       {
+        "Name": "SECRETS_BACKEND",
+        "Value": "aws"
+       },
+       {
+        "Name": "SLACK_CHANNEL",
+        "Value": "#artik-agent-notify"
+       },
+       {
+        "Name": "SECRETS_PREFIX",
+        "Value": "artikagentfactory/production"
+       },
+       {
+        "Name": "INITIAL_ADMIN_EMAIL",
+        "Value": "admin@artikagentfactory-production.internal"
+       },
+       {
+        "Name": "INITIAL_ADMIN_USERNAME",
+        "Value": "admin"
+       },
+       {
+        "Name": "RUN_QUEUE_URL",
+        "Value": {
+         "Fn::ImportValue": "artikagentfactory-production-data:ExportsOutputRefAgentRunQueue68043E5349D1D2B4"
+        }
+       },
+       {
+        "Name": "NOTIFY_QUEUE_URL",
+        "Value": {
+         "Fn::ImportValue": "artikagentfactory-production-data:ExportsOutputRefSlackNotifyQueue2DFC99B5E1DF38E5"
+        }
+       },
+       {
+        "Name": "DB_HOST",
+        "Value": {
+         "Fn::ImportValue": "artikagentfactory-production-data:ExportsOutputFnGetAttDatabaseB269D8BBEndpointAddressA4DBD059"
+        }
+       },
+       {
+        "Name": "DB_PORT",
+        "Value": {
+         "Fn::ImportValue": "artikagentfactory-production-data:ExportsOutputFnGetAttDatabaseB269D8BBEndpointPort3ACB3F51"
+        }
+       },
+       {
+        "Name": "DB_NAME",
+        "Value": "artikagentfactory"
+       },
+       {
+        "Name": "WORKER_ROLE",
+        "Value": "run"
+       }
+      ],
+      "Essential": true,
+      "Image": {
+       "Fn::Join": [
+        "",
+        [
+         {
+          "Fn::Select": [
+           4,
+           {
+            "Fn::Split": [
+             ":",
+             {
+              "Fn::ImportValue": "artikagentfactory-registry:ExportsOutputFnGetAttRepository22E53BBDArn3AD4E30B"
+             }
+            ]
+           }
+          ]
+         },
+         ".dkr.ecr.",
+         {
+          "Fn::Select": [
+           3,
+           {
+            "Fn::Split": [
+             ":",
+             {
+              "Fn::ImportValue": "artikagentfactory-registry:ExportsOutputFnGetAttRepository22E53BBDArn3AD4E30B"
+             }
+            ]
+           }
+          ]
+         },
+         ".",
+         {
+          "Ref": "AWS::URLSuffix"
+         },
+         "/",
+         {
+          "Fn::ImportValue": "artikagentfactory-registry:ExportsOutputRefRepository22E53BBD9A9E013B"
+         },
+         ":latest"
+        ]
+       ]
+      },
+      "LogConfiguration": {
+       "LogDriver": "awslogs",
+       "Options": {
+        "awslogs-group": {
+         "Fn::ImportValue": "artikagentfactory-production-data:ExportsOutputRefAppLogGroup7D8CD9527CC48D3E"
+        },
+        "awslogs-stream-prefix": "run-worker",
+        "awslogs-region": "us-west-2"
+       }
+      },
+      "Name": "run_worker",
+      "Secrets": [
+       {
+        "Name": "APP_SECRET",
+        "ValueFrom": {
+         "Fn::ImportValue": "artikagentfactory-production-data:ExportsOutputRefAppSecretSecretF7CED462B3E2650C"
+        }
+       },
+       {
+        "Name": "ANTHROPIC_API_KEY",
+        "ValueFrom": {
+         "Fn::ImportValue": "artikagentfactory-production-data:ExportsOutputRefAnthropicApiKeySecret77C8E53B998DB1DE"
+        }
+       },
+       {
+        "Name": "INITIAL_ADMIN_PASSWORD",
+        "ValueFrom": {
+         "Fn::ImportValue": "artikagentfactory-production-data:ExportsOutputRefInitialAdminPasswordSecret96EFB21A6EDA2E22"
+        }
+       },
+       {
+        "Name": "DB_USERNAME",
+        "ValueFrom": {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::ImportValue": "artikagentfactory-production-data:ExportsOutputRefDbCredentialsSecret4110FA1DC5536844"
+           },
+           ":username::"
+          ]
+         ]
+        }
+       },
+       {
+        "Name": "DB_PASSWORD",
+        "ValueFrom": {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::ImportValue": "artikagentfactory-production-data:ExportsOutputRefDbCredentialsSecret4110FA1DC5536844"
+           },
+           ":password::"
+          ]
+         ]
+        }
+       }
+      ]
+     }
+    ],
+    "Cpu": "512",
+    "ExecutionRoleArn": {
+     "Fn::ImportValue": "artikagentfactory-production-iam:ExportsOutputFnGetAttTaskExecutionRole250D2532Arn61CC7A98"
+    },
+    "Family": "artikagentfactory-production-run-worker",
+    "Memory": "1024",
+    "NetworkMode": "awsvpc",
+    "RequiresCompatibilities": [
+     "FARGATE"
+    ],
+    "Tags": [
+     {
+      "Key": "Environment",
+      "Value": "production"
+     },
+     {
+      "Key": "Project",
+      "Value": "artikAgentFactory"
+     }
+    ],
+    "TaskRoleArn": {
+     "Fn::ImportValue": "artikagentfactory-production-iam:ExportsOutputFnGetAttWorkerTaskRole013F226AArnCC93AE7B"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-production-compute/RunWorkerTaskDef/Resource"
+   }
+  },
+  "RunWorkerServiceE4FB6AAB": {
+   "Type": "AWS::ECS::Service",
+   "Properties": {
+    "Cluster": {
+     "Ref": "ClusterEB0386A7"
+    },
+    "DeploymentConfiguration": {
+     "Alarms": {
+      "AlarmNames": [],
+      "Enable": false,
+      "Rollback": false
+     },
+     "DeploymentCircuitBreaker": {
+      "Enable": true,
+      "Rollback": true
+     },
+     "MaximumPercent": 200,
+     "MinimumHealthyPercent": 100
+    },
+    "DesiredCount": 1,
+    "EnableECSManagedTags": false,
+    "LaunchType": "FARGATE",
+    "NetworkConfiguration": {
+     "AwsvpcConfiguration": {
+      "AssignPublicIp": "DISABLED",
+      "SecurityGroups": [
+       {
+        "Fn::ImportValue": "artikagentfactory-production-network:ExportsOutputFnGetAttEcsWorkerSecurityGroup6B970AC6GroupId30E0C8D8"
+       }
+      ],
+      "Subnets": [
+       {
+        "Fn::ImportValue": "artikagentfactory-production-network:ExportsOutputRefVpcprivateecsSubnet1Subnet80A3EB7DFEA0F1DC"
+       },
+       {
+        "Fn::ImportValue": "artikagentfactory-production-network:ExportsOutputRefVpcprivateecsSubnet2SubnetCA5ECF90A162717E"
+       }
+      ]
+     }
+    },
+    "Tags": [
+     {
+      "Key": "Environment",
+      "Value": "production"
+     },
+     {
+      "Key": "Project",
+      "Value": "artikAgentFactory"
+     }
+    ],
+    "TaskDefinition": {
+     "Ref": "RunWorkerTaskDef0CC1A398"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-production-compute/RunWorkerService/Service"
+   }
+  },
+  "RunWorkerServiceTaskCountTarget109BB3AC": {
+   "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
+   "Properties": {
+    "MaxCapacity": 3,
+    "MinCapacity": 1,
+    "ResourceId": {
+     "Fn::Join": [
+      "",
+      [
+       "service/",
+       {
+        "Ref": "ClusterEB0386A7"
+       },
+       "/",
+       {
+        "Fn::GetAtt": [
+         "RunWorkerServiceE4FB6AAB",
+         "Name"
+        ]
+       }
+      ]
+     ]
+    },
+    "RoleARN": "arn:aws:iam::515966528039:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService",
+    "ScalableDimension": "ecs:service:DesiredCount",
+    "ServiceNamespace": "ecs"
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-production-compute/RunWorkerService/TaskCount/Target/Resource"
+   }
+  },
+  "RunWorkerServiceTaskCountTargetRunWorkerQueueDepthScalingLowerPolicy25B1584A": {
+   "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
+   "Properties": {
+    "PolicyName": "artikagentfactoryproductioncomputeRunWorkerServiceTaskCountTargetRunWorkerQueueDepthScalingLowerPolicy5B95CEA1",
+    "PolicyType": "StepScaling",
+    "ScalingTargetId": {
+     "Ref": "RunWorkerServiceTaskCountTarget109BB3AC"
+    },
+    "StepScalingPolicyConfiguration": {
+     "AdjustmentType": "ChangeInCapacity",
+     "MetricAggregationType": "Maximum",
+     "StepAdjustments": [
+      {
+       "MetricIntervalUpperBound": 0,
+       "ScalingAdjustment": -1
+      }
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-production-compute/RunWorkerService/TaskCount/Target/RunWorkerQueueDepthScaling/LowerPolicy/Resource"
+   }
+  },
+  "RunWorkerServiceTaskCountTargetRunWorkerQueueDepthScalingLowerAlarm91707E0E": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmActions": [
+     {
+      "Ref": "RunWorkerServiceTaskCountTargetRunWorkerQueueDepthScalingLowerPolicy25B1584A"
+     }
+    ],
+    "AlarmDescription": "Lower threshold scaling alarm",
+    "ComparisonOperator": "LessThanOrEqualToThreshold",
+    "Dimensions": [
+     {
+      "Name": "QueueName",
+      "Value": {
+       "Fn::ImportValue": "artikagentfactory-production-data:ExportsOutputFnGetAttAgentRunQueue68043E53QueueNameC2FDE009"
+      }
+     }
+    ],
+    "EvaluationPeriods": 1,
+    "MetricName": "ApproximateNumberOfMessagesVisible",
+    "Namespace": "AWS/SQS",
+    "Period": 60,
+    "Statistic": "Maximum",
+    "Tags": [
+     {
+      "Key": "Environment",
+      "Value": "production"
+     },
+     {
+      "Key": "Project",
+      "Value": "artikAgentFactory"
+     }
+    ],
+    "Threshold": 0
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-production-compute/RunWorkerService/TaskCount/Target/RunWorkerQueueDepthScaling/LowerAlarm/Resource"
+   }
+  },
+  "RunWorkerServiceTaskCountTargetRunWorkerQueueDepthScalingUpperPolicy8CC18583": {
+   "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
+   "Properties": {
+    "PolicyName": "artikagentfactoryproductioncomputeRunWorkerServiceTaskCountTargetRunWorkerQueueDepthScalingUpperPolicyEAC7FA33",
+    "PolicyType": "StepScaling",
+    "ScalingTargetId": {
+     "Ref": "RunWorkerServiceTaskCountTarget109BB3AC"
+    },
+    "StepScalingPolicyConfiguration": {
+     "AdjustmentType": "ChangeInCapacity",
+     "MetricAggregationType": "Maximum",
+     "StepAdjustments": [
+      {
+       "MetricIntervalLowerBound": 0,
+       "ScalingAdjustment": 1
+      }
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-production-compute/RunWorkerService/TaskCount/Target/RunWorkerQueueDepthScaling/UpperPolicy/Resource"
+   }
+  },
+  "RunWorkerServiceTaskCountTargetRunWorkerQueueDepthScalingUpperAlarmB2D18C75": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmActions": [
+     {
+      "Ref": "RunWorkerServiceTaskCountTargetRunWorkerQueueDepthScalingUpperPolicy8CC18583"
+     }
+    ],
+    "AlarmDescription": "Upper threshold scaling alarm",
+    "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+    "Dimensions": [
+     {
+      "Name": "QueueName",
+      "Value": {
+       "Fn::ImportValue": "artikagentfactory-production-data:ExportsOutputFnGetAttAgentRunQueue68043E53QueueNameC2FDE009"
+      }
+     }
+    ],
+    "EvaluationPeriods": 1,
+    "MetricName": "ApproximateNumberOfMessagesVisible",
+    "Namespace": "AWS/SQS",
+    "Period": 60,
+    "Statistic": "Maximum",
+    "Tags": [
+     {
+      "Key": "Environment",
+      "Value": "production"
+     },
+     {
+      "Key": "Project",
+      "Value": "artikAgentFactory"
+     }
+    ],
+    "Threshold": 10
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-production-compute/RunWorkerService/TaskCount/Target/RunWorkerQueueDepthScaling/UpperAlarm/Resource"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/3VRS2/CMAz+LbuHbCvS7qzTdtkBUe6Tm5piGpIqDxCq+t/nNhTKpJ1sfw/bcTKZvS3lyxOc/UJVzUJTKbsigGoEQz8dKi+7XEcf0Il8Z6b0E1wNAbfgmw/ckaFA1gyCv4g1Acigm2FXb4HuRAoH05QWCjSUemyb22hCL6BtNSkYjBCD9awgU/OON6mrMYxNHpEUto6fwoYi+daWm10m9R0oArb/Iis1TO8FavCBlLZQlTzKKOZOmexW9xW/mXsfuXSuh3quI76iuWqmfMan5b+cjW066q3sBS8QqzMEtefRGtxxUIxJ34sNehudwl6sL2FvzfNSvg7/e/BEC8cXpSPKTYq/d3K2Y/wBAAA="
+   },
+   "Metadata": {
+    "aws:cdk:path": "artikagentfactory-production-compute/CDKMetadata/Default"
+   }
+  }
+ },
+ "Outputs": {
+  "ExportsOutputRefClusterEB0386A796A0E3FE": {
+   "Value": {
+    "Ref": "ClusterEB0386A7"
+   },
+   "Export": {
+    "Name": "artikagentfactory-production-compute:ExportsOutputRefClusterEB0386A796A0E3FE"
+   }
+  },
+  "ExportsOutputFnGetAttWebService7F8A1763NameD4F59687": {
+   "Value": {
+    "Fn::GetAtt": [
+     "WebService7F8A1763",
+     "Name"
+    ]
+   },
+   "Export": {
+    "Name": "artikagentfactory-production-compute:ExportsOutputFnGetAttWebService7F8A1763NameD4F59687"
+   }
+  },
+  "ExportsOutputFnGetAttAlb16C2F182DNSNameB67BDABC": {
+   "Value": {
+    "Fn::GetAtt": [
+     "Alb16C2F182",
+     "DNSName"
+    ]
+   },
+   "Export": {
+    "Name": "artikagentfactory-production-compute:ExportsOutputFnGetAttAlb16C2F182DNSNameB67BDABC"
+   }
+  }
+ },
+ "Parameters": {
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}

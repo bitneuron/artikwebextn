@@ -1,0 +1,284 @@
+{
+  "/artikagentfactory-staging-compute": [
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    },
+    {
+      "type": "aws:cdk:stack-tags",
+      "data": [
+        {
+          "key": "Environment",
+          "value": "staging"
+        },
+        {
+          "key": "Project",
+          "value": "artikAgentFactory"
+        }
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-compute/BootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "BootstrapVersion"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-compute/CheckBootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CheckBootstrapVersion"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-compute/Cluster/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ClusterEB0386A7"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-compute/WebTaskDef/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "WebTaskDefDC37DBDB"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-compute/WebService/Service": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "WebService7F8A1763"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-compute/Alb/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "Alb16C2F182"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-compute/RunWorkerTaskDef/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "RunWorkerTaskDef0CC1A398"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-compute/RunWorkerService/Service": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "RunWorkerServiceE4FB6AAB"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-compute/CDKMetadata/Default": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CDKMetadata"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-compute/Exports/Output{\"Ref\":\"ClusterEB0386A7\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefClusterEB0386A796A0E3FE"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-compute/Exports/Output{\"Fn::GetAtt\":[\"WebService7F8A1763\",\"Name\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttWebService7F8A1763NameD4F59687"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-compute/Alb/HttpListener/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "AlbHttpListener00C8B33E"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-compute/WebService/TaskCount/Target/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "WebServiceTaskCountTarget578D9A62"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-compute/Alb/HttpListener/WebTargetsGroup/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "AlbHttpListenerWebTargetsGroup62465FD4"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-compute/RunWorkerService/TaskCount/Target/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "RunWorkerServiceTaskCountTarget109BB3AC"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-compute/WebService/TaskCount/Target/WebCpuScaling/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "WebServiceTaskCountTargetWebCpuScaling94DE1699"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-compute/RunWorkerService/TaskCount/Target/RunWorkerQueueDepthScaling/LowerPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "RunWorkerServiceTaskCountTargetRunWorkerQueueDepthScalingLowerPolicy25B1584A"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-compute/RunWorkerService/TaskCount/Target/RunWorkerQueueDepthScaling/LowerAlarm/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "RunWorkerServiceTaskCountTargetRunWorkerQueueDepthScalingLowerAlarm91707E0E"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-compute/RunWorkerService/TaskCount/Target/RunWorkerQueueDepthScaling/UpperPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "RunWorkerServiceTaskCountTargetRunWorkerQueueDepthScalingUpperPolicy8CC18583"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/artikagentfactory-staging-compute/RunWorkerService/TaskCount/Target/RunWorkerQueueDepthScaling/UpperAlarm/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "RunWorkerServiceTaskCountTargetRunWorkerQueueDepthScalingUpperAlarmB2D18C75"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ]
+}
