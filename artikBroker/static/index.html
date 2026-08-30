@@ -1211,7 +1211,7 @@
       <span style="flex:1"></span>
       <select id="fin-year" onchange="finRender()" style="display:none"><option value="">All years</option></select>
       <button class="ex-btn" onclick="finCopilot()">🤖 Analyze with Artik Copilot</button>
-      <button class="ghost" id="fin-reimport" onclick="finReimport()" title="Re-import the bundled workbook">↻ Re-import</button>
+      <button class="ghost" id="fin-refresh" onclick="finRefresh()" title="Pull the latest Assets &amp; Liabilities values from the database and recompute Net Worth, Cash Flow and the dashboard">↻ Refresh</button>
     </div>
     <div id="fin-out" style="margin-top:12px"><div class="spin">Loading…</div></div>
     <!-- Persistent modal host so Add/Edit dialogs work on every Financial Statements page
@@ -3369,6 +3369,14 @@ function finRender(){
         ${finCard('Highest', finMoney(st.highest))}${finCard('Lowest', finMoney(st.lowest))}${finCard('Average', finMoney(st.average))}
         ${finCard('Debt / Assets', s.debt_to_asset_pct!=null?s.debt_to_asset_pct+'%':'—')}
       </div>
+      ${(()=>{ // periods recorded on one side only — net worth can't be computed for them
+        const u=(d.unpaired||[]).slice(-4);
+        if(!u.length) return '';
+        return `<div class="card" style="border-color:#f59e0b55;margin-bottom:14px"><div class="pf-meta">
+          ⚠ Not in the net-worth timeline yet: ${u.map(x=>`<b>${escapeHtml(x.period)}</b> (${escapeHtml(x.has)} only)`).join(', ')}.
+          Net worth needs both sides of a period — add the missing
+          ${u.some(x=>x.has==='assets')?'liabilities':'assets'} column to extend it.</div></div>`;
+      })()}
       <div class="fin-chart"><div class="up-label" style="margin-bottom:8px">Net Worth Timeline (${(d.points||[]).length} periods)</div>${finLine(d.points||[],'net_worth',null,'Net Worth')}</div>
       ${(s.insights&&s.insights.length)?`<div class="card" style="margin-bottom:14px"><div class="up-label" style="margin-bottom:6px">💡 Insights</div>${s.insights.map(i=>'<div class="pf-meta" style="padding:2px 0">• '+escapeHtml(i)+'</div>').join('')}</div>`:''}
       ${finMatrixTable('nw', {
@@ -3483,6 +3491,22 @@ function finCopilot(){
   if(page==='ccinterest'&&d.rows) ctx+=`Card APRs: `+d.rows.map(r=>`${r.card} ${r.purchase_apr}`).join('; ')+`.\n`;
   ctx+=`\nAnalyze this: key trends, what improved or worsened and why it matters, risks, and 3 concrete recommendations to improve my finances.`;
   if(typeof copilotAsk==='function') copilotAsk(ctx);
+}
+/* Net Worth, Cash Flow, the summary cards and the dashboard are all DERIVED from the
+   Assets/Liabilities records. finLoad caches each page, so any edit to those records has to
+   drop the derived caches or the older numbers linger until a full reload. */
+function finInvalidateDerived(){
+  ['overview','summary','cashflow'].forEach(k=>delete window._finData[k]);
+}
+/* ↻ Refresh — re-read the latest Assets & Liabilities from the DB and recompute everything
+   built on top of them. (The bundled-workbook re-import is a separate, destructive action.) */
+async function finRefresh(){
+  const b=$('#fin-refresh'); const label=b?b.textContent:'';
+  if(b){ b.disabled=true; b.textContent='↻ Refreshing…'; }
+  window._finData={};            // every derived page
+  window._afDataAll={};          // cached Assets/Liabilities searches
+  try{ await finLoad(window._finPage); }
+  finally{ if(b){ b.disabled=false; b.textContent=label||'↻ Refresh'; } }
 }
 async function finReimport(){
   if(!confirm('Re-import the bundled financial statement workbook? This replaces the imported data (the workbook itself is untouched).')) return;
@@ -4043,7 +4067,7 @@ async function afItemRename(item){
     body:JSON.stringify({dataset:afKey()==='assets'?'asset':'liability', old:item, new:nn.trim()})});
   const res=await r.json();
   if(!r.ok){ alert(res.error||'rename failed'); return; }
-  window._afEdit=null; afLoad();
+  window._afEdit=null; finInvalidateDerived(); afLoad();
 }
 async function afItemDelete(item){
   if(!afEditGuard()) return;
@@ -4055,7 +4079,7 @@ async function afItemDelete(item){
     body:JSON.stringify({dataset:afKey()==='assets'?'asset':'liability', item})});
   const res=await r.json();
   if(!r.ok){ alert(res.error||'delete failed'); return; }
-  window._afEdit=null; afLoad();
+  window._afEdit=null; finInvalidateDerived(); afLoad();
 }
 async function afEditSave(){
   const ed=window._afEdit; if(!ed) return;
@@ -4068,7 +4092,8 @@ async function afEditSave(){
   const res=await r.json();
   if(!r.ok){ alert(res.error||'save failed'); return; }
   window._afEdit=null;
-  window._afNote=`<div class="card" style="border-color:#34d39955;margin-bottom:10px">Saved ${res.applied} value${res.applied===1?'':'s'}${res.deleted?` · ${res.deleted} cleared`:''} — totals and charts refreshed.</div>`;
+  window._afNote=`<div class="card" style="border-color:#34d39955;margin-bottom:10px">Saved ${res.applied} value${res.applied===1?'':'s'}${res.deleted?` · ${res.deleted} cleared`:''} — totals, charts and Net Worth refreshed.</div>`;
+  finInvalidateDerived();
   afLoad();
 }
 function afExportMatrixCsv(){

@@ -486,7 +486,12 @@ def net_worth() -> dict:
                  "highest": max(nws), "lowest": min(nws),
                  "average": round(sum(nws) / len(nws), 2),
                  "cagr_pct": round(cagr, 2) if cagr is not None else None}
-    return {"points": pts, "stats": stats}
+    # Periods recorded on only ONE side. Net worth deliberately skips them (an assets-only
+    # column would fake a spike), so the UI can say *why* the timeline stops where it does.
+    unpaired = [{"period": (f"Q{k[1]} {k[0]}" if k[1] else str(k[0])),
+                 "has": "assets" if k in a else "liabilities"}
+                for k in sorted(set(a) ^ set(l), key=lambda k: _period_key(*k))]
+    return {"points": pts, "stats": stats, "unpaired": unpaired}
 
 
 # ── Inline matrix editing (Assets / Liabilities pages) ───────────────────────
