@@ -3709,6 +3709,26 @@ function afToggleCat(i,fromBar){
   afRenderBar();
   if(!fromBar) afLoad();       // card click applies immediately; bar buttons wait for Apply
 }
+/* Real-estate–aware helpers: "Excl. Real Estate" is expressed as "every category except
+   the real-estate ones", so the trend line, cards and table all follow the normal filter path. */
+function afCatsAll(){ const d=afD(); return (d&&d.filters.available_categories)||[]; }
+function afIsReCat(c){ return /real\s*estate/i.test(c||''); }
+function afNonReCats(){ return afCatsAll().filter(c=>!afIsReCat(c)); }
+function afHasRe(){ return afCatsAll().some(afIsReCat); }
+function afIsExRE(){ const f=afS(), nr=afNonReCats();
+  return afHasRe()&&nr.length>0&&!f.items.length&&f.cats.length===nr.length&&nr.every(c=>f.cats.includes(c)); }
+function afExRE(){ const f=afS(); f.items=[]; f.cats=afIsExRE()?[]:afNonReCats(); afRenderBar(); afLoad(); }
+/* Click a composition bar → filter by it (category bars toggle the category, item bars the item). */
+function afCompClick(i){
+  const d=afD(); if(!d) return;
+  const c=(d.composition||[])[i]; if(!c) return;
+  const ap=(d.filters||{}).applied||{};
+  if(!(ap.categories||[]).length&&!(ap.items||[]).length){
+    const idx=afCatsAll().indexOf(c.name); if(idx>=0) afToggleCat(idx,false); return; }
+  const f=afS(), j=f.items.indexOf(c.name);
+  if(j>=0) f.items.splice(j,1); else f.items.push(c.name);
+  afRenderChips(); afLoad();
+}
 function afSuggest(q){
   window._afQ=q;
   clearTimeout(window._afSugT);
@@ -3754,7 +3774,8 @@ function afRenderChips(){
   if(f.ptype==='year'&&f.year) chips.push(chip(escapeHtml(String(f.year)),"afS().ptype='all';afRenderBar();afLoad()"));
   if(f.ptype==='quarter'&&f.year) chips.push(chip(escapeHtml(f.quarter+' '+f.year),"afS().ptype='all';afRenderBar();afLoad()"));
   if(f.ptype==='custom'&&f.from) chips.push(chip(escapeHtml(f.from+' – '+f.to),"afS().ptype='all';afRenderBar();afLoad()"));
-  f.cats.forEach((c,i)=>chips.push(chip(escapeHtml(c),`afDropCat(${i})`)));
+  if(afIsExRE()) chips.push(chip('Excl. Real Estate',"afS().cats=[];afRenderBar();afLoad()"));
+  else f.cats.forEach((c,i)=>chips.push(chip(escapeHtml(c),`afDropCat(${i})`)));
   f.items.forEach((it,i)=>chips.push(chip(escapeHtml(it),`afDropItem(${i})`)));
   el.innerHTML=chips.length?chips.join('')+`<a class="pf-meta" style="cursor:pointer;text-decoration:underline;margin-left:8px" onclick="afReset()">Clear All</a>`:'';
 }
@@ -3799,18 +3820,40 @@ function afRender(){
   </div>`:'';
   // trend
   const fCats=f.categories||[], fItems=f.items||[];
-  const scope=fItems.length?fItems.join(' and '):(fCats.length?fCats.join(' and '):('All '+afCfg().plural));
+  const scope=fItems.length?fItems.join(' and ')
+    :afIsExRE()?('All '+afCfg().plural+' excl. Real Estate')
+    :(fCats.length?fCats.join(' and '):('All '+afCfg().plural));
   $('#af-trend-title').textContent=`${afCfg().noun} Trend · ${scope} · ${d.trend.label}`;
-  $('#af-trend').innerHTML=finMultiLine(d.trend.series||[],afCfg().chart);
+  // Excl.-Real-Estate view: one line (the total of the non-real-estate categories), not one per category.
+  let series=d.trend.series||[];
+  if(afIsExRE()){
+    const tot=series.filter(s0=>!s0.category);
+    if(tot.length) series=tot.map(s0=>({...s0, name:afCfg().total+' excl. Real Estate'}));
+  }
+  $('#af-trend').innerHTML=finMultiLine(series,afCfg().chart);
   // composition
-  const compTitle=fItems.length?('Selected '+afCfg().plural+' Composition'):(fCats.length?(fCats.join(' + ')+' Composition'):'Composition');
+  const compTitle=fItems.length?('Selected '+afCfg().plural+' Composition')
+    :afIsExRE()?('Composition excl. Real Estate')
+    :(fCats.length?(fCats.join(' + ')+' Composition'):'Composition');
   $('#af-comp-title').textContent=`${compTitle} · ${d.summary.period||'—'}`;
-  const maxv=Math.max(...(d.composition||[]).map(c=>c.value),1);
-  $('#af-comp').innerHTML=(d.composition||[]).length?(d.composition||[]).map(c=>`<div class="fin-bar">
-      <span class="lbl" title="${escapeHtml(c.category||c.name)}">${escapeHtml(c.name)}</span>
-      <div class="track"><div class="fill" style="width:${(c.value/maxv*100).toFixed(1)}%"></div></div>
-      <span style="min-width:150px">${finMoney(c.value)} · ${c.pct}%</span></div>`).join('')
-    :'<div class="pf-meta">No data for the selected filters.</div>';
+  const comp=d.composition||[];
+  // Extra composition option: everything except real estate (only on the all-categories view).
+  const byCat=!fCats.length&&!fItems.length;
+  const tot=d.summary.total_assets||0;
+  const exRe=(byCat&&afHasRe())
+    ? {value: tot-comp.filter(c=>afIsReCat(c.name)).reduce((a,c)=>a+c.value,0)} : null;
+  if(exRe) exRe.pct=tot?Math.round(exRe.value/tot*1000)/10:0;
+  const maxv=Math.max(...comp.map(c=>c.value), exRe?exRe.value:0, 1);
+  const bar=(label,value,pct,onclick,title,accent)=>`<div class="fin-bar" style="cursor:pointer" onclick="${onclick}" title="${escapeHtml(title)}">
+      <span class="lbl"${accent?' style="color:var(--acc)"':''}>${escapeHtml(label)}</span>
+      <div class="track"><div class="fill" style="width:${(value/maxv*100).toFixed(1)}%${accent?';background:var(--acc)':''}"></div></div>
+      <span style="min-width:150px${accent?';color:var(--acc)':''}">${finMoney(value)} · ${pct}%</span></div>`;
+  $('#af-comp').innerHTML=comp.length?(
+      comp.map((c,i)=>bar(c.name,c.value,c.pct,`afCompClick(${i})`,
+        `Click to ${byCat?'filter the trend by':'toggle'} ${c.name}`,false)).join('')
+      +(exRe?bar('Excl. Real Estate',exRe.value,exRe.pct,'afExRE()',
+        'Click to chart every category except real estate — liquid '+afCfg().plural.toLowerCase(),true):'')
+    ):'<div class="pf-meta">No data for the selected filters.</div>';
   // table — Matrix (workbook-style: item rows × quarter columns) or flat List
   $('#af-table').innerHTML=(d.rows||[]).length?afTableHtml()
     :(d.messages||[]).length?'' :'<div class="card pf-meta">No ${afCfg().noun.toLowerCase()} records match the selected filters. <a style="cursor:pointer;text-decoration:underline" onclick="afReset()">Reset filters</a></div>';
@@ -3872,10 +3915,18 @@ function afMatrixHtml(){
   const n=v=>v==null?'<span class="muted">—</span>':`<span class="${v<0?'neg':''}">${Math.round(v).toLocaleString()}</span>`;
   const stick1='position:sticky;left:0;background:var(--panel,#161b22);z-index:2';
   const multiCat=new Set(items.map(i=>meta[i])).size>1;
-  let body='', lastCat=null;
+  // Sum a set of items down one period column (null when none of them have a value there).
+  const sumCells=(its,label)=>{ let t=null; its.forEach(i=>{ const v=(cell[i]||{})[label]; if(v!=null) t=(t||0)+v; }); return t; };
+  const isRE=c=>/real\s*estate/i.test(c||'');
+  const subRow=(cat,its)=>`<tr style="border-top:1px solid var(--line)"><td style="${stick1};white-space:nowrap;padding-left:14px"><b style="color:var(--mut)">${escapeHtml(cat||'Other')} subtotal</b></td>`
+    +cols.map(c=>`<td style="text-align:right;white-space:nowrap;color:var(--mut)"><b>${n(sumCells(its,c.label))}</b></td>`).join('')+'</tr>';
+  let body='', lastCat=null, group=[];
   items.forEach(it=>{
-    if(multiCat&&meta[it]!==lastCat){ lastCat=meta[it];
+    if(multiCat&&meta[it]!==lastCat){
+      if(!ed&&group.length) body+=subRow(lastCat,group);
+      lastCat=meta[it]; group=[];
       body+=`<tr><td style="${stick1};color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.4px" colspan="${cols.length+1}">${escapeHtml(lastCat||'Other')}</td></tr>`; }
+    group.push(it);
     const nameCell = ed
       ? `<b>${escapeHtml(it)}</b> <a style="cursor:pointer" title="Rename item" aria-label="Rename ${escapeHtml(it)}" onclick="afItemRename('${escAttr(it)}')">✏️</a>${meta[it]!=='(new)'?` <a style="cursor:pointer" title="Delete item and all its values" aria-label="Delete ${escapeHtml(it)}" onclick="afItemDelete('${escAttr(it)}')">🗑</a>`:''}`
       : `<b>${escapeHtml(it)}</b>`;
@@ -3893,9 +3944,17 @@ function afMatrixHtml(){
           style="width:92px;text-align:right;background:var(--bg);color:var(--txt);border-radius:6px;padding:4px 6px;font-size:12px;border:1px solid ${changed?'#f59e0b':'var(--line)'}"></td>`;
       }).join('')+'</tr>';
   });
-  if(!ed)
+  if(!ed&&multiCat&&group.length) body+=subRow(lastCat,group);
+  if(!ed){
     body+=`<tr style="border-top:2px solid var(--line)"><td style="${stick1}"><b>Total</b></td>`
       +cols.map(c=>`<td style="text-align:right;white-space:nowrap"><b>${n(c.total)}</b></td>`).join('')+'</tr>';
+    // Liquid total — everything except the hard/illiquid real-estate categories.
+    const reItems=Object.keys(cell).filter(i=>isRE(meta[i]));
+    if(reItems.length)
+      body+=`<tr><td style="${stick1};white-space:nowrap" title="Total minus every real-estate item — liquid ${escapeHtml(afCfg().plural.toLowerCase())} only"><b style="color:var(--acc)">Total excl. Real Estate</b></td>`
+        +cols.map(c=>{ const re=sumCells(reItems,c.label); const v=c.total==null?null:c.total-(re||0);
+          return `<td style="text-align:right;white-space:nowrap;color:var(--acc)"><b>${n(v)}</b></td>`; }).join('')+'</tr>';
+  }
   return `<div class="card" style="overflow-x:auto;max-height:560px;overflow-y:auto;padding-top:0">
     <table class="mini" style="width:100%;border-collapse:separate;border-spacing:0">
       <tr style="position:sticky;top:0;background:var(--panel,#161b22);z-index:3">
@@ -4019,9 +4078,22 @@ function afExportMatrixCsv(){
   (d.rows||[]).forEach(r=>{ (cell[r.item]=cell[r.item]||{})[r.period]=r.value; meta[r.item]=r.category; });
   const esc=v=>{ v=String(v??''); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
   const items=Object.keys(cell).sort((a,b)=>(meta[a]||'').localeCompare(meta[b]||'')||a.localeCompare(b));
+  const sumCells=(its,p)=>{ let t=null; its.forEach(i=>{ const v=(cell[i]||{})[p]; if(v!=null) t=(t||0)+v; }); return t; };
+  const isRE=c=>/real\s*estate/i.test(c||'');
   const lines=[[afCfg().noun,'Category',...periods].map(esc).join(',')];
-  items.forEach(it=>lines.push([it, meta[it]||'', ...periods.map(p=>(cell[it]||{})[p]??'')].map(esc).join(',')));
-  lines.push(['Total','',...periods.map(p=>{ const t=(d.timeline||[]).find(x=>x.period===p); return t?t.total:''; })].map(esc).join(','));
+  let lastCat=null, group=[];
+  const pushSub=()=>{ if(group.length) lines.push([`${lastCat||'Other'} subtotal`, lastCat||'', ...periods.map(p=>sumCells(group,p)??'')].map(esc).join(',')); };
+  items.forEach(it=>{
+    if(meta[it]!==lastCat){ pushSub(); lastCat=meta[it]; group=[]; }
+    group.push(it);
+    lines.push([it, meta[it]||'', ...periods.map(p=>(cell[it]||{})[p]??'')].map(esc).join(','));
+  });
+  pushSub();
+  const ptot=p=>{ const t=(d.timeline||[]).find(x=>x.period===p); return t?t.total:null; };
+  lines.push(['Total','',...periods.map(p=>ptot(p)??'')].map(esc).join(','));
+  const reItems=Object.keys(cell).filter(i=>isRE(meta[i]));
+  if(reItems.length) lines.push(['Total excl. Real Estate','',...periods.map(p=>{
+    const t=ptot(p); return t==null?'':t-(sumCells(reItems,p)||0); })].map(esc).join(','));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/csv'}));
   a.download=afCfg().csv+'_matrix.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),5000);
 }
