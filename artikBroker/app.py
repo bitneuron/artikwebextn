@@ -51,7 +51,8 @@ import intelligence_store  # noqa: E402  (persistent intelligence snapshots for 
 import portfolio_store  # noqa: E402  (persistent broker portfolio snapshots)
 import trading_store  # noqa: E402  (Trading Desk: settings/paper/log KV, durable)
 import trading_desk  # noqa: E402  (Trading Desk: universe/recommendation/risk engine)
-import finance  # noqa: E402  (ArtikFinance: personal financial statement import + queries)
+import finance
+import margin_migration  # noqa: E402  (ArtikFinance: personal financial statement import + queries)
 import models as _models  # noqa: E402  (LLM model chains + version fallback)
 import news_runs  # noqa: E402  (run history + results reader)
 import news_data  # noqa: E402  (deletes a config's run history/logs + exclusive-ticker articles)
@@ -1849,6 +1850,29 @@ def _start_trading_scheduler():
 @app.on_event("startup")
 def _finance_startup_import():
     threading.Thread(target=finance.ensure_imported, daemon=True).start()
+
+
+@app.get("/api/finance/margin-migration/status")
+def finance_margin_status():
+    return margin_migration.status()
+
+
+@app.get("/api/finance/margin-migration/dry-run")
+def finance_margin_dry_run():
+    """Read-only reconciliation report for the margin gross-up. Never writes."""
+    return margin_migration.dry_run()
+
+
+@app.post("/api/finance/margin-migration/apply")
+async def finance_margin_apply(request: Request):
+    """Apply the historical gross-up. Requires an explicit confirm — approval workflow."""
+    b = await request.json()
+    return _fin_call(margin_migration.apply, _fin_actor(request), bool(b.get("confirm")))
+
+
+@app.post("/api/finance/margin-migration/rollback")
+async def finance_margin_rollback(request: Request):
+    return _fin_call(margin_migration.rollback, _fin_actor(request))
 
 
 @app.get("/api/finance/assessment")

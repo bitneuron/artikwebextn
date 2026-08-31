@@ -3353,7 +3353,7 @@ function finBars(cats){
     <div class="track"><div class="fill" style="width:${(v/max*100).toFixed(1)}%"></div></div>
     <span style="min-width:90px">${finMoney(v)}</span></div>`).join('') || '<div class="pf-meta">No data.</div>';
 }
-function finCard(l,v,c){ return `<div class="card"><div class="pf-meta">${l}</div><div class="v"${c?` style="color:${c}"`:''}>${v}</div></div>`; }
+function finCard(l,v,c,tip){ return `<div class="card"${tip?` title="${escapeHtml(tip)}"`:''}><div class="pf-meta">${l}</div><div class="v"${c?` style="color:${c}"`:''}>${v}</div></div>`; }
 function finTable(head, rowsHtml){ return `<div class="card" style="overflow-x:auto"><table class="mini" style="width:100%">${head}${rowsHtml}</table></div>`; }
 function finRender(){
   const page=window._finPage, d=window._finData[page], out=$('#fin-out');
@@ -3365,9 +3365,9 @@ function finRender(){
     const st=d.stats||{}, s=window._finData.summary||{};
     const rows=(d.points||[]).map(p=>({_ps:ps(p), period:p.period, assets:p.assets, liabilities:p.liabilities, net_worth:p.net_worth})).reverse();
     out.innerHTML = `<div class="fin-cards">
-        ${finCard('Net Worth', finMoney(st.current), '#34d399')}
-        ${finCard('Total Assets', finMoney(s.total_assets))}
-        ${finCard('Total Liabilities', finMoney(s.total_liabilities), '#f87171')}
+        ${finCard('Net Worth', finMoney(st.current), '#34d399', FIN_TIP.nw)}
+        ${finCard('Total Assets', finMoney(s.total_assets), null, FIN_TIP.assets)}
+        ${finCard('Total Liabilities', finMoney(s.total_liabilities), '#f87171', FIN_TIP.liab)}
         ${finCard('CAGR', st.cagr_pct!=null?st.cagr_pct+'%':'—')}
         ${finCard('Highest', finMoney(st.highest))}${finCard('Lowest', finMoney(st.lowest))}${finCard('Average', finMoney(st.average))}
         ${finCard('Debt / Assets', s.debt_to_asset_pct!=null?s.debt_to_asset_pct+'%':'—')}
@@ -3482,6 +3482,197 @@ function finRender(){
     payRenderPTab(); payLoadAccounts();
   }
 }
+/* ═══════════ Margin gross-up — dry-run report, approval, rollback (admin) ═══════════
+   Brokerage values were stored NET of margin while margin was also a liability, so net worth
+   deducted it twice. The migration adds margin back to the brokerage asset rows; nothing is
+   applied until the reconciliation report is reviewed and explicitly confirmed. */
+async function finMarginPanel(){
+  const host=$('#fin-margin'); if(!host) return;
+  host.innerHTML='<div class="spin">Building reconciliation report…</div>';
+  let st, rep;
+  try{
+    st=await (await fetch('/api/finance/margin-migration/status')).json();
+    rep=await (await fetch('/api/finance/margin-migration/dry-run')).json();
+  }catch(e){ host.innerHTML='<div class="card err">'+escapeHtml(String(e))+'</div>'; return; }
+  const money=v=>v==null?'—':finMoney(v);
+  const applied=st.applied;
+  const rows=rep.rows||[];
+  const byPeriod={}; rows.forEach(r=>{ (byPeriod[r.period]=byPeriod[r.period]||[]).push(r); });
+  const periods=Object.keys(byPeriod);
+  host.innerHTML=`<div class="card" style="border-color:${applied?'#34d39955':'#f59e0b55'}">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <span class="up-label">${applied?'✓':'⚠'} Margin gross-up · ${applied?'applied':'not applied'}</span>
+      <span class="pf-meta">Brokerage rows stored net of margin deduct it twice in net worth. This adds margin back to assets; margin stays a liability and is subtracted once.</span>
+    </div>
+    <div class="pf-meta" style="margin-top:8px">
+      ${periods.length} period${periods.length===1?'':'s'} · ${rows.length} account row${rows.length===1?'':'s'} ·
+      margin added back <b>${money(rep.total_margin_added_back)}</b> ·
+      rows by basis: ${Object.entries(st.rows_by_basis||{}).map(([k,v])=>`${escapeHtml(k)} ${v}`).join(', ')||'—'} ·
+      backup rows ${st.backup_rows}
+    </div>
+    ${(rep.warnings||[]).length?`<div style="margin-top:10px">${rep.warnings.map(w=>`<div class="pf-meta" style="color:#f59e0b">⚠ ${escapeHtml(w)}</div>`).join('')}</div>`:''}
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+      ${applied
+        ? `<button class="ghost" onclick="finMarginRollback()" title="Restore the pre-migration values from the backup">↶ Roll back</button>`
+        : `<button class="ex-btn" onclick="finMarginApply()" ${rows.length?'':'disabled'} title="Apply the gross-up to every historical period">✓ Confirm &amp; apply to ${periods.length} periods</button>`}
+      <button class="ghost" onclick="finMarginCsv()">Export report CSV</button>
+      <button class="ghost" onclick="$('#fin-margin-rows').style.display=$('#fin-margin-rows').style.display==='none'?'':'none'">Show/hide report</button>
+    </div>
+    <div id="fin-margin-rows" style="display:none;overflow-x:auto;max-height:420px;overflow-y:auto;margin-top:12px">
+      <table class="mini" style="width:100%;border-collapse:separate;border-spacing:0">
+        <tr style="position:sticky;top:0;background:var(--panel,#161b22)">
+          <th style="text-align:left">Period</th><th style="text-align:left">Account</th>
+          <th style="text-align:right" title="${finTip('net')}">Original net</th>
+          <th style="text-align:right" title="${finTip('margin')}">Margin added back</th>
+          <th style="text-align:right" title="${finTip('gross')}">Corrected gross</th>
+          <th style="text-align:right">Original assets</th><th style="text-align:right">Corrected assets</th>
+          <th style="text-align:right">Liabilities</th>
+          <th style="text-align:right">Original NW</th><th style="text-align:right">Corrected NW</th>
+          <th style="text-align:left">Mapping</th></tr>
+        ${rows.map(r=>`<tr>
+          <td>${escapeHtml(r.period)}</td><td>${escapeHtml(r.account)}${r.new_row?' <span style="color:#f59e0b" title="new reconciliation row">•</span>':''}</td>
+          <td style="text-align:right">${money(r.original_net)}</td>
+          <td style="text-align:right;color:#f59e0b">${money(r.margin_added_back)}</td>
+          <td style="text-align:right"><b>${money(r.corrected_gross)}</b></td>
+          <td style="text-align:right">${money(r.original_total_assets)}</td>
+          <td style="text-align:right">${money(r.corrected_total_assets)}</td>
+          <td style="text-align:right">${money(r.total_liabilities)}</td>
+          <td style="text-align:right">${money(r.original_net_worth)}</td>
+          <td style="text-align:right;color:#34d399"><b>${money(r.corrected_net_worth)}</b></td>
+          <td class="pf-meta">${escapeHtml(r.mapping_method||'')}</td></tr>`).join('')}
+      </table></div></div>`;
+  window._finMarginRep=rep;
+}
+async function finMarginApply(){
+  const rep=window._finMarginRep||{};
+  if(!confirm(`Apply the margin gross-up to ${rep.periods} historical periods?\n\n`
+    +`${finMoney(rep.total_margin_added_back)} of margin debt will be added back to brokerage ASSET rows. `
+    +`Margin stays on the liability side and is deducted once.\n\n`
+    +`Every changed row is backed up first and this can be rolled back.`)) return;
+  const r=await fetch('/api/finance/margin-migration/apply',{method:'POST',
+    headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm:true})});
+  const d=await r.json();
+  if(!r.ok||d.error){ alert(d.error||'migration failed'); return; }
+  alert(`Applied: ${d.rows_updated} rows updated, ${d.rows_created} reconciliation rows created.\n`
+    +`${finMoney(d.margin_added_back)} of margin added back to assets.`);
+  finInvalidateDerived(); window._afDataAll={}; finMarginPanel(); finLoad(window._finPage);
+}
+async function finMarginRollback(){
+  if(!confirm('Roll the margin gross-up back to the pre-migration values? Brokerage assets return to net-of-margin.')) return;
+  const r=await fetch('/api/finance/margin-migration/rollback',{method:'POST',
+    headers:{'Content-Type':'application/json'},body:'{}'});
+  const d=await r.json();
+  if(!r.ok||d.error){ alert(d.error||'rollback failed'); return; }
+  alert(`Rolled back: ${d.restored} rows restored, ${d.removed} rows removed.`);
+  finInvalidateDerived(); window._afDataAll={}; finMarginPanel(); finLoad(window._finPage);
+}
+function finMarginCsv(){
+  const rep=window._finMarginRep; if(!rep) return;
+  const cols=['period','account','original_net','margin_added_back','corrected_gross',
+    'original_total_assets','corrected_total_assets','total_liabilities','original_net_worth',
+    'corrected_net_worth','mapping_method'];
+  const esc=v=>{ v=String(v??''); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
+  const lines=[cols.join(',')].concat((rep.rows||[]).map(r=>cols.map(c=>esc(r[c])).join(',')));
+  if((rep.warnings||[]).length) lines.push('', 'WARNINGS'); (rep.warnings||[]).forEach(w=>lines.push(esc(w)));
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/csv'}));
+  a.download='margin_gross_up_reconciliation.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+
+/* ═══════════ Brokerage account entry — explicit value basis ═══════════
+   Gross and net are never ambiguous: the user picks which one they are entering and the other
+   is computed. Gross goes to the asset row, margin to the liability row — stored once each. */
+function finBrokerageForm(item, year, quarter){
+  window._bkForm={item:item||'', year:year||new Date().getFullYear(), quarter:quarter||1,
+                  basis:'gross', gross:'', cash:'', margin:'', net:''};
+  payModal(finBrokerageFormHtml());
+}
+function finBkSet(k,v){ window._bkForm[k]=v; const h=$('#bk-calc'); if(h) h.innerHTML=finBkCalcHtml(); }
+function finBkNum(v){ const n=parseFloat(String(v).replace(/[$,\s]/g,'')); return isNaN(n)?null:n; }
+function finBkCalc(){
+  const f=window._bkForm;
+  const margin=finBkNum(f.margin)||0, cash=finBkNum(f.cash)||0;
+  let gross=finBkNum(f.gross), net=finBkNum(f.net);
+  if(f.basis==='gross'){ gross=(gross||0)+cash; net=gross-margin; }
+  else { net=(net||0); gross=net+margin; }
+  return {gross, net, margin, cash};
+}
+function finBkCalcHtml(){
+  const f=window._bkForm, c=finBkCalc();
+  const reported=finBkNum(f.basis==='gross'?f.net:f.gross);
+  const expected=f.basis==='gross'?c.net:c.gross;
+  const tol=Math.max(50, Math.abs(expected)*0.005);       // 0.5% or $50 — interest, unsettled trades, drift
+  const diff=reported==null?null:reported-expected;
+  return `<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:4px">
+      <div><div class="pf-meta" title="${finTip('gross')}">Gross Brokerage Assets</div><b>${finMoney(c.gross)}</b></div>
+      <div><div class="pf-meta" title="${finTip('margin')}">Margin Debt</div><b style="color:#f87171">${finMoney(c.margin)}</b></div>
+      <div><div class="pf-meta" title="${finTip('net')}">Net Account Value</div><b>${finMoney(c.net)}</b></div>
+    </div>
+    ${diff!=null&&Math.abs(diff)>tol?`<div class="card" style="border-color:#f59e0b55;margin-top:10px"><div class="pf-meta" style="color:#f59e0b">
+      ⚠ Does not reconcile by ${finMoney(Math.abs(diff))} (tolerance ${finMoney(tol)}).
+      Expected ${f.basis==='gross'?'net':'gross'} ${finMoney(expected)}, you entered ${finMoney(reported)}.
+      Common causes: accrued margin interest, unsettled trades, pending transfers, options or short positions,
+      cash on hold, or the screenshots being taken at different times. Your entries are kept as typed — nothing is overwritten.
+    </div></div>`:(diff!=null?`<div class="pf-meta" style="color:#34d399;margin-top:8px">✓ Reconciles within tolerance (${finMoney(Math.abs(diff))} of ${finMoney(tol)}).</div>`:'')}
+    <div class="pf-meta" style="margin-top:8px;font-size:11px">Gross brokerage assets are saved to the Assets page; margin debt is saved once to Liabilities and is not stored anywhere else.</div>`;
+}
+function finBrokerageFormHtml(){
+  const f=window._bkForm;
+  const S='background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px;width:150px';
+  const yrs=[]; for(let y=new Date().getFullYear()+1; y>=2015; y--) yrs.push(y);
+  return `<div class="up-label" style="margin-bottom:10px">Brokerage Account Entry</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+      <label class="pf-meta">Account<br><input id="bk-item" value="${escAttr(f.item)}" style="${S}" oninput="finBkSet('item',this.value)"></label>
+      <label class="pf-meta">Year<br><select style="${S}" onchange="finBkSet('year',parseInt(this.value))">${yrs.map(y=>`<option${y===f.year?' selected':''}>${y}</option>`).join('')}</select></label>
+      <label class="pf-meta">Quarter<br><select style="${S}" onchange="finBkSet('quarter',parseInt(this.value.replace('Q','')))">${[1,2,3,4].map(q=>`<option${q===f.quarter?' selected':''}>Q${q}</option>`).join('')}</select></label>
+    </div>
+    <div class="pf-meta" style="margin:12px 0 6px">Value basis — which figure are you entering?</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="ghost" style="${f.basis==='gross'?'background:var(--acc);color:#fff;border-color:var(--acc)':''}" onclick="finBkSet('basis','gross');payModal(finBrokerageFormHtml())" title="${finTip('gross')}">Gross Market Value</button>
+      <button class="ghost" style="${f.basis==='net'?'background:var(--acc);color:#fff;border-color:var(--acc)':''}" onclick="finBkSet('basis','net');payModal(finBrokerageFormHtml())" title="${finTip('net')}">Net Account Value</button>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
+      ${f.basis==='gross'
+        ? `<label class="pf-meta" title="${finTip('gross')}">Gross Market Value of securities<br><input value="${escAttr(f.gross)}" inputmode="decimal" style="${S}" oninput="finBkSet('gross',this.value)"></label>
+           <label class="pf-meta">Positive cash &amp; cash investments<br><input value="${escAttr(f.cash)}" inputmode="decimal" style="${S}" oninput="finBkSet('cash',this.value)"></label>
+           <label class="pf-meta" title="${finTip('net')}">Net Account Value (reported, optional)<br><input value="${escAttr(f.net)}" inputmode="decimal" style="${S}" oninput="finBkSet('net',this.value)"></label>`
+        : `<label class="pf-meta" title="${finTip('net')}">Net Account Value<br><input value="${escAttr(f.net)}" inputmode="decimal" style="${S}" oninput="finBkSet('net',this.value)"></label>
+           <label class="pf-meta" title="${finTip('gross')}">Gross Market Value (reported, optional)<br><input value="${escAttr(f.gross)}" inputmode="decimal" style="${S}" oninput="finBkSet('gross',this.value)"></label>`}
+      <label class="pf-meta" title="${finTip('margin')}">Margin Debt<br><input value="${escAttr(f.margin)}" inputmode="decimal" style="${S}" oninput="finBkSet('margin',this.value)"></label>
+    </div>
+    <div id="bk-calc">${finBkCalcHtml()}</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <button class="ghost" onclick="payModalClose()">Cancel</button>
+      <button class="ex-btn" onclick="finBrokerageSave()">Save</button>
+    </div>`;
+}
+async function finBrokerageSave(){
+  const f=window._bkForm, c=finBkCalc();
+  const item=(f.item||'').trim();
+  if(!item){ alert('Account name is required.'); return; }
+  const r1=await fetch('/api/finance/records/batch',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({dataset:'asset',changes:[{item, year:f.year, quarter:f.quarter, value:c.gross}]})});
+  const d1=await r1.json(); if(!r1.ok||d1.error){ alert(d1.error||'save failed'); return; }
+  if(c.margin){
+    const r2=await fetch('/api/finance/records/batch',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({dataset:'liability',changes:[{item, year:f.year, quarter:f.quarter, value:c.margin}]})});
+    const d2=await r2.json(); if(!r2.ok||d2.error){ alert(d2.error||'margin save failed'); return; }
+  }
+  payModalClose(); finInvalidateDerived(); window._afDataAll={}; finLoad(window._finPage);
+}
+
+/* ═══════════ Balance-sheet vocabulary ═══════════
+   One definition of every term, used by every label and tooltip so the pages cannot drift.
+   Assets are GROSS (before margin); margin is a liability and is deducted exactly once. */
+const FIN_TIP = {
+  gross: 'Gross brokerage assets include securities and positive cash before subtracting margin debt. Margin debt is reported separately under liabilities and deducted once when calculating net worth.',
+  net:   'Net account value equals gross brokerage assets minus margin debt. It is shown for reconciliation and is not added to total assets when gross brokerage assets are used.',
+  margin:'Outstanding brokerage borrowing. This amount is included once under liabilities.',
+  assets:'Total Assets — gross market value of everything owned, before any debt.',
+  liab:  'Total Liabilities — every debt, including margin, mortgages, credit cards and loans.',
+  nw:    'Net Worth = Total Assets − Total Liabilities. Each liability is subtracted exactly once.',
+};
+const finTip = k => escapeHtml(FIN_TIP[k] || '');
+
 /* ═══════════ Assessment — analyst read of assets vs liabilities (Net Worth page) ═══════════
    Every figure is computed server-side from the Assets/Liabilities records (see
    finance.assessment); nothing here is estimated. "Ask Artik Copilot" hands the same numbers
@@ -3495,7 +3686,7 @@ function finAssessmentHtml(){
   const tone={warn:'#f59e0b', good:'#34d399', info:'var(--acc)'};
   const icon={warn:'⚠', good:'✓', info:'•'};
   const pctOr=v=>v==null?'—':v+'%';
-  const stat=(label,val,hint)=>`<div class="card" style="padding:10px 12px">
+  const stat=(label,val,hint,tip)=>`<div class="card" style="padding:10px 12px"${tip?` title="${finTip(tip)}"`:''}>
       <div class="pf-meta">${escapeHtml(label)}</div>
       <div style="font-size:19px;font-weight:700;margin:2px 0">${val}</div>
       <div class="pf-meta" style="font-size:11px">${escapeHtml(hint||'')}</div></div>`;
@@ -3508,7 +3699,7 @@ function finAssessmentHtml(){
       <button class="ex-btn" onclick="finAssessCopilot()" title="Ask Artik Copilot about this assessment">🤖 Ask Artik Copilot</button>
     </div>
     <div class="fin-cards" style="margin-bottom:12px">
-      ${stat('Net Worth', finMoney(m.net_worth), `${finMoney(m.assets)} owned − ${finMoney(m.liabilities)} owed`)}
+      ${stat('Net Worth', finMoney(m.net_worth), `${finMoney(m.assets)} owned − ${finMoney(m.liabilities)} owed`, 'nw')}
       ${stat('Debt / Assets', pctOr(m.debt_to_assets_pct), 'lower is safer')}
       ${stat('Liquid vs Debt', pctOr(m.liquid_to_debt_pct), `${finMoney(m.liquid_assets)} outside property`)}
       ${stat('Property Share', pctOr(m.real_estate_share_pct), `${finMoney(m.real_estate)} in real estate`)}
@@ -3742,6 +3933,7 @@ function afInit(){
   const ys=$('#fin-year'); if(ys) ys.style.display='none';
   if(location.hash.startsWith('#'+afCfg().hash)) afHashRead();
   $('#fin-out').innerHTML=`
+    ${afKey()==='assets'?'<div id="fin-margin" style="margin-bottom:10px"></div>':''}
     <div class="card" id="af-bar" style="margin-bottom:10px"></div>
     <div id="af-chips" style="margin-bottom:10px"></div>
     <div id="af-msg"></div>
@@ -3752,6 +3944,7 @@ function afInit(){
     <div id="pay-modal"></div>`;
   window._afEdit=null;                        // page switch drops any unsaved edit session
   afRenderBar(); afLoad();
+  if(afKey()==='assets' && window._isAdmin!==false) finMarginPanel();
 }
 function afRenderBar(){
   const el=$('#af-bar'); if(!el) return;
@@ -3784,6 +3977,7 @@ function afRenderBar(){
       </span>
       <button class="ex-btn" id="af-apply" onclick="afApply()">Apply Search</button>
       <button class="ghost" onclick="afReset()">Reset</button>
+      ${afKey()==='assets'?`<button class="ghost" onclick="finBrokerageForm()" title="${finTip('gross')}">＋ Brokerage account</button>`:''}
     </div>`;
 }
 function afToggleCat(i,fromBar){
