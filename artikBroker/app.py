@@ -1851,6 +1851,12 @@ def _finance_startup_import():
     threading.Thread(target=finance.ensure_imported, daemon=True).start()
 
 
+@app.get("/api/finance/assessment")
+def finance_assessment():
+    """Analyst-style balance-sheet assessment (computed ratios + rule-based findings)."""
+    return finance.assessment()
+
+
 @app.get("/api/finance/summary")
 def finance_summary():
     return finance.summary()

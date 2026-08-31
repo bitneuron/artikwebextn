@@ -3198,6 +3198,9 @@ async function finLoad(page){
       if(page==='overview' && !window._finData.summary){
         try{ window._finData.summary=await (await fetch('/api/finance/summary')).json(); }catch(e){}
       }
+      if(page==='overview' && !window._finData.assessment){
+        try{ window._finData.assessment=await (await fetch('/api/finance/assessment')).json(); }catch(e){}
+      }
     }
     finYears(page); finRender();
   }catch(e){ out.innerHTML='<div class="card err">'+escapeHtml(String(e))+'</div>'; }
@@ -3392,7 +3395,8 @@ function finRender(){
           {key:'assets', label:'Assets', money:1},
           {key:'liabilities', label:'Liabilities', money:1},
           {key:'net_worth', label:'Net Worth', money:1, render:r=>`<b class="${r.net_worth>=0?'pos':'neg'}">${finMoney(r.net_worth)}</b>`},
-        ], listRows:rows})}`;
+        ], listRows:rows})}
+      ${finAssessmentHtml()}`;
   } else if(page==='cashflow'){
     // Cashflow metrics are independent lines (Asset, Liability w/wo house, Totals) — never summed.
     const inYr=p=>!yr||p.includes(String(yr));
@@ -3478,6 +3482,63 @@ function finRender(){
     payRenderPTab(); payLoadAccounts();
   }
 }
+/* ═══════════ Assessment — analyst read of assets vs liabilities (Net Worth page) ═══════════
+   Every figure is computed server-side from the Assets/Liabilities records (see
+   finance.assessment); nothing here is estimated. "Ask Artik Copilot" hands the same numbers
+   to the copilot so follow-up questions are answered against this exact balance sheet. */
+function finAssessmentHtml(){
+  const a=window._finData.assessment;
+  if(!a) return '';
+  if(!a.period) return `<div class="card" style="margin-top:14px"><div class="up-label">🧭 Assessment</div>
+    <div class="pf-meta" style="margin-top:6px">${escapeHtml((a.messages||[])[0]||'Not enough data yet.')}</div></div>`;
+  const m=a.metrics||{};
+  const tone={warn:'#f59e0b', good:'#34d399', info:'var(--acc)'};
+  const icon={warn:'⚠', good:'✓', info:'•'};
+  const pctOr=v=>v==null?'—':v+'%';
+  const stat=(label,val,hint)=>`<div class="card" style="padding:10px 12px">
+      <div class="pf-meta">${escapeHtml(label)}</div>
+      <div style="font-size:19px;font-weight:700;margin:2px 0">${val}</div>
+      <div class="pf-meta" style="font-size:11px">${escapeHtml(hint||'')}</div></div>`;
+  const delta=v=>v==null?'—':`<span class="${v>=0?'pos':'neg'}">${v>=0?'+':'−'}${finMoney(Math.abs(v)).replace('$','$')}</span>`;
+  return `<div class="fin-chart" style="margin-top:14px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+      <span class="up-label">🧭 Assessment · ${escapeHtml(a.period)}</span>
+      <span class="pf-meta">assets vs liabilities, computed from your records</span>
+      <span style="flex:1"></span>
+      <button class="ex-btn" onclick="finAssessCopilot()" title="Ask Artik Copilot about this assessment">🤖 Ask Artik Copilot</button>
+    </div>
+    <div class="fin-cards" style="margin-bottom:12px">
+      ${stat('Net Worth', finMoney(m.net_worth), `${finMoney(m.assets)} owned − ${finMoney(m.liabilities)} owed`)}
+      ${stat('Debt / Assets', pctOr(m.debt_to_assets_pct), 'lower is safer')}
+      ${stat('Liquid vs Debt', pctOr(m.liquid_to_debt_pct), `${finMoney(m.liquid_assets)} outside property`)}
+      ${stat('Property Share', pctOr(m.real_estate_share_pct), `${finMoney(m.real_estate)} in real estate`)}
+      ${stat('Home Equity', pctOr(m.equity_in_home_pct), `${finMoney(m.mortgage)} mortgage`)}
+      ${stat('Margin / Liquid', pctOr(m.margin_to_liquid_pct), `${finMoney(m.margin)} callable`)}
+      ${stat('Since '+escapeHtml(m.prev_period||'—'), delta(m.nw_change_qoq), 'net-worth change')}
+      ${stat('Vs '+escapeHtml(m.yr_ago_period||'—'), delta(m.nw_change_yoy), 'year over year')}
+    </div>
+    ${(a.findings||[]).map(f=>`<div style="display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--line)">
+        <span style="color:${tone[f.severity]||'var(--mut)'};font-weight:700">${icon[f.severity]||'•'}</span>
+        <span><b>${escapeHtml(f.headline)}</b><div class="pf-meta" style="margin-top:2px">${escapeHtml(f.detail)}</div></span>
+      </div>`).join('')}
+    <div class="pf-meta" style="margin-top:10px;font-size:11px">Ratios and thresholds are conventional planning rules of thumb applied to your recorded balances — not personalised financial advice.</div>
+  </div>`;
+}
+function finAssessCopilot(){
+  const a=window._finData.assessment; if(!a||!a.period) return;
+  const m=a.metrics||{}, c=a.composition||{};
+  let ctx=`Here is my personal balance-sheet assessment as of ${a.period} from ArtikFinance. Every figure is computed from my own records.\n\n`;
+  ctx+=`TOTALS: assets ${finMoney(m.assets)}, liabilities ${finMoney(m.liabilities)}, net worth ${finMoney(m.net_worth)}.\n`;
+  ctx+=`ASSET SIDE: real estate ${finMoney(m.real_estate)}, liquid (non-property) ${finMoney(m.liquid_assets)}, retirement ${finMoney(m.retirement)}, cash ${finMoney(m.cash)}.\n`;
+  ctx+=`DEBT SIDE: mortgage ${finMoney(m.mortgage)}, margin ${finMoney(m.margin)}, credit cards ${finMoney(m.credit_cards)}, other ${finMoney(m.other_debt)}.\n`;
+  ctx+=`RATIOS: debt/assets ${m.debt_to_assets_pct}%, liquid/debt ${m.liquid_to_debt_pct}%, property share ${m.real_estate_share_pct}%, home equity ${m.equity_in_home_pct}%, margin/liquid ${m.margin_to_liquid_pct}%, cash share ${m.cash_share_pct}%.\n`;
+  ctx+=`MOVES: net worth ${m.nw_change_qoq>=0?'up':'down'} ${finMoney(Math.abs(m.nw_change_qoq||0))} since ${m.prev_period}, ${m.nw_change_yoy>=0?'up':'down'} ${finMoney(Math.abs(m.nw_change_yoy||0))} vs ${m.yr_ago_period}; long-run CAGR ${m.cagr_pct}%.\n`;
+  ctx+=`ASSET CATEGORIES: `+Object.entries(c.assets||{}).map(([k,v])=>`${k} ${finMoney(v)}`).join(', ')+`.\n`;
+  ctx+=`LIABILITY CATEGORIES: `+Object.entries(c.liabilities||{}).map(([k,v])=>`${k} ${finMoney(v)}`).join(', ')+`.\n`;
+  ctx+=`\nFINDINGS FLAGGED:\n`+(a.findings||[]).map(f=>`- [${f.severity}] ${f.headline} — ${f.detail}`).join('\n');
+  ctx+=`\n\nAct as my financial analyst on this balance sheet. Explain what stands out, what the biggest risk is, and answer my follow-up questions using these numbers. Ask me for anything you need that isn't here.`;
+  if(typeof copilotAsk==='function') copilotAsk(ctx);
+}
 function finCopilot(){
   const page=window._finPage, d=window._finData[page]||{}, s=window._finData.summary||{};
   if(page==='apps'){ payCopilot('portfolio'); return; }   // whole payment-portfolio analysis
@@ -3496,7 +3557,7 @@ function finCopilot(){
    Assets/Liabilities records. finLoad caches each page, so any edit to those records has to
    drop the derived caches or the older numbers linger until a full reload. */
 function finInvalidateDerived(){
-  ['overview','summary','cashflow'].forEach(k=>delete window._finData[k]);
+  ['overview','summary','cashflow','assessment'].forEach(k=>delete window._finData[k]);
 }
 /* ↻ Refresh — re-read the latest Assets & Liabilities from the DB and recompute everything
    built on top of them. (The bundled-workbook re-import is a separate, destructive action.) */

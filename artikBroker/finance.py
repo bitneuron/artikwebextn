@@ -588,34 +588,67 @@ def record_item_delete(dataset: str, item: str, actor: str = "") -> dict:
     return {"ok": True, "deleted": n}
 
 
-def cashflow_series() -> dict:
-    """Cashflow sheet = independent summary metrics per period (Asset, Liability with/without
-    house, Totals). They are separate lines — NEVER summed across rows. Repeated-header
-    artifacts and identical '#N' duplicate rows are dropped."""
+# Cashflow metrics are DERIVED from the Assets/Liabilities records (they used to be read from
+# the workbook's own 'cashflow' sheet, which went stale the moment a quarter was added by hand).
+# Semantics reproduced from that sheet and verified against it period by period:
+#   Asset                    = assets excluding Real Estate (the liquid side)
+#   Liability with no house  = Credit Card + Property Tax + Loan + Other Debt
+#                              (i.e. every debt except the Mortgage and Margin)
+#   Liability (with house)   = the above + Mortgage
+#   Total with no house      = Asset - Liability with no house
+#   Total                    = Asset - Liability (with house)
+CF_NO_HOUSE_CATS = {"Credit Card", "Property Tax", "Loan", "Other Debt"}
+CF_ITEMS = ["Asset", "Liability (with house)", "Liability with no house",
+            "Total with no house", "Total"]
+
+
+def _cat_totals(dataset: str) -> dict:
+    """{(year, quarter): {category: total}} over real (non-aggregate) rows."""
+    out: dict = {}
+    with _conn() as c:
+        for r in c.execute(
+                "SELECT year, quarter, category, SUM(value) AS v FROM financial_records "
+                "WHERE dataset=? AND is_total=0 GROUP BY year, quarter, category", (dataset,)):
+            out.setdefault((r["year"], r["quarter"]), {})[r["category"] or "Other"] = r["v"] or 0
+    return out
+
+
+def cashflow_metrics() -> dict:
+    """{(year, quarter): {metric: value|None}} — None where that side has no data."""
     init()
-    metrics: dict[str, dict] = {}
-    for r in records("cashflow"):
-        if r["item"].strip().lower() == "cashflow":     # repeated header parsed as data (legacy imports)
-            continue
-        metrics.setdefault(r["item"], {})[(r["year"], r["quarter"])] = r["value"]
-    for name in [n for n in list(metrics) if re.search(r" #\d+$", n)]:
-        base = re.sub(r" #\d+$", "", name)
-        if base in metrics and metrics[base] == metrics[name]:
-            del metrics[name]
+    A, L = _cat_totals("asset"), _cat_totals("liability")
+    out: dict = {}
+    for p in set(A) | set(L):
+        a, l = A.get(p), L.get(p)
+        liquid = sum(v for k, v in a.items() if "real estate" not in k.lower()) if a else None
+        noh = sum(v for k, v in l.items() if k in CF_NO_HOUSE_CATS) if l else None
+        mort = sum(v for k, v in l.items() if k.lower() == "mortgage") if l else None
+        both = liquid is not None and noh is not None
+        out[p] = {
+            "Asset": round(liquid, 2) if liquid is not None else None,
+            "Liability with no house": round(noh, 2) if noh is not None else None,
+            "Liability (with house)": round(noh + mort, 2) if noh is not None else None,
+            "Total with no house": round(liquid - noh, 2) if both else None,
+            "Total": round(liquid - (noh + mort), 2) if both else None,
+        }
+    return out
+
+
+def cashflow_series() -> dict:
+    """Cashflow page = independent summary metrics per period (Asset, Liability with/without
+    house, Totals). They are separate lines — NEVER summed across rows. Derived from the
+    Assets/Liabilities records, so adding a quarter there extends this automatically."""
+    metrics = cashflow_metrics()
     pk = lambda p: p[0] + ((p[1] or 4) / 10.0)          # noqa: E731
     label = lambda p: (f"Q{p[1]} {p[0]}" if p[1] else str(p[0]))  # noqa: E731
-    periods = sorted({p for v in metrics.values() for p in v}, key=pk)
-
-    def okey(n: str):
-        ln = n.lower()
-        return (0 if ln == "asset" else 2 if ln == "total" else 1, n)
-    names = sorted(metrics, key=okey)
+    periods = sorted(metrics, key=pk)
     series = [{"name": n, "category": None,
-               "points": [{"period": label(p), "value": metrics[n].get(p)} for p in periods]}
-              for n in names]
-    rows = [{"item": n, "period": label(p), "year": p[0], "quarter": p[1], "value": metrics[n][p]}
-            for n in names for p in periods if metrics[n].get(p) is not None]
-    return {"periods": [label(p) for p in periods], "items": names, "series": series, "rows": rows}
+               "points": [{"period": label(p), "value": metrics[p].get(n)} for p in periods]}
+              for n in CF_ITEMS]
+    rows = [{"item": n, "period": label(p), "year": p[0], "quarter": p[1], "value": metrics[p][n]}
+            for n in CF_ITEMS for p in periods if metrics[p].get(n) is not None]
+    return {"periods": [label(p) for p in periods], "items": CF_ITEMS,
+            "series": series, "rows": rows, "derived": True}
 
 
 def assets_search(params: dict, dataset: str = "asset") -> dict:
@@ -1813,6 +1846,130 @@ def copilot_context(focus_page: str | None = None) -> str:
         return "\n".join(lines)[:7000]
     except Exception as e:  # noqa: BLE001
         return f"(financial statement context unavailable: {e})"
+
+
+def assessment() -> dict:
+    """Analyst-style read of the balance sheet: computed ratios, period-over-period moves, and
+    rule-based findings comparing what is owned against what is owed. Every number here is
+    derived from the Assets/Liabilities records — nothing is estimated or modelled."""
+    init()
+    a, l = latest_breakdown("asset"), latest_breakdown("liability")
+    nw = net_worth()
+    pts = nw["points"]
+    if not pts:
+        return {"period": None, "metrics": {}, "findings": [],
+                "messages": ["Net worth needs both an asset and a liability column for the same "
+                             "period before an assessment can be produced."]}
+    cur = pts[-1]
+    prev = pts[-2] if len(pts) > 1 else None
+    yr_ago = next((p for p in reversed(pts[:-1])
+                   if _period_key(p["year"], p["quarter"]) <= _period_key(cur["year"], cur["quarter"]) - 1), None)
+
+    acats, lcats = a["categories"], l["categories"]
+    assets, debts = cur["assets"], cur["liabilities"]
+    real_estate = sum(v for k, v in acats.items() if "real estate" in k.lower())
+    liquid = assets - real_estate
+    mortgage = sum(v for k, v in lcats.items() if k.lower() == "mortgage")
+    margin = sum(v for k, v in lcats.items() if k.lower() == "margin")
+    cards = sum(v for k, v in lcats.items() if "credit card" in k.lower())
+    other_debt = debts - mortgage - margin - cards
+    cash = acats.get("Cash", 0)
+    retirement = sum(v for k, v in acats.items() if k in ("401K", "529"))
+
+    pct = lambda n, d: round(n / d * 100, 1) if d else None      # noqa: E731
+    chg = lambda k: (round(cur[k] - prev[k], 2) if prev else None)  # noqa: E731
+    metrics = {
+        "assets": assets, "liabilities": debts, "net_worth": cur["net_worth"],
+        "real_estate": real_estate, "liquid_assets": round(liquid, 2),
+        "mortgage": mortgage, "margin": margin, "credit_cards": cards,
+        "other_debt": round(other_debt, 2), "cash": cash, "retirement": retirement,
+        "debt_to_assets_pct": pct(debts, assets),
+        "liquid_to_debt_pct": pct(liquid, debts),
+        "real_estate_share_pct": pct(real_estate, assets),
+        "mortgage_share_pct": pct(mortgage, debts),
+        "margin_to_liquid_pct": pct(margin, liquid),
+        "cash_share_pct": pct(cash, assets),
+        "equity_in_home_pct": pct(real_estate - mortgage, real_estate),
+        "nw_change_qoq": chg("net_worth"), "assets_change_qoq": chg("assets"),
+        "liabilities_change_qoq": chg("liabilities"),
+        "nw_change_yoy": round(cur["net_worth"] - yr_ago["net_worth"], 2) if yr_ago else None,
+        "cagr_pct": (nw["stats"] or {}).get("cagr_pct"),
+        "prev_period": prev["period"] if prev else None,
+        "yr_ago_period": yr_ago["period"] if yr_ago else None,
+    }
+
+    # ── findings: (severity, headline, detail). Thresholds are conventional planning rules.
+    f: list = []
+    add = lambda sev, head, detail: f.append({"severity": sev, "headline": head, "detail": detail})  # noqa: E731
+    d2a = metrics["debt_to_assets_pct"]
+    if d2a is not None:
+        if d2a >= 50:
+            add("warn", f"Leverage is high — debt is {d2a}% of assets",
+                f"{_m(debts)} owed against {_m(assets)} owned. Above ~50% a downturn in asset "
+                f"prices erodes net worth quickly.")
+        elif d2a <= 30:
+            add("good", f"Leverage is conservative — debt is {d2a}% of assets",
+                f"{_m(debts)} owed against {_m(assets)} owned.")
+        else:
+            add("info", f"Leverage is moderate — debt is {d2a}% of assets",
+                f"{_m(debts)} owed against {_m(assets)} owned.")
+    if metrics["liquid_to_debt_pct"] is not None:
+        v = metrics["liquid_to_debt_pct"]
+        add("warn" if v < 50 else "good" if v >= 100 else "info",
+            f"Liquid assets cover {v}% of total debt",
+            f"{_m(liquid)} outside real estate against {_m(debts)} of debt. Selling the house "
+            f"is not a liquidity plan; this ratio is.")
+    if metrics["real_estate_share_pct"] is not None and metrics["real_estate_share_pct"] >= 50:
+        add("warn", f"Concentrated in property — {metrics['real_estate_share_pct']}% of assets",
+            f"{_m(real_estate)} of {_m(assets)} sits in real estate, which cannot be sold in "
+            f"parts and carries the mortgage.")
+    if margin:
+        v = metrics["margin_to_liquid_pct"]
+        add("warn" if (v or 0) >= 25 else "info",
+            f"Margin borrowing of {_m(margin)} ({v}% of liquid assets)",
+            "Margin is callable: a drawdown can force sales at the worst moment. It is the one "
+            "debt here that can escalate without warning.")
+    if cards:
+        add("warn" if cards > 20000 else "info", f"Credit-card balance of {_m(cards)}",
+            "Card APRs dominate every other rate on the sheet — clearing this beats most "
+            "investment returns on a risk-adjusted basis.")
+    if real_estate and metrics["equity_in_home_pct"] is not None:
+        add("info", f"Home equity is {metrics['equity_in_home_pct']}% of property value",
+            f"{_m(real_estate - mortgage)} of equity in {_m(real_estate)} of property "
+            f"({_m(mortgage)} mortgage).")
+    if metrics["cash_share_pct"] is not None and cash and metrics["cash_share_pct"] < 1:
+        add("warn", f"Cash is {metrics['cash_share_pct']}% of assets ({_m(cash)})",
+            "Thin buffer — an unplanned expense would have to be funded by selling assets or "
+            "borrowing.")
+    if metrics["nw_change_qoq"] is not None:
+        v = metrics["nw_change_qoq"]
+        add("good" if v >= 0 else "warn",
+            f"Net worth {'rose' if v >= 0 else 'fell'} {_m(abs(v))} since {metrics['prev_period']}",
+            f"Assets {_signed(metrics['assets_change_qoq'])}, liabilities "
+            f"{_signed(metrics['liabilities_change_qoq'])}.")
+    if metrics["nw_change_yoy"] is not None:
+        v = metrics["nw_change_yoy"]
+        add("good" if v >= 0 else "warn",
+            f"Year over year net worth {'is up' if v >= 0 else 'is down'} {_m(abs(v))}",
+            f"Against {metrics['yr_ago_period']}.")
+
+    order = {"warn": 0, "info": 1, "good": 2}
+    f.sort(key=lambda x: order.get(x["severity"], 1))
+    return {"period": cur["period"], "metrics": metrics, "findings": f, "messages": [],
+            "composition": {"assets": acats, "liabilities": lcats}}
+
+
+def _m(v) -> str:
+    try:
+        return "${:,.0f}".format(float(v))
+    except (TypeError, ValueError):
+        return "—"
+
+
+def _signed(v) -> str:
+    if v is None:
+        return "unchanged"
+    return ("up " if v >= 0 else "down ") + _m(abs(v))
 
 
 def summary() -> dict:
