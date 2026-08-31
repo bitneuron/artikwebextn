@@ -591,19 +591,25 @@ def record_item_delete(dataset: str, item: str, actor: str = "") -> dict:
 # Cashflow metrics are DERIVED from the Assets/Liabilities records (they used to be read from
 # the workbook's own 'cashflow' sheet, which went stale the moment a quarter was added by hand).
 # Semantics reproduced from that sheet and verified against it period by period:
-#   Asset                    = assets excluding Real Estate (the liquid side)
+#   Liquid Assets            = assets excluding Real Estate (the workbook called this "Asset";
+#                              it is NOT total assets — the house is deliberately set aside)
+#   Total Assets             = every asset including Real Estate, carried for reconciliation
 #   Liability with no house  = Credit Card + Property Tax + Loan + Other Debt
 #                              (i.e. every debt except the Mortgage and Margin)
 #   Liability (with house)   = the above + Mortgage
-#   Total with no house      = Asset - Liability with no house
-#   Total                    = Asset - Liability (with house)
+#   Total with no house      = Liquid Assets - Liability with no house
+#   Total                    = Liquid Assets - Liability (with house)   [ = net worth - real estate ]
 CF_NO_HOUSE_CATS = {"Credit Card", "Property Tax", "Loan", "Other Debt"}
 # Margin belongs on the liability side ONLY when brokerage assets are stated gross. While assets
 # were stored net of margin the deduction was already baked into the Asset line, so counting it
 # again here would deduct it twice; once assets are gross, leaving it out deducts it zero times.
 # The basis is read per period, so these lines stay correct either side of the migration.
 CF_MARGIN_CAT = "Margin"
-CF_ITEMS = ["Asset", "Liability (with house)", "Liability with no house",
+# Row labels. "Asset" was the workbook's name for liquid assets — it is NOT total assets, so it
+# is labelled for what it measures. Total Assets is carried alongside it for reconciliation.
+CF_LIQUID = "Liquid Assets (excl. real estate)"
+CF_TOTAL_ASSETS = "Total Assets (incl. real estate)"
+CF_ITEMS = [CF_LIQUID, CF_TOTAL_ASSETS, "Liability (with house)", "Liability with no house",
             "Total with no house", "Total"]
 
 
@@ -642,8 +648,10 @@ def cashflow_metrics() -> dict:
         noh = sum(v for k, v in l.items() if k in noh_cats) if l else None
         mort = sum(v for k, v in l.items() if k.lower() == "mortgage") if l else None
         both = liquid is not None and noh is not None
+        total_assets = sum(a.values()) if a else None
         out[p] = {
-            "Asset": round(liquid, 2) if liquid is not None else None,
+            CF_LIQUID: round(liquid, 2) if liquid is not None else None,
+            CF_TOTAL_ASSETS: round(total_assets, 2) if total_assets is not None else None,
             "Liability with no house": round(noh, 2) if noh is not None else None,
             "Liability (with house)": round(noh + mort, 2) if noh is not None else None,
             "Total with no house": round(liquid - noh, 2) if both else None,

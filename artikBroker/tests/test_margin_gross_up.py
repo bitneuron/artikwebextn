@@ -245,7 +245,7 @@ def test_networth_and_cashflow_use_corrected_values(db):
     assert nw["assets"] == 1140.0 and nw["liabilities"] == 640.0
     assert nw["net_worth"] == 500.0
     cf = fin.cashflow_metrics()[(2026, 2)]
-    assert cf["Asset"] == 140.0                       # gross brokerage, real estate excluded
+    assert cf[fin.CF_LIQUID] == 140.0                       # gross brokerage, real estate excluded
 
 
 def test_cashflow_deducts_margin_exactly_once_after_migration(db):
@@ -258,19 +258,33 @@ def test_cashflow_deducts_margin_exactly_once_after_migration(db):
     put(fin, "liability", "House", "Mortgage", 2026, 2, 3000.0)
 
     before = fin.cashflow_metrics()[(2026, 2)]
-    assert before["Asset"] == 1000.0                    # net basis: margin already inside Asset
+    assert before[fin.CF_LIQUID] == 1000.0                    # net basis: margin already inside Asset
     assert before["Liability with no house"] == 100.0   # ...so it must NOT be on this side
     assert before["Total"] == 1000.0 - 3100.0
 
     mig.apply(confirm=True)
     after = fin.cashflow_metrics()[(2026, 2)]
-    assert after["Asset"] == 1400.0                     # gross basis
+    assert after[fin.CF_LIQUID] == 1400.0                     # gross basis
     assert after["Liability with no house"] == 500.0    # margin now counted here
     assert after["Liability (with house)"] == 3500.0
     assert after["Total with no house"] == 900.0
     assert after["Total"] == -2100.0
     # margin moved the Total by exactly zero — it is deducted once before AND once after
     assert after["Total"] == before["Total"]
+
+
+def test_cashflow_reports_both_liquid_and_total_assets(db):
+    """The liquid line excludes the house; Total Assets is carried alongside it, unambiguously."""
+    fin, mig = db
+    put(fin, "asset", "eTrade", "Brokerage", 2026, 2, 1000.0)
+    put(fin, "asset", "House", "Real Estate", 2026, 2, 5000.0)
+    put(fin, "liability", "eTrade", "Margin", 2026, 2, 400.0)
+    mig.apply(confirm=True)
+    m = fin.cashflow_metrics()[(2026, 2)]
+    assert m[fin.CF_LIQUID] == 1400.0                 # gross brokerage, house set aside
+    assert m[fin.CF_TOTAL_ASSETS] == 6400.0           # everything, house included
+    assert m[fin.CF_TOTAL_ASSETS] - m[fin.CF_LIQUID] == 5000.0
+    assert "Asset" not in m                            # the ambiguous label is gone
 
 
 def test_cashflow_total_equals_networth_minus_real_estate(db):
