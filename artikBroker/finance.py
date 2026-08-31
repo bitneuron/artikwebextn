@@ -598,6 +598,11 @@ def record_item_delete(dataset: str, item: str, actor: str = "") -> dict:
 #   Total with no house      = Asset - Liability with no house
 #   Total                    = Asset - Liability (with house)
 CF_NO_HOUSE_CATS = {"Credit Card", "Property Tax", "Loan", "Other Debt"}
+# Margin belongs on the liability side ONLY when brokerage assets are stated gross. While assets
+# were stored net of margin the deduction was already baked into the Asset line, so counting it
+# again here would deduct it twice; once assets are gross, leaving it out deducts it zero times.
+# The basis is read per period, so these lines stay correct either side of the migration.
+CF_MARGIN_CAT = "Margin"
 CF_ITEMS = ["Asset", "Liability (with house)", "Liability with no house",
             "Total with no house", "Total"]
 
@@ -613,15 +618,28 @@ def _cat_totals(dataset: str) -> dict:
     return out
 
 
+def _gross_basis_periods() -> set:
+    """Periods whose brokerage asset rows are stated GROSS (margin not yet deducted)."""
+    with _conn() as c:
+        cols = {r["name"] for r in c.execute("PRAGMA table_info(financial_records)")}
+        if "asset_value_basis" not in cols:
+            return set()
+        return {(r["year"], r["quarter"]) for r in c.execute(
+            "SELECT DISTINCT year, quarter FROM financial_records WHERE dataset='asset' "
+            "AND category='Brokerage' AND is_total=0 AND asset_value_basis='gross'")}
+
+
 def cashflow_metrics() -> dict:
     """{(year, quarter): {metric: value|None}} — None where that side has no data."""
     init()
     A, L = _cat_totals("asset"), _cat_totals("liability")
+    gross = _gross_basis_periods()
     out: dict = {}
     for p in set(A) | set(L):
         a, l = A.get(p), L.get(p)
         liquid = sum(v for k, v in a.items() if "real estate" not in k.lower()) if a else None
-        noh = sum(v for k, v in l.items() if k in CF_NO_HOUSE_CATS) if l else None
+        noh_cats = CF_NO_HOUSE_CATS | ({CF_MARGIN_CAT} if p in gross else set())
+        noh = sum(v for k, v in l.items() if k in noh_cats) if l else None
         mort = sum(v for k, v in l.items() if k.lower() == "mortgage") if l else None
         both = liquid is not None and noh is not None
         out[p] = {

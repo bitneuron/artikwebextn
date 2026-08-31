@@ -248,6 +248,54 @@ def test_networth_and_cashflow_use_corrected_values(db):
     assert cf["Asset"] == 140.0                       # gross brokerage, real estate excluded
 
 
+def test_cashflow_deducts_margin_exactly_once_after_migration(db):
+    """Assets gross + margin on the liability side => margin hits the Total once, not zero times."""
+    fin, mig = db
+    put(fin, "asset", "eTrade", "Brokerage", 2026, 2, 1000.0)      # net of 400 margin
+    put(fin, "asset", "House", "Real Estate", 2026, 2, 5000.0)
+    put(fin, "liability", "eTrade", "Margin", 2026, 2, 400.0)
+    put(fin, "liability", "Visa", "Credit Card", 2026, 2, 100.0)
+    put(fin, "liability", "House", "Mortgage", 2026, 2, 3000.0)
+
+    before = fin.cashflow_metrics()[(2026, 2)]
+    assert before["Asset"] == 1000.0                    # net basis: margin already inside Asset
+    assert before["Liability with no house"] == 100.0   # ...so it must NOT be on this side
+    assert before["Total"] == 1000.0 - 3100.0
+
+    mig.apply(confirm=True)
+    after = fin.cashflow_metrics()[(2026, 2)]
+    assert after["Asset"] == 1400.0                     # gross basis
+    assert after["Liability with no house"] == 500.0    # margin now counted here
+    assert after["Liability (with house)"] == 3500.0
+    assert after["Total with no house"] == 900.0
+    assert after["Total"] == -2100.0
+    # margin moved the Total by exactly zero — it is deducted once before AND once after
+    assert after["Total"] == before["Total"]
+
+
+def test_cashflow_total_equals_networth_minus_real_estate(db):
+    fin, mig = db
+    put(fin, "asset", "eTrade", "Brokerage", 2026, 2, 1000.0)
+    put(fin, "asset", "House", "Real Estate", 2026, 2, 5000.0)
+    put(fin, "liability", "eTrade", "Margin", 2026, 2, 400.0)
+    put(fin, "liability", "Visa", "Credit Card", 2026, 2, 100.0)
+    put(fin, "liability", "House", "Mortgage", 2026, 2, 3000.0)
+    mig.apply(confirm=True)
+    nw = fin.net_worth()["points"][-1]["net_worth"]
+    assert fin.cashflow_metrics()[(2026, 2)]["Total"] == pytest.approx(nw - 5000.0, abs=0.01)
+
+
+def test_cashflow_margin_handling_survives_rollback(db):
+    fin, mig = db
+    put(fin, "asset", "eTrade", "Brokerage", 2026, 2, 1000.0)
+    put(fin, "liability", "eTrade", "Margin", 2026, 2, 400.0)
+    base = fin.cashflow_metrics()[(2026, 2)]["Total"]
+    mig.apply(confirm=True)
+    assert fin.cashflow_metrics()[(2026, 2)]["Total"] == pytest.approx(base, abs=0.01)
+    mig.rollback()
+    assert fin.cashflow_metrics()[(2026, 2)]["Total"] == pytest.approx(base, abs=0.01)
+
+
 def test_csv_export_rows_carry_corrected_values(db):
     fin, mig = db
     put(fin, "asset", "eTrade", "Brokerage", 2026, 2, 100.0)
