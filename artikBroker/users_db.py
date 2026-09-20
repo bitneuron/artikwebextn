@@ -60,8 +60,38 @@ def _conn() -> sqlite3.Connection:
     return c
 
 
+def get_setting(key: str, default=None):
+    """Small durable key/value store.
+
+    This DB is the only thing Litestream replicates, so it is the one place a
+    runtime setting survives an App Runner redeploy — the container filesystem
+    does not.
+    """
+    try:
+        with _lock, _conn() as c:
+            row = c.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        return row[0] if row else default
+    except Exception:  # noqa: BLE001
+        return default
+
+
+def set_setting(key: str, value: str) -> None:
+    with _lock, _conn() as c:
+        c.execute("INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?) "
+                  "ON CONFLICT(key) DO UPDATE SET value = excluded.value, "
+                  "updated_at = excluded.updated_at",
+                  (key, str(value), _now()))
+
+
 def init_db() -> None:
     with _lock, _conn() as c:
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """)
         c.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

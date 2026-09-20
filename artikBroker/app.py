@@ -141,6 +141,13 @@ def _init_users():
     users_db.ensure_initial_admin(is_production=IS_PRODUCTION)
     # Break-glass: force-reset the admin password when ADMIN_PASSWORD_RESET is set.
     users_db.apply_admin_password_reset()
+    # Re-apply a persisted model choice. It lives in this DB because it is the only
+    # thing Litestream replicates, and the container filesystem does not survive a
+    # redeploy. The env var still wins, and neither touches the per-task assignments.
+    if not os.environ.get("ARTIK_PRIMARY_MODEL"):
+        saved = users_db.get_setting("primary_model")
+        if saved:
+            _models.apply_primary(saved)
 
 
 def _pwd_fp(password_hash: str) -> str:
@@ -4665,6 +4672,20 @@ def api_stock_price_changes(ticker: str, months: int = Query(12, ge=1, le=24)):
 # Search history — persisted server-side (S3 on AWS, local folder in dev) so it
 # survives browser close / redeploys and is shared across devices.
 # ──────────────────────────────────────────────────────────────────────────────
+# Search history is per user. A query reveals what someone is researching, and the
+# delete is unrecoverable, so every endpoint below is scoped to the caller. Admins
+# see everything; entries written before owners existed are admin-only.
+def _hist_scope(request: Request) -> tuple:
+    """(user_id, sees_everything) for the caller.
+
+    OPEN_MODE is the dev-only fully-open mode, where there is no user to scope by;
+    it sees everything, matching _snapshot_visible. In production the auth gate has
+    already rejected anonymous callers, so a missing user sees nothing.
+    """
+    u = _user(request) or {}
+    return u.get("id"), (u.get("role") == "admin" or OPEN_MODE)
+
+
 @app.post("/api/history")
 async def api_history_save(request: Request):
     try:
@@ -4673,24 +4694,27 @@ async def api_history_save(request: Request):
         return JSONResponse({"error": "invalid JSON body"}, status_code=400)
     if not (body.get("query") or "").strip():
         return JSONResponse({"error": "missing query"}, status_code=400)
+    uid, _ = _hist_scope(request)
     try:
-        return hist.save(body)
+        return hist.save(body, user_id=uid)
     except Exception as e:  # noqa: BLE001
         return JSONResponse({"error": f"could not save history: {_err_detail(e)}"}, status_code=500)
 
 
 @app.get("/api/history")
-def api_history_list():
+def api_history_list(request: Request):
+    uid, is_admin = _hist_scope(request)
     try:
-        return {"backend": hist.backend(), "searches": hist.list_meta()}
+        return {"backend": hist.backend(), "searches": hist.list_meta(uid, is_admin)}
     except Exception as e:  # noqa: BLE001
         return JSONResponse({"error": f"could not list history: {_err_detail(e)}"}, status_code=500)
 
 
 @app.get("/api/history/{eid}")
-def api_history_get(eid: str):
-    e = hist.get(eid)
-    if not e:
+def api_history_get(eid: str, request: Request):
+    uid, is_admin = _hist_scope(request)
+    e = hist.get(eid, uid, is_admin)
+    if not e:                       # same answer for "missing" and "not yours"
         return JSONResponse({"error": "not found"}, status_code=404)
     return e
 
@@ -4704,19 +4728,24 @@ async def api_history_delete_bulk(request: Request):
     ids = body.get("ids") or []
     if not isinstance(ids, list) or not ids:
         return JSONResponse({"error": "no ids"}, status_code=400)
-    return {"ok": True, "deleted": hist.delete_many(ids)}
+    uid, is_admin = _hist_scope(request)
+    return {"ok": True, "deleted": hist.delete_many(ids, uid, is_admin)}
 
 
 @app.delete("/api/history/{eid}")
-def api_history_delete(eid: str):
-    hist.delete(eid)
+def api_history_delete(eid: str, request: Request):
+    uid, is_admin = _hist_scope(request)
+    if not hist.delete(eid, uid, is_admin):
+        return JSONResponse({"error": "not found"}, status_code=404)
     return {"ok": True}
 
 
 @app.delete("/api/history")
-def api_history_clear():
-    hist.clear()
-    return {"ok": True}
+def api_history_clear(request: Request):
+    uid, is_admin = _hist_scope(request)
+    # Clears the CALLER's history only. An admin tidying their own must not wipe
+    # everyone else's, so this is scoped by owner even for them.
+    return {"ok": True, "deleted": hist.clear(uid, is_admin=False)}
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -5155,13 +5184,22 @@ async def api_config_models_set(request: Request):
     choice = str(body.get("primary") or "").strip().lower()
     if choice not in ("astra", "claude", "openai", "anthropic"):
         return JSONResponse({"error": "primary must be 'astra' or 'claude'"}, status_code=400)
+    if os.environ.get("ARTIK_PRIMARY_MODEL"):
+        return JSONResponse({"error": "ARTIK_PRIMARY_MODEL is set, so it overrides this. "
+                                      "Unset it on the service to change the primary here."},
+                            status_code=409)
     try:
-        _models.set_primary(choice)
-    except PermissionError as e:
-        return JSONResponse({"error": str(e)}, status_code=409)
+        applied = _models.apply_primary(choice)
+        # The container filesystem is ephemeral, so writing models.json would be lost
+        # on the next deploy. The Litestream-backed DB is the only durable store here.
+        users_db.set_setting("primary_model", applied)
+        try:
+            _models.set_primary(choice)      # also update the file, for a dev checkout
+        except Exception:  # noqa: BLE001
+            pass
     except Exception as e:  # noqa: BLE001
         return JSONResponse({"error": f"could not save: {_err_detail(e)}"}, status_code=500)
-    return {"ok": True, **_models.info(), "source": _models.primary_source()}
+    return {"ok": True, **_models.info(), "source": "db", "durable": True}
 
 
 # ──────────────────────────────────────────────────────────────────────────────

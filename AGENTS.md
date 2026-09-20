@@ -138,6 +138,12 @@ agents with `save_*` tools persist memory back into their KB across sessions.
   same image and amounts, dates, signs, line count and account are compared. Disagreements are shown
   and the Apply button changes to require explicit confirmation. Agreement is reported as agreement,
   not as proof.
+- **Search history is per user.** Entries record `user_id`; list/get/delete/clear are all scoped to
+  the caller, an admin sees everything, and pre-ownership entries are admin-only. Clear removes only
+  the caller's own, even for an admin. Pruning is per owner so one busy user cannot evict another's.
+- **The model choice persists in the users DB**, not `models.json`: on App Runner the container
+  filesystem is ephemeral and Litestream replicates only that DB. `ARTIK_PRIMARY_MODEL` still wins
+  over it, and the admin endpoint refuses to write while that variable is set.
 - **Primary provider: `primary` in `models.json`** (`"openai"` = gpt-6-astra, `"anthropic"` = claude).
   Every AI feature in artikBroker can run on either; `primary` picks which is tried first and the
   other stays as the fallback. Change it with `POST /api/config/models {"primary":"astra"|"claude"}`

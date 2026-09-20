@@ -19,8 +19,10 @@ _DEFAULT = {"primary": "openai",
             "tasks": {"extraction": "anthropic", "structured": "anthropic",
                       "reports": "anthropic", "summaries": "anthropic",
                       "questions": "openai"},
-            "anthropic": {"default": "claude-opus-5", "synthesis": "claude-opus-5"},
-            "openai": {"data": "gpt-6-astra", "chat": "gpt-6-astra", "vision": "gpt-6-astra"}}
+            "anthropic": {"default": "claude-opus-5", "synthesis": "claude-opus-5",
+                          "fallback": "claude-opus-4-8", "fast": "claude-haiku-4-5-20251001"},
+            "openai": {"data": "gpt-6-astra", "chat": "gpt-6-astra", "vision": "gpt-6-astra",
+                       "fallback": "gpt-5", "fast": "gpt-5-mini"}}
 
 
 def _load() -> dict:
@@ -97,20 +99,27 @@ CLAUDE = _dedupe([
     os.environ.get("ANTHROPIC_MODEL"),
     _AN.get("synthesis"), _AN.get("default"),
     "claude-opus-5",
+    _AN.get("fallback"),          # previous version, tried only if the flagship errors
 ])
 GPT = _dedupe([
     os.environ.get("OPENAI_MODEL"),
     _OA.get("chat"), _OA.get("data"),
     "gpt-6-astra",
+    _OA.get("fallback"),
 ])
 
-# ── Bulk routes (names retained; now use the user-selected flagship models) ──
+# ── Bulk routes ──────────────────────────────────────────────────────────────
+# Short, bounded, low-stakes work that can run many times per request. A flagship
+# here is pure cost: these chains lead with the small model and keep the flagship
+# behind it, so quality still degrades gracefully rather than failing.
 CLAUDE_FAST = _dedupe([
     os.environ.get("ANTHROPIC_FAST_MODEL"),
-    "claude-opus-5",
+    _AN.get("fast"),
+    _AN.get("default"), "claude-opus-5",
 ])
 GPT_FAST = _dedupe([
     os.environ.get("OPENAI_FAST_MODEL"),
+    _OA.get("fast"),
     _OA.get("data"), "gpt-6-astra",
 ])
 
@@ -142,6 +151,18 @@ def _models_json_path() -> Path | None:
         if p and Path(p).exists():
             return Path(p)
     return None
+
+
+def apply_primary(choice: str) -> str:
+    """Set the leading provider for THIS process only. No file is written.
+
+    Used to re-apply a setting persisted elsewhere (the Litestream-backed DB), which
+    is the only storage that survives a redeploy on App Runner.
+    """
+    global PRIMARY, SECONDARY
+    canon = _primary(choice)
+    PRIMARY, SECONDARY = canon, ("anthropic" if canon == "openai" else "openai")
+    return canon
 
 
 def set_primary(choice: str) -> str:

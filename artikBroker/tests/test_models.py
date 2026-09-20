@@ -6,13 +6,20 @@ import importlib
 import models
 
 
-def test_chains_have_primary_and_fallbacks():
-    assert models.CLAUDE and models.GPT
-    assert models.CLAUDE == ["claude-opus-5"]
-    assert models.GPT == ["gpt-6-astra"]
-    # The user selected Opus 5 for every Claude workload, including bulk tasks.
-    assert models.CLAUDE_FAST == ["claude-opus-5"]
-    assert models.GPT_FAST == ["gpt-6-astra"]
+def test_chains_lead_with_the_flagship_and_keep_a_version_fallback():
+    assert models.CLAUDE[0] == "claude-opus-5"
+    assert models.GPT[0] == "gpt-6-astra"
+    # A single-entry chain gives with_fallback nothing to fall back to.
+    assert len(models.CLAUDE) > 1 and len(models.GPT) > 1
+
+
+def test_bulk_chains_lead_with_a_small_model():
+    # Short, bounded, high-volume work must not run a flagship by default.
+    assert "haiku" in models.CLAUDE_FAST[0]
+    assert models.GPT_FAST[0] == "gpt-5-mini"
+    # ...and still degrade to the flagship rather than failing outright.
+    assert models.CLAUDE[0] in models.CLAUDE_FAST
+    assert models.GPT[0] in models.GPT_FAST
 
 
 def test_env_override(monkeypatch):

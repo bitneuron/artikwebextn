@@ -3,7 +3,7 @@
 The Stock News Collector can be configured with a plain-English statement
 ("AI infrastructure leaders", "companies hurt by a strong dollar") instead of a
 hand-typed ticker list. This module turns that statement into a list of US-listed
-operating-company tickers using the SAME Claude-first / GPT-fallback cascade that
+operating-company tickers using the SAME per-task cascade and version fallback that
 powers Broker's AI Search — it just returns tickers (no scoring, no filters).
 
 Self-contained on purpose (own key lookup) so agent_runner can import it without a
@@ -11,7 +11,7 @@ circular dependency on app.py.
 """
 from __future__ import annotations
 
-from models import openai_create, anthropic_create
+import models as _models
 
 import json
 import os
@@ -77,22 +77,22 @@ def _clean(plan: dict | None, limit: int = 12) -> list[str]:
 def _resolve_anthropic(query: str, key: str) -> dict | None:
     import anthropic
     client = anthropic.Anthropic(api_key=key)
-    msg = anthropic_create(client,
-        model="claude-opus-5",
+    msg = _models.with_fallback(_models.CLAUDE, lambda mdl: _models.anthropic_create(client,
+        model=mdl,
         max_tokens=1200,
         system=_SYSTEM,
         tools=[_TOOL],
         tool_choice={"type": "tool", "name": "return_tickers"},
         messages=[{"role": "user", "content": query}],
-    )
+    ))
     return next((b.input for b in msg.content if b.type == "tool_use"), None)
 
 
 def _resolve_openai(query: str, key: str) -> dict | None:
     from openai import OpenAI
     client = OpenAI(api_key=key)
-    resp = openai_create(client,
-        model="gpt-6-astra",
+    resp = _models.with_fallback(_models.GPT, lambda mdl: _models.openai_create(client,
+        model=mdl,
         messages=[{"role": "system", "content": _SYSTEM},
                   {"role": "user", "content": query}],
         tools=[{"type": "function", "function": {
@@ -102,7 +102,7 @@ def _resolve_openai(query: str, key: str) -> dict | None:
         tool_choice={"type": "function", "function": {"name": _TOOL["name"]}},
         max_completion_tokens=1200,
         reasoning_effort="minimal",
-    )
+    ))
     calls = resp.choices[0].message.tool_calls
     return json.loads(calls[0].function.arguments) if calls else None
 
@@ -120,17 +120,13 @@ def resolve(query: str, limit: int = 12) -> dict:
     if not akey and not okey:
         return {"ok": False, "error": "no ANTHROPIC_API_KEY or OPENAI_API_KEY configured"}
 
-    plan, provider, last_err = None, None, None
-    if akey:
-        try:
-            plan, provider = _resolve_anthropic(query, akey), "claude"
-        except Exception as e:  # noqa: BLE001
-            last_err = str(e)[:200]
-    if plan is None and okey:
-        try:
-            plan, provider = _resolve_openai(query, okey), "gpt"
-        except Exception as e:  # noqa: BLE001
-            last_err = str(e)[:200]
+    # Same cascade, policy and version fallback as every other call site. This used
+    # to be a hand-rolled Claude-first copy with the model names written inline, so
+    # it silently kept calling old models after a config change.
+    plan, provider, err = _models.cascade(akey, okey,
+        claude_fn=lambda k: _resolve_anthropic(query, k),
+        gpt_fn=lambda k: _resolve_openai(query, k), task="structured")
+    last_err = str(err)[:200] if err else None
 
     tickers = _clean(plan, limit)
     if not tickers:

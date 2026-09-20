@@ -25,7 +25,7 @@ _PREFIX = (os.environ.get("HISTORY_S3_PREFIX", "search_history/") or "").strip()
 _REGION = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "us-west-2"
 _LOCAL_DIR = HERE / "search_history"
 
-_META_KEYS = ("id", "ts", "type", "query", "summary", "provider", "count")
+_META_KEYS = ("id", "ts", "user_id", "type", "query", "summary", "provider", "count")
 
 
 def backend() -> str:
@@ -145,10 +145,24 @@ def _all() -> list:
     return _s3_all() if _BUCKET else _local_all()
 
 
-def save(entry: dict) -> dict:
+def visible(entry: dict, user_id, is_admin: bool = False) -> bool:
+    """May this caller see this entry?
+
+    Every entry now records its owner. Entries written before that are unowned;
+    they are shown to admins only rather than to everyone, on the same rule the
+    portfolio snapshots use — "unowned" must not mean "everyone's".
+    """
+    if is_admin:
+        return True
+    owner = entry.get("user_id")
+    return owner is not None and user_id is not None and owner == user_id
+
+
+def save(entry: dict, user_id=None) -> dict:
     e = {
         "id": _new_id(),
         "ts": int(time.time() * 1000),
+        "user_id": user_id,
         "type": entry.get("type"),
         "query": entry.get("query") or "",
         "summary": entry.get("summary"),
@@ -157,42 +171,49 @@ def save(entry: dict) -> dict:
         "results": entry.get("results") or [],
     }
     (_s3_save if _BUCKET else _local_save)(e)
-    _prune()
+    _prune(user_id)
     return {"id": e["id"], "ts": e["ts"]}
 
 
-def list_meta(limit: int = MAX_ENTRIES) -> list:
-    alle = _all()
+def list_meta(user_id=None, is_admin: bool = False, limit: int = MAX_ENTRIES) -> list:
+    alle = [e for e in _all() if visible(e, user_id, is_admin)]
     alle.sort(key=lambda e: e.get("ts", 0), reverse=True)
     return [_meta(e) for e in alle[:limit]]
 
 
-def get(eid: str):
-    return _s3_get(eid) if _BUCKET else _local_get(eid)
+def get(eid: str, user_id=None, is_admin: bool = False):
+    """The entry, or None when it does not exist OR is not the caller's.
+
+    Same answer either way, so this cannot be used to probe which ids exist.
+    """
+    e = _s3_get(eid) if _BUCKET else _local_get(eid)
+    return e if (e and visible(e, user_id, is_admin)) else None
 
 
-def delete(eid: str) -> None:
+def delete(eid: str, user_id=None, is_admin: bool = False) -> bool:
+    """True if something was deleted. Refuses entries the caller does not own."""
+    e = _s3_get(eid) if _BUCKET else _local_get(eid)
+    if not e or not visible(e, user_id, is_admin):
+        return False
     (_s3_delete if _BUCKET else _local_delete)(eid)
+    return True
 
 
-def delete_many(ids) -> int:
-    n = 0
-    for eid in ids:
-        if eid:
-            delete(str(eid))
-            n += 1
-    return n
+def delete_many(ids, user_id=None, is_admin: bool = False) -> int:
+    return sum(1 for eid in ids if eid and delete(str(eid), user_id, is_admin))
 
 
-def clear() -> None:
-    for e in _all():
-        delete(e["id"])
+def clear(user_id=None, is_admin: bool = False) -> int:
+    """Clear the CALLER's history. An admin clearing their own does not wipe others'."""
+    return sum(1 for e in _all() if visible(e, user_id, is_admin)
+               and delete(e["id"], user_id, is_admin))
 
 
-def _prune() -> None:
-    alle = _all()
-    if len(alle) <= MAX_ENTRIES:
+def _prune(user_id=None) -> None:
+    """Cap history per owner, so one busy user cannot evict another's entries."""
+    mine = [e for e in _all() if e.get("user_id") == user_id]
+    if len(mine) <= MAX_ENTRIES:
         return
-    alle.sort(key=lambda e: e.get("ts", 0), reverse=True)
-    for e in alle[MAX_ENTRIES:]:
-        delete(e["id"])
+    mine.sort(key=lambda e: e.get("ts", 0), reverse=True)
+    for e in mine[MAX_ENTRIES:]:
+        (_s3_delete if _BUCKET else _local_delete)(e["id"])
