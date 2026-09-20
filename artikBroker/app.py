@@ -196,6 +196,28 @@ def _require_admin(request: Request) -> dict | None:
     return u if (u and u["role"] == "admin") else None
 
 
+def _snapshot_visible(request: Request | None, snap: dict) -> bool:
+    """May this caller see this portfolio snapshot?
+
+    Fails CLOSED. The previous form was `if u and ...`, which skipped the check
+    entirely when no user was resolved — harmless today because the auth gate
+    rejects anonymous requests first, but it would silently open up if that gate
+    ever changed. `request is None` means an internal, server-side call.
+
+    A snapshot with no user_id is admin-only rather than world-readable: those are
+    legacy rows, and "unowned" should not mean "everyone's".
+    """
+    if request is None or OPEN_MODE:
+        return True
+    u = _user(request)
+    if not u:
+        return False
+    if u.get("role") == "admin":
+        return True
+    owner = snap.get("user_id")
+    return owner is not None and owner == u.get("id")
+
+
 def _safe_user_or_self(request: Request, uid: int) -> bool:
     u = _user(request)
     return bool(u and (u["role"] == "admin" or u["id"] == uid))
@@ -4053,7 +4075,7 @@ def _pc_load_snapshots(keys, request: Request):
             errors.append({"key": key, "error": "snapshot not found"})
             continue
         # Ownership: only the owner or an admin may include a snapshot (don't leak existence).
-        if u and u.get("role") != "admin" and snap.get("user_id") not in (None, u.get("id")):
+        if not _snapshot_visible(request, snap):
             errors.append({"key": key, "error": "not found"})
             continue
         snaps.append(snap)
@@ -4199,8 +4221,7 @@ def _stored_portfolio_response(key: str, request: Request | None = None):
     snap = portfolio_store.get(sid)
     if not snap:
         return JSONResponse({"error": "snapshot not found."}, status_code=404)
-    u = _user(request) if request is not None else None
-    if u and u.get("role") != "admin" and snap.get("user_id") not in (None, u.get("id")):
+    if not _snapshot_visible(request, snap):
         return JSONResponse({"error": "snapshot not found."}, status_code=404)   # don't leak existence
     rows, totals = _score_holdings(snap["holdings"])
     now = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -4325,8 +4346,7 @@ def _pf_holdings_light(request, date=None, file=None, key=None):
         snap = portfolio_store.get(sid)
         if not snap:
             return None, JSONResponse({"error": "snapshot not found."}, status_code=404)
-        u = _user(request) if request is not None else None
-        if u and u.get("role") != "admin" and snap.get("user_id") not in (None, u.get("id")):
+        if not _snapshot_visible(request, snap):
             return None, JSONResponse({"error": "snapshot not found."}, status_code=404)
         return snap.get("holdings") or [], None
 
@@ -4370,10 +4390,12 @@ def _monthly_closes(tickers: list, months: int) -> dict:
         return out
     for t in plain:
         try:
-            if len(plain) == 1:
-                ser = df["Close"].dropna()
-            else:
+            # group_by="ticker" returns a 2-level column index even for ONE symbol,
+            # so branch on the frame's shape, not on how many tickers were asked for.
+            if getattr(df.columns, "nlevels", 1) > 1:
                 ser = df[t]["Close"].dropna() if t in df.columns.get_level_values(0) else None
+            else:
+                ser = df["Close"].dropna() if "Close" in df.columns else None
             if ser is None or not len(ser):
                 continue
             out[t] = [(ix.strftime("%Y-%m"), float(v)) for ix, v in ser.items() if v == v]
@@ -4485,6 +4507,37 @@ def api_portfolio_price_changes(request: Request, date: str = Query(None),
         },
         "basis": "Current snapshot quantities priced at each month's close. "
                  "Not the account's actual historic value.",
+    }
+
+
+@app.get("/api/stocks/price-changes/{ticker}")
+def api_stock_price_changes(ticker: str, months: int = Query(12, ge=1, le=24)):
+    """One ticker's month-by-month close and % change over a trailing window.
+
+    Same monthly series the Portfolio view uses, for a single symbol, so a searched
+    ticker can show its price trend without a portfolio."""
+    t = (ticker or "").strip().upper()
+    if not re.match(r"^[A-Z][A-Z0-9.\-]{0,9}$", t):
+        return JSONResponse({"error": "invalid ticker"}, status_code=400)
+    series = (_monthly_closes([t], months) or {}).get(t) or []
+    if not series:
+        return JSONResponse({"error": f"no monthly price history for {t}"}, status_code=404)
+
+    window = series[-(months + 1):]
+    rows = []
+    for i in range(1, len(window)):
+        (_pm, prev), (m, cur) = window[i - 1], window[i]
+        rows.append({"month": m, "price": round(cur, 2),
+                     "prev_price": round(prev, 2),
+                     "pct": round((cur - prev) / prev * 100, 2) if prev else None})
+    first, last = window[0][1], window[-1][1]
+    return {
+        "ticker": t, "months": months,
+        "window_from": window[0][0], "window_to": window[-1][0],
+        "price_then": round(first, 2), "price_now": round(last, 2),
+        "change_pct": round((last - first) / first * 100, 2) if first else None,
+        "monthly": rows,
+        "basis": "Month-end closes from the daily series; the current month is to date.",
     }
 
 

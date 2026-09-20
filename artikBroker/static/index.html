@@ -1390,7 +1390,7 @@ function toggleFav(tk, source){ tk=(tk||'').toUpperCase(); isFav(tk)?removeFav(t
 // Small star shown next to every ticker. Click toggles; right-click → context menu.
 function favStar(tk, source){ tk=(tk||'').toUpperCase(); const f=isFav(tk);
   return `<span class="favstar ${f?'on':''}" data-star="${tk}" title="${f?'Remove from Favorites':'Add to Favorites'}" `
-    + `onclick="event.stopPropagation();event.preventDefault();toggleFav('${tk}','${source||'ui'}')">${f?'★':'☆'}</span>`; }
+    + `onclick="event.stopPropagation();event.preventDefault();toggleFav('${jsStr(tk)}','${source||'ui'}')">${f?'★':'☆'}</span>`; }
 function refreshStars(){ document.querySelectorAll('.favstar[data-star]').forEach(el=>{
   const f=isFav(el.getAttribute('data-star')); el.classList.toggle('on',f); el.textContent=f?'★':'☆';
   el.title=f?'Remove from Favorites':'Add to Favorites'; }); }
@@ -1485,7 +1485,7 @@ function assignGroupModal(tk){
     const groups=getGroups();
     const rows = groups.length ? groups.map(g=>`
       <label class="grow">
-        <input type="checkbox" ${isInGroup(tk,g.id)?'checked':''} onchange="toggleGroupAssign('${tk}','${g.id}')">
+        <input type="checkbox" ${isInGroup(tk,g.id)?'checked':''} onchange="toggleGroupAssign('${jsStr(tk)}','${g.id}')">
         <span class="gnm">${escapeHtml(g.name)}</span><span class="muted" style="font-size:11.5px">${groupCount(g.id)} stock(s)</span>
       </label>`).join('') : '<div class="muted" style="padding:8px 0">No groups yet — create one below.</div>';
     $('#fav-modal-card').innerHTML = `
@@ -1494,8 +1494,8 @@ function assignGroupModal(tk){
       <div class="glist">${rows}</div>
       <div class="fld" style="margin-top:14px"><label>Create & add to a new group</label>
         <div class="inline" style="gap:8px">
-          <input type="text" id="ag-new" placeholder="e.g. Quantum Stocks" style="flex:1" onkeydown="if(event.key==='Enter')agCreateAdd('${tk}')">
-          <button class="tc-btn" onclick="agCreateAdd('${tk}')">Add</button>
+          <input type="text" id="ag-new" placeholder="e.g. Quantum Stocks" style="flex:1" onkeydown="if(event.key==='Enter')agCreateAdd('${jsStr(tk)}')">
+          <button class="tc-btn" onclick="agCreateAdd('${jsStr(tk)}')">Add</button>
         </div></div>
       <div class="modal-actions"><button onclick="closeFavModal()">Done</button></div>`;
   };
@@ -1511,7 +1511,7 @@ function manageGroupsModal(){
     const groups=getGroups();
     const body = groups.length ? groups.map(g=>{
       const mem=tickersInGroup(g.id);
-      const chips = mem.length ? mem.map(t=>`<span class="gmember">${escapeHtml(t)}<button title="Remove from group" onclick="removeFromGroup('${t}','${g.id}')">✕</button></span>`).join('') : '<span class="muted" style="font-size:11.5px">No stocks yet</span>';
+      const chips = mem.length ? mem.map(t=>`<span class="gmember">${escapeHtml(t)}<button title="Remove from group" onclick="removeFromGroup('${jsStr(t)}','${jsStr(g.id)}')">✕</button></span>`).join('') : '<span class="muted" style="font-size:11.5px">No stocks yet</span>';
       return `<div class="gcard">
         <div class="inline" style="gap:8px">
           <input type="text" value="${escapeHtml(g.name)}" id="gn-${g.id}" style="flex:1">
@@ -1553,11 +1553,11 @@ function _ensureFavMenu(){ if(_favMenuEl) return _favMenuEl;
 function hideFavMenu(){ if(_favMenuEl) _favMenuEl.classList.add('hidden'); }
 function showFavMenu(x,y,tk){ tk=(tk||'').toUpperCase(); const m=_ensureFavMenu(); const fav=isFav(tk);
   m.innerHTML=`<div class="ci head">${tk}</div>`
-    + (fav ? `<div class="ci" onclick="removeFav('${tk}');hideFavMenu()">★ Remove from Favorites</div>`
-           : `<div class="ci" onclick="addFav('${tk}','context_menu');hideFavMenu()">☆ Add to Favorites</div>`)
-    + `<div class="ci" onclick="assignGroupModal('${tk}')">🏷 Add to Group…</div>`
-    + `<div class="ci" onclick="ctxViewDetails('${tk}')">🔎 View Details</div>`
-    + `<div class="ci" onclick="ctxAnalyze('${tk}')">⚡ Analyze Stock</div>`;
+    + (fav ? `<div class="ci" onclick="removeFav('${jsStr(tk)}');hideFavMenu()">★ Remove from Favorites</div>`
+           : `<div class="ci" onclick="addFav('${jsStr(tk)}','context_menu');hideFavMenu()">☆ Add to Favorites</div>`)
+    + `<div class="ci" onclick="assignGroupModal('${jsStr(tk)}')">🏷 Add to Group…</div>`
+    + `<div class="ci" onclick="ctxViewDetails('${jsStr(tk)}')">🔎 View Details</div>`
+    + `<div class="ci" onclick="ctxAnalyze('${jsStr(tk)}')">⚡ Analyze Stock</div>`;
   m.classList.remove('hidden');
   const w=m.offsetWidth||200, h=m.offsetHeight||150;
   m.style.left=Math.min(x, window.innerWidth-w-8)+'px';
@@ -2001,7 +2001,7 @@ function analyzeListTable(view){
       <td class="num">${r.rsi!=null?r.rsi:'—'}</td>
       <td>${statusCell(r)}</td>
       <td class="num">${news}</td>
-      <td style="white-space:nowrap"><button class="ex-btn" onclick="openStock('${r.ticker}','search')">Explain →</button></td>
+      <td style="white-space:nowrap"><button class="ex-btn" onclick="openStock('${jsStr(r.ticker)}','search')">Explain →</button></td>
     </tr>`;
   }).join('');
   return `<table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`;
@@ -2020,7 +2020,7 @@ function stockCard(r,i){
   const risk = (r.risks&&r.risks[0]) ? `<div class="cl bad">⚠ <span>${escapeHtml(r.risks[0])}</span></div>` : '';
   const why = r.why ? `<div class="co" style="margin-top:6px;white-space:normal">${escapeHtml(r.why)}</div>` : '';
   return `<div class="scard">
-    <div class="row1" onclick="openStock('${r.ticker}','search')" style="cursor:pointer">
+    <div class="row1" onclick="openStock('${jsStr(r.ticker)}','search')" style="cursor:pointer">
       <div style="min-width:0">
         <div class="tk" data-fav-ticker="${r.ticker}">${r.ticker}${favStar(r.ticker,'search_results')}${overlayChip(r)}</div>
         <div class="co">${escapeHtml(r.company||'')}</div>
@@ -2037,7 +2037,7 @@ function stockCard(r,i){
     </div>
     ${strength}${risk}
     <div class="cardbtns">
-      <button class="cta-sm primary" onclick="openStock('${r.ticker}','search')">Analyze →</button>
+      <button class="cta-sm primary" onclick="openStock('${jsStr(r.ticker)}','search')">Analyze →</button>
     </div>
   </div>`;
 }
@@ -2109,7 +2109,7 @@ function favTile(r,i){
   return `<div class="ftile">${stockCard(r,i)}
     <div class="fav-grp-bar">
       <div class="gbadges">${groupBadges(r.ticker,'<span class="muted" style="font-size:11px">No groups</span>')}</div>
-      <button class="ex-btn sm" onclick="assignGroupModal('${r.ticker}')" title="Add to / manage groups">🏷 Groups</button>
+      <button class="ex-btn sm" onclick="assignGroupModal('${jsStr(r.ticker)}')" title="Add to / manage groups">🏷 Groups</button>
     </div></div>`;
 }
 
@@ -2137,7 +2137,7 @@ function favListTable(view){
       <td>${statusCell(r)}</td>
       <td class="num">${news}</td>
       <td class="gcell">${groupBadges(r.ticker)}</td>
-      <td style="white-space:nowrap"><button class="ex-btn" onclick="openStock('${r.ticker}','favorites')">Explain →</button> <button class="ex-btn" onclick="assignGroupModal('${r.ticker}')" title="Add to / manage groups">🏷</button> <button class="ex-btn" onclick="removeFav('${r.ticker}')" title="Remove from Favorites">✕</button></td>
+      <td style="white-space:nowrap"><button class="ex-btn" onclick="openStock('${jsStr(r.ticker)}','favorites')">Explain →</button> <button class="ex-btn" onclick="assignGroupModal('${jsStr(r.ticker)}')" title="Add to / manage groups">🏷</button> <button class="ex-btn" onclick="removeFav('${jsStr(r.ticker)}')" title="Remove from Favorites">✕</button></td>
     </tr>`;
   }).join('');
   return `<table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`;
@@ -2239,7 +2239,7 @@ function _positionCard(r){
     return `<div style="margin:14px 0;padding:10px 14px;background:var(--bg);border:1px solid var(--line);border-radius:12px;display:flex;align-items:center;gap:10px">
       <span style="font-size:11px;font-weight:800;letter-spacing:.6px;color:var(--mut)">NO POSITION</span>
       <span style="display:flex;gap:8px;margin-left:auto">
-        <button class="ex-btn" onclick="addFav('${r.ticker}','stock_detail');this.textContent='★ In Watchlist';this.disabled=true">☆ Add to Watchlist</button>
+        <button class="ex-btn" onclick="addFav('${jsStr(r.ticker)}','stock_detail');this.textContent='★ In Watchlist';this.disabled=true">☆ Add to Watchlist</button>
         <button class="ex-btn" onclick="detTab('trade')">Create Trade Plan</button>
       </span></div>`;
   }
@@ -2255,7 +2255,8 @@ function detailFor(r){
     .map(c=>`<span class="pill acc">${escapeHtml(c)}</span>`).join('');
   const ni = r.news_overlay ? `<span class="pill ${r.news_overlay.aggregate_score_delta>=0?'acc':''}">${r.news_overlay.aggregate_score_delta>=0?'+':''}${r.news_overlay.aggregate_score_delta} News Impact</span>` : '';
   const TABS = [['overview','Overview'],['technicals','Technicals'],['fundamentals','Fundamentals'],
-                ['deep','🔬 Deep Analysis'],['news','News'],['signals','Signals'],['peers','Peers'],['trade','Trade Plan']];
+                ['deep','🔬 Deep Analysis'],['news','News'],['signals','Signals'],['peers','Peers'],['trade','Trade Plan'],
+                ['prices','📊 Price Changes']];
   $('#view-detail').innerHTML = `
     <button class="ghost" style="margin-bottom:14px" onclick="showTab('${back}')">← Back to results</button>
     <div class="det-head">
@@ -2287,6 +2288,55 @@ function detTab(name){
   if(name==='news' || name==='signals') loadDetailNews(window._detR, name);
   if(name==='signals') loadIntelligence((window._detR||{}).ticker);
   if(name==='deep') deepAnalyze((window._detR||{}).ticker);
+  if(name==='prices') loadTickerPrices();
+}
+
+// ── Single-ticker price changes (Price Changes tab) ──────────────────────────
+// Same monthly series the Portfolio view shows, for the one ticker on screen.
+async function loadTickerPrices(){
+  const tk = (window._detR||{}).ticker;
+  const box = $('#tp-out'); if(!box || !tk) return;
+  const m = parseInt(($('#tp-months')||{}).value || '12', 10);
+  const token = (window._tpSeq = (window._tpSeq || 0) + 1);
+  box.innerHTML = `<div class="spin">Loading ${m}-month price history…</div>`;
+  try {
+    const res = await fetch('/api/stocks/price-changes/' + encodeURIComponent(tk) + '?months=' + m);
+    const d = await res.json();
+    if(token !== window._tpSeq) return;                 // a newer request is in flight
+    if(d.error){ box.innerHTML = '<div class="err">' + escapeHtml(d.error) + '</div>'; return; }
+    box.innerHTML = renderTickerPrices(d);
+  } catch(e){
+    if(token === window._tpSeq) box.innerHTML = '<div class="err">' + escapeHtml(String(e)) + '</div>';
+  }
+}
+
+function renderTickerPrices(d){
+  const up = d.change_pct >= 0;
+  const diff = (d.price_now != null && d.price_then != null) ? d.price_now - d.price_then : null;
+  const cards = `<div class="exec" style="margin-bottom:10px">
+    <div class="estat"><div class="lbl">${d.months}-Month Change</div>
+      <div class="big ${up?'pos':'neg'}">${d.change_pct!=null?(up?'+':'')+d.change_pct.toFixed(2)+'%':'—'}</div>
+      <div class="sub">${escapeHtml(d.window_from||'')} → ${escapeHtml(d.window_to||'')}</div></div>
+    <div class="estat"><div class="lbl">Price Then</div><div class="big">$${(d.price_then??0).toLocaleString()}</div>
+      <div class="sub">${escapeHtml(d.window_from||'')}</div></div>
+    <div class="estat"><div class="lbl">Price Now</div><div class="big">$${(d.price_now??0).toLocaleString()}</div>
+      <div class="sub">${escapeHtml(d.window_to||'')}</div></div>
+    <div class="estat"><div class="lbl">Per Share</div>
+      <div class="big ${diff>=0?'pos':'neg'}">${diff!=null?(diff>=0?'+':'−')+'$'+Math.abs(diff).toFixed(2):'—'}</div>
+      <div class="sub">over ${d.months} months</div></div>
+  </div>`;
+  const rows = (d.monthly||[]).slice().reverse().map(r=>`<tr class="row">
+      <td>${escapeHtml(r.month)}</td>
+      <td class="num">$${(r.prev_price??0).toLocaleString()}</td>
+      <td class="num"><b>$${(r.price??0).toLocaleString()}</b></td>
+      <td class="num">${pcPct(r.pct)}</td>
+    </tr>`).join('');
+  return cards
+    + pcBarChart(d.monthly, `${d.ticker} — monthly % change`)
+    + `<div style="overflow-x:auto;margin-top:14px"><table style="min-width:420px"><thead><tr>
+         <th>Month</th><th class="num">Prev Close</th><th class="num">Close</th><th class="num">Change</th>
+       </tr></thead><tbody>${rows}</tbody></table></div>`
+    + `<div class="pf-meta" style="margin-top:8px">${escapeHtml(d.basis||'')}</div>`;
 }
 function kpiCards(cats){
   return `<div class="kpi-grid">${(cats||[]).map(c=>{
@@ -2365,6 +2415,17 @@ function detContent(r, name){
   if(name==='deep'){
     return `<div id="deep-out"><div class="spin">Pulling Yahoo Finance + Alpha Vantage + Financial Modeling Prep, then running AI analysis… (this can take ~20-40s)</div></div>`;
   }
+  if(name==='prices'){
+    return `<div class="panel-card"><h3>Price Changes</h3>
+      <div class="row" style="gap:8px;align-items:center;margin-bottom:10px">
+        <label class="pf-meta" for="tp-months">Window</label>
+        <select id="tp-months" onchange="loadTickerPrices()">
+          <option value="3">3 months</option><option value="6">6 months</option>
+          <option value="12" selected>12 months</option><option value="24">24 months</option>
+        </select>
+      </div>
+      <div id="tp-out"><div class="spin">Loading monthly price history…</div></div></div>`;
+  }
   if(name==='overview'){
     const arch = b.archetype ? `a <b>${escapeHtml(b.archetype)}</b>` : 'a company';
     const summary = `${r.ticker}${r.company?` (${escapeHtml(r.company)})`:''} scores <b>${r.score}</b> — <b>${r.status}</b> — as ${arch} in ${escapeHtml(r.sector||'its sector')}.`
@@ -2396,7 +2457,7 @@ function detContent(r, name){
     const used = (b.base_metrics_used&&b.base_metrics_used.length)
       ? `<div style="margin-bottom:12px;font-size:13px"><b style="color:var(--buy)">Sector basis used:</b> ${b.base_metrics_used.join(', ')}${(b.base_metrics_skipped&&b.base_metrics_skipped.length)?`<br><b style="color:#fca5a5">skipped:</b> ${b.base_metrics_skipped.join(', ')}`:''}</div>` : '';
     return `<div class="panel-card"><h3>Fundamentals</h3>${used}
-      <span class="av-slot"><button class="ex-btn" onclick="loadEnrich('${r.ticker}', this)">📊 Load Alpha Vantage — Bollinger Bands + fundamentals</button></span></div>`;
+      <span class="av-slot"><button class="ex-btn" onclick="loadEnrich('${jsStr(r.ticker)}', this)">📊 Load Alpha Vantage — Bollinger Bands + fundamentals</button></span></div>`;
   }
   if(name==='news'){
     return `<div class="panel-card news-card"><h3>📰 News Intelligence</h3><div id="det-news"><div class="spin">Loading news signals…</div></div></div>`;
@@ -2645,7 +2706,14 @@ async function loadEnrich(ticker, btn){
 window._cop = { ctxType:'search', ctx:null, uiMode:'auto', msgs:[], busy:false, provider:null };
 const COP_MODES = [['auto','Auto'],['research','Research'],['analysis','Analysis'],
                    ['discovery','Discovery'],['comparison','Comparison'],['screening','Screening']];
-function escapeHtml(s){ return (s||'').replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g,
+  c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+/* For a value going inside a quoted JS string in an on* attribute, e.g.
+   onclick="f('${jsStr(x)}')". Escapes the JS-string metacharacters FIRST, then the
+   HTML ones, so neither the string literal nor the attribute can be broken out of.
+   Tickers reach these handlers from uploaded CSVs and broker feeds, so they are
+   not trustworthy just because they are usually four capital letters. */
+function jsStr(s){ return escapeHtml(String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")); }
 /* Only allow http(s) links from external (news/filings) data — blocks javascript:/data:
    and other schemes, then HTML-escapes the URL for safe use inside href="...". */
 function safeUrl(u){
@@ -5896,9 +5964,9 @@ function tdCard(rec){
     </div>
     <div class="pf-meta" style="font-size:11px;line-height:1.7">${(rec.signals||[]).map(s=>'• '+tdEsc(s)).join(' &nbsp; ')}</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
-      <button class="ex-btn" onclick="tdAct('copilot','${t}')">🤖 Analyze with Artik Copilot</button>
-      <button class="ghost" onclick="tdAct('paper','${t}')">📝 Paper Trade</button>
-      <button class="ghost" onclick="tdAct('submit','${t}')">🚀 Submit Order</button>
+      <button class="ex-btn" onclick="tdAct('copilot','${jsStr(t)}')">🤖 Analyze with Artik Copilot</button>
+      <button class="ghost" onclick="tdAct('paper','${jsStr(t)}')">📝 Paper Trade</button>
+      <button class="ghost" onclick="tdAct('submit','${jsStr(t)}')">🚀 Submit Order</button>
       <button class="ghost" onclick="this.closest('.card').style.display='none'">✕ Dismiss</button>
     </div>
   </div>`;
@@ -6264,7 +6332,7 @@ function indexDetail(pfx, tk){
 function indexSummary(rows, pfx){
   const ok = rows.filter(r => !r.error && r.score!=null);
   if(!ok.length) return '';
-  const rk = r => `<div class="rk" onclick="indexDetail('${pfx}','${r.ticker}')"><span class="tk">${r.ticker}</span><span class="se">${escapeHtml(r.sector||'')}</span><span class="sv" style="color:${scoreColor(r.score)}">${r.score}</span></div>`;
+  const rk = r => `<div class="rk" onclick="indexDetail('${pfx}','${jsStr(r.ticker)}')"><span class="tk">${r.ticker}</span><span class="se">${escapeHtml(r.sector||'')}</span><span class="sv" style="color:${scoreColor(r.score)}">${r.score}</span></div>`;
   const topBuys = [...ok].sort((a,b)=>b.score-a.score).filter(r=>r.status==='BUY').slice(0,5);
   const topSells = [...ok].sort((a,b)=>a.score-b.score).slice(0,5);
   // sector heatmap
@@ -6313,7 +6381,7 @@ function drawIndex(pfx){
         <td class="num"><b>${r.score}</b>${overlayChip(r)}</td>
         <td class="num">${r.rsi!=null?r.rsi:'—'}</td>
         <td>${statusCell(r)}</td>
-        <td><button class="ex-btn" onclick="openStock('${r.ticker}','${pfx}')">Explain →</button></td>
+        <td><button class="ex-btn" onclick="openStock('${jsStr(r.ticker)}','${pfx}')">Explain →</button></td>
       </tr>`;
     },
   });
@@ -6728,7 +6796,7 @@ function applyPfView(){
       <td>${statusBadge(r.status)}</td>
       <td class="num">${plSaved(r.pl, r.pl_pct)}</td>
       <td class="num">${r.change_pct!=null?`<span class="${r.change_pct>=0?'pos':'neg'}">${r.change_pct>=0?'+':''}${r.change_pct.toFixed(1)}%</span>`:'<span class="pf-meta">—</span>'}</td>
-      <td><button class="ex-btn" onclick="openStock('${r.ticker}','portfolio')">Explain →</button></td>
+      <td><button class="ex-btn" onclick="openStock('${jsStr(r.ticker)}','portfolio')">Explain →</button></td>
     </tr>`,
   });
 }
@@ -7219,7 +7287,7 @@ async function agLoadPortfolio(){
 }
 function agPfHtml(){
   const d=window._agPf, sel=window._agPfSel;
-  const chip=t=>`<span class="ag-tk${sel.has(t)?' on':''}" data-t="${t}" onclick="agPfToggle('${t}')">${t}</span>`;
+  const chip=t=>`<span class="ag-tk${sel.has(t)?' on':''}" data-t="${t}" onclick="agPfToggle('${jsStr(t)}')">${t}</span>`;
   const accts=(d.snapshots||[]).map((s,i)=>`
     <div style="margin-bottom:10px">
       <div class="inline" style="justify-content:space-between;gap:8px;flex-wrap:wrap">
@@ -7465,10 +7533,10 @@ function tickerCard(t){
       <div class="res-srcs">${resSrcBadges(t.sources)}</div>
     </div>
     <div class="tact">
-      <button class="ex-btn" onclick="resExpand('${t.ticker}','articles')">📰 View Articles</button>
-      <button class="ex-btn" onclick="resExpand('${t.ticker}','signals')">⚡ View Signals</button>
-      <button class="ex-btn" onclick="resExpand('${t.ticker}','timeline')">🕒 Timeline</button>
-      <button class="ex-btn" onclick="resExpand('${t.ticker}', ${exp?'null':"'articles'"})">${exp?'▴ Collapse':'▾ View Details'}</button>
+      <button class="ex-btn" onclick="resExpand('${jsStr(t.ticker)}','articles')">📰 View Articles</button>
+      <button class="ex-btn" onclick="resExpand('${jsStr(t.ticker)}','signals')">⚡ View Signals</button>
+      <button class="ex-btn" onclick="resExpand('${jsStr(t.ticker)}','timeline')">🕒 Timeline</button>
+      <button class="ex-btn" onclick="resExpand('${jsStr(t.ticker)}', ${exp?'null':"'articles'"})">${exp?'▴ Collapse':'▾ View Details'}</button>
     </div>
     ${exp?resExpanded(t):''}`+`</div>`;
 }
@@ -7481,7 +7549,7 @@ function resSub(tk,k){ _res.sub[tk]=k; renderResultsBody(); if(k==='signals'&&_r
 function resExpanded(t){
   const sub=_res.sub[t.ticker]||'articles', hls=_filteredHeadlines(t);
   const tabs=[['articles','Articles'],['signals','Signals'],['timeline','Timeline']]
-    .map(([k,l])=>`<button class="rtab ${sub===k?'on':''}" onclick="resSub('${t.ticker}','${k}')">${l}</button>`).join('');
+    .map(([k,l])=>`<button class="rtab ${sub===k?'on':''}" onclick="resSub('${jsStr(t.ticker)}','${k}')">${l}</button>`).join('');
   let inner='';
   if(sub==='signals') inner=resSignalsView(t.ticker);
   else if(sub==='timeline'){
