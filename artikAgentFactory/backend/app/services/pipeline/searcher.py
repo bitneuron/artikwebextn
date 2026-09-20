@@ -3,7 +3,7 @@ Tolerant of individual query failures (a network hiccup on query 2 shouldn't kil
 4-query run); raises only if every single query failed."""
 from __future__ import annotations
 
-from app.services.model_config import get_anthropic_api_key, get_model
+from app.services.model_config import get_anthropic_api_key, chain, with_fallback
 from app.services.pipeline.prompts import SEARCH_SYSTEM
 
 WEB_SEARCH_TOOL_TYPE = "web_search_20250305"
@@ -40,7 +40,7 @@ def web_search_pass(queries: list[str], max_uses: int) -> tuple[list[dict], int,
     if not api_key:
         raise RuntimeError("ANTHROPIC_API_KEY is not configured (checked env and artikAgents/agents/.env)")
     client = anthropic.Anthropic(api_key=api_key)
-    model = get_model("anthropic", "research")
+    models = chain("anthropic", "research")
 
     raw_findings: list[dict] = []
     total_sources = 0
@@ -48,13 +48,13 @@ def web_search_pass(queries: list[str], max_uses: int) -> tuple[list[dict], int,
 
     for query in queries:
         try:
-            msg = client.messages.create(
-                model=model,
+            msg = with_fallback(models, lambda _m: client.messages.create(
+                model=_m,
                 max_tokens=4096,
                 system=SEARCH_SYSTEM,
                 tools=[{"type": WEB_SEARCH_TOOL_TYPE, "name": "web_search", "max_uses": max_uses}],
                 messages=[{"role": "user", "content": f"Research query: {query}"}],
-            )
+            ))
             text, citations, sources_touched = _extract_text_and_citations(msg.content)
             total_sources += sources_touched
             raw_findings.append({"query": query, "text": text, "citations": citations})

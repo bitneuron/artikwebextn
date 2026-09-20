@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 
-from app.services.model_config import get_anthropic_api_key, get_model
+from app.services.model_config import get_anthropic_api_key, chain, with_fallback
 from app.services.pipeline.prompts import extraction_system
 from app.templates.spec import TemplateSpec
 
@@ -51,7 +51,7 @@ def extract_structured(raw_findings: list[dict], template: TemplateSpec, objecti
     if not api_key:
         raise RuntimeError("ANTHROPIC_API_KEY is not configured")
     client = anthropic.Anthropic(api_key=api_key)
-    model = get_model("anthropic", "research")
+    models = chain("anthropic", "research")
     schema = _build_schema(template)
     tool = {"name": "emit", "description": "Return the structured research findings.", "input_schema": schema}
 
@@ -63,13 +63,13 @@ def extract_structured(raw_findings: list[dict], template: TemplateSpec, objecti
     }
     user_content = json.dumps(user_payload)[:120_000]
 
-    msg = client.messages.create(
-        model=model, max_tokens=8192,
-        **({"thinking": {"type": "disabled"}} if model == "claude-opus-5" else {}),
+    msg = with_fallback(models, lambda _m: client.messages.create(
+        model=_m, max_tokens=8192,
+        **({"thinking": {"type": "disabled"}} if _m == "claude-opus-5" else {}),
         system=extraction_system(template.system_prompt_fragment, template.result_categories),
         tools=[tool], tool_choice={"type": "tool", "name": "emit"},
         messages=[{"role": "user", "content": user_content}],
-    )
+    ))
     for block in msg.content:
         if getattr(block, "type", "") == "tool_use":
             findings = (block.input or {}).get("findings", [])

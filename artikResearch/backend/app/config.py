@@ -57,8 +57,10 @@ _load_env_file()
 
 class Models:
     # Newest-first chains; env overrides win. Mirrors the artik model-config pattern.
-    ANTHROPIC = [os.environ.get("ANTHROPIC_MODEL"), "claude-opus-5"]
-    OPENAI = [os.environ.get("OPENAI_MODEL"), "gpt-6-astra"]
+    # Newest first, then the previous version so a brief unavailability degrades
+    # instead of failing. Kept in step with artikAgents/agents/shared/models.json.
+    ANTHROPIC = [os.environ.get("ANTHROPIC_MODEL"), "claude-opus-5", "claude-opus-4-8"]
+    OPENAI = [os.environ.get("OPENAI_MODEL"), "gpt-6-astra", "gpt-5"]
     GEMINI = [os.environ.get("GEMINI_MODEL"), "gemini-2.0-flash"]
 
     @staticmethod

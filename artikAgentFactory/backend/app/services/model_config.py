@@ -43,6 +43,32 @@ def _load_config() -> dict:
 _CONFIG = _load_config()
 
 
+def chain(provider: str, role: str = "default") -> list:
+    """[newest, previous] — get_model() returns only the newest, which makes a brief
+    unavailability a hard failure. Same shape as the other apps' model configs."""
+    prov = (_CONFIG.get(provider) if "_CONFIG" in globals() else None) or _FALLBACK.get(provider) or {}
+    env = _ENV_OVERRIDES.get((provider, role))
+    out, seen = [], set()
+    for m in ((os.environ.get(env) if env else None),
+              prov.get(role), prov.get("default"), prov.get("fallback")):
+        if m and m not in seen:
+            seen.add(m)
+            out.append(m)
+    return out
+
+
+def with_fallback(models: list, fn):
+    last = None
+    for m in models:
+        try:
+            return fn(m)
+        except Exception as e:  # noqa: BLE001
+            last = e
+    if last:
+        raise last
+    raise RuntimeError("no model configured")
+
+
 def get_model(provider: str, role: str = "default") -> str:
     env = _ENV_OVERRIDES.get((provider, role))
     if env and os.environ.get(env):
