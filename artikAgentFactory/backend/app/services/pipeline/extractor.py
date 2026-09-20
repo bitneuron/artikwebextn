@@ -65,6 +65,7 @@ def extract_structured(raw_findings: list[dict], template: TemplateSpec, objecti
 
     msg = client.messages.create(
         model=model, max_tokens=8192,
+        **({"thinking": {"type": "disabled"}} if model == "claude-opus-5" else {}),
         system=extraction_system(template.system_prompt_fragment, template.result_categories),
         tools=[tool], tool_choice={"type": "tool", "name": "emit"},
         messages=[{"role": "user", "content": user_content}],

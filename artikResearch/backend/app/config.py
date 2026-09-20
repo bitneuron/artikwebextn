@@ -57,11 +57,21 @@ _load_env_file()
 
 class Models:
     # Newest-first chains; env overrides win. Mirrors the artik model-config pattern.
-    ANTHROPIC = [os.environ.get("ANTHROPIC_MODEL"), "claude-opus-4-8", "claude-sonnet-4-6"]
-    OPENAI = [os.environ.get("OPENAI_MODEL"), "gpt-5", "gpt-5-mini"]
+    ANTHROPIC = [os.environ.get("ANTHROPIC_MODEL"), "claude-opus-5"]
+    OPENAI = [os.environ.get("OPENAI_MODEL"), "gpt-6-astra"]
     GEMINI = [os.environ.get("GEMINI_MODEL"), "gemini-2.0-flash"]
 
     @staticmethod
     def chain(provider: str) -> list[str]:
         c = {"anthropic": Models.ANTHROPIC, "openai": Models.OPENAI, "gemini": Models.GEMINI}
         return [m for m in c.get(provider, []) if m]
+
+
+# Shared provider compatibility (also copied into the standalone Broker image).
+import importlib.util as _import_util
+_compat_path = next(p for p in [ROOT.parent / "artikAgents/agents/shared/llm_compat.py"] if p.exists())
+_compat_spec = _import_util.spec_from_file_location("artik_llm_compat", _compat_path)
+_compat = _import_util.module_from_spec(_compat_spec)
+_compat_spec.loader.exec_module(_compat)
+openai_create = _compat.openai_create
+anthropic_create = _compat.anthropic_create

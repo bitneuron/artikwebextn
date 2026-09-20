@@ -8,11 +8,11 @@ import models
 
 def test_chains_have_primary_and_fallbacks():
     assert models.CLAUDE and models.GPT
-    assert len(models.CLAUDE) >= 2 and len(models.GPT) >= 2       # primary + ≥1 fallback
-    assert models.CLAUDE[0].startswith("claude-")
-    assert models.GPT[0] == "gpt-5"                               # bumped to most-capable
-    # fast tier is distinct/cheaper-first
-    assert "haiku" in models.CLAUDE_FAST[0]
+    assert models.CLAUDE == ["claude-opus-5"]
+    assert models.GPT == ["gpt-6-astra"]
+    # The user selected Opus 5 for every Claude workload, including bulk tasks.
+    assert models.CLAUDE_FAST == ["claude-opus-5"]
+    assert models.GPT_FAST == ["gpt-6-astra"]
 
 
 def test_env_override(monkeypatch):
@@ -35,8 +35,9 @@ def test_with_fallback_uses_previous_when_latest_fails():
             raise RuntimeError(f"model unavailable: {m}")
         return f"ok:{m}"
 
-    assert models.with_fallback(models.CLAUDE, fn) == f"ok:{models.CLAUDE[-1]}"
-    assert tried == models.CLAUDE                                 # tried newest → oldest in order
+    chain = ["unavailable-primary", models.CLAUDE[-1]]
+    assert models.with_fallback(chain, fn) == f"ok:{models.CLAUDE[-1]}"
+    assert tried == chain
 
 
 def test_with_fallback_returns_first_success():

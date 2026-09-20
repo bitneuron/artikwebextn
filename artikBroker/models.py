@@ -15,8 +15,8 @@ import os
 from pathlib import Path
 
 _HERE = Path(__file__).resolve().parent
-_DEFAULT = {"anthropic": {"default": "claude-opus-4-8", "synthesis": "claude-opus-4-8"},
-            "openai": {"data": "gpt-5-mini", "chat": "gpt-5-mini", "vision": "gpt-5"}}
+_DEFAULT = {"anthropic": {"default": "claude-opus-5", "synthesis": "claude-opus-5"},
+            "openai": {"data": "gpt-6-astra", "chat": "gpt-6-astra", "vision": "gpt-6-astra"}}
 
 
 def _load() -> dict:
@@ -44,27 +44,26 @@ def _dedupe(xs):
 
 
 # ── Capable tier (reasoning: AI search, copilot, single-ticker analysis) ──────
-# Newest/most-capable first, then previous versions as automatic fallbacks.
+# Explicit environment overrides win; all Claude workloads default to Opus 5.
 CLAUDE = _dedupe([
     os.environ.get("ANTHROPIC_MODEL"),
     _AN.get("synthesis"), _AN.get("default"),
-    "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6",
+    "claude-opus-5",
 ])
 GPT = _dedupe([
     os.environ.get("OPENAI_MODEL"),
-    "gpt-5",                                   # bump: most-capable GPT-5 first
     _OA.get("chat"), _OA.get("data"),
-    "gpt-5-mini",
+    "gpt-6-astra",
 ])
 
-# ── Fast tier (bulk / high-volume: the rate-limit analysis fallback) ──────────
+# ── Bulk routes (names retained; now use the user-selected flagship models) ──
 CLAUDE_FAST = _dedupe([
     os.environ.get("ANTHROPIC_FAST_MODEL"),
-    "claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-8",
+    "claude-opus-5",
 ])
 GPT_FAST = _dedupe([
     os.environ.get("OPENAI_FAST_MODEL"),
-    _OA.get("data"), "gpt-5-mini",
+    _OA.get("data"), "gpt-6-astra",
 ])
 
 
@@ -87,3 +86,13 @@ def with_fallback(models: list[str], fn):
 def info() -> dict:
     """Introspection for /api/config etc. (which chains are in effect)."""
     return {"claude": CLAUDE, "gpt": GPT, "claude_fast": CLAUDE_FAST, "gpt_fast": GPT_FAST}
+
+
+# Shared provider compatibility (also copied into the standalone Broker image).
+import importlib.util as _import_util
+_compat_path = next(p for p in [Path(__file__).with_name("llm_compat.py"), Path(__file__).resolve().parents[1] / "artikAgents/agents/shared/llm_compat.py"] if p.exists())
+_compat_spec = _import_util.spec_from_file_location("artik_llm_compat", _compat_path)
+_compat = _import_util.module_from_spec(_compat_spec)
+_compat_spec.loader.exec_module(_compat)
+openai_create = _compat.openai_create
+anthropic_create = _compat.anthropic_create

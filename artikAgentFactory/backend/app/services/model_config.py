@@ -24,7 +24,7 @@ _CONFIG_PATH = (_REPO_ROOT / "artikAgents" / "agents" / "shared" / "models.json"
 _ENV_PATH = (_REPO_ROOT / "artikAgents" / "agents" / ".env") if _REPO_ROOT else None
 
 _FALLBACK = {
-    "anthropic": {"default": "claude-opus-4-8", "synthesis": "claude-opus-4-8", "research": "claude-opus-4-8"},
+    "anthropic": {"default": "claude-opus-5", "synthesis": "claude-opus-5", "research": "claude-opus-5"},
 }
 
 _ENV_OVERRIDES = {

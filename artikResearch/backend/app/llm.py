@@ -11,7 +11,7 @@ import json
 import os
 from typing import Any
 
-from .config import Models
+from .config import Models, openai_create, anthropic_create
 
 
 class LLMError(RuntimeError):
@@ -44,7 +44,7 @@ def _anthropic_json(system: str, user: str, schema: dict, max_tokens: int) -> di
     last = None
     for model in Models.chain("anthropic"):
         try:
-            msg = client.messages.create(
+            msg = anthropic_create(client,
                 model=model, max_tokens=max_tokens, system=system,
                 tools=[tool], tool_choice={"type": "tool", "name": "emit"},
                 messages=[{"role": "user", "content": user}])
@@ -62,7 +62,7 @@ def _anthropic_text(system: str, user: str, max_tokens: int) -> str:
     last = None
     for model in Models.chain("anthropic"):
         try:
-            msg = client.messages.create(model=model, max_tokens=max_tokens, system=system,
+            msg = anthropic_create(client,model=model, max_tokens=max_tokens, system=system,
                                          messages=[{"role": "user", "content": user}])
             return "".join(getattr(b, "text", "") for b in msg.content)
         except Exception as e:  # noqa: BLE001
@@ -79,7 +79,7 @@ def _openai_json(system: str, user: str, schema: dict, max_tokens: int) -> dict:
     last = None
     for model in Models.chain("openai"):
         try:
-            resp = client.chat.completions.create(
+            resp = openai_create(client,
                 model=model, messages=[{"role": "system", "content": system},
                                        {"role": "user", "content": user}],
                 tools=[tool], tool_choice={"type": "function", "function": {"name": "emit"}},
@@ -98,7 +98,7 @@ def _openai_text(system: str, user: str, max_tokens: int) -> str:
     last = None
     for model in Models.chain("openai"):
         try:
-            resp = client.chat.completions.create(
+            resp = openai_create(client,
                 model=model, messages=[{"role": "system", "content": system},
                                        {"role": "user", "content": user}],
                 max_completion_tokens=max_tokens, reasoning_effort="minimal")

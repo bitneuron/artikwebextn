@@ -45,6 +45,7 @@ COPY ["artikAgents/agents/knowledge_bases/personal_financial_statement/Financial
 
 # LLM model versions — single source of truth (env vars can override at runtime).
 COPY artikAgents/agents/shared/models.json /app/models.json
+COPY artikAgents/agents/shared/llm_compat.py /app/llm_compat.py
 
 # 5) News Collector agent — the Broker runs it as a subprocess. Bake it in and point
 #    the app at it (deps: anthropic + yfinance, already installed above; PyYAML optional).

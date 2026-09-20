@@ -11,6 +11,8 @@ circular dependency on app.py.
 """
 from __future__ import annotations
 
+from models import openai_create, anthropic_create
+
 import json
 import os
 from pathlib import Path
@@ -75,8 +77,8 @@ def _clean(plan: dict | None, limit: int = 12) -> list[str]:
 def _resolve_anthropic(query: str, key: str) -> dict | None:
     import anthropic
     client = anthropic.Anthropic(api_key=key)
-    msg = client.messages.create(
-        model="claude-opus-4-8",
+    msg = anthropic_create(client,
+        model="claude-opus-5",
         max_tokens=1200,
         system=_SYSTEM,
         tools=[_TOOL],
@@ -89,8 +91,8 @@ def _resolve_anthropic(query: str, key: str) -> dict | None:
 def _resolve_openai(query: str, key: str) -> dict | None:
     from openai import OpenAI
     client = OpenAI(api_key=key)
-    resp = client.chat.completions.create(
-        model="gpt-5-mini",
+    resp = openai_create(client,
+        model="gpt-6-astra",
         messages=[{"role": "system", "content": _SYSTEM},
                   {"role": "user", "content": query}],
         tools=[{"type": "function", "function": {
