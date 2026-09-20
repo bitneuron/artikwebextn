@@ -5354,6 +5354,33 @@ const PAY_FIELD_LABELS={institution:'Institution',account_name:'Account name',ac
   statement_start_date:'Statement start',statement_end_date:'Statement end',statement_close_date:'Statement close',
   due_date:'Due date',interest_charged:'Interest charged',fees_charged:'Fees charged',new_purchases:'New purchases',
   credits:'Credits',rewards:'Rewards',currency:'Currency'};
+// Two models read the same statement image. This reports whether they agreed, and
+// says plainly that agreement is not proof — the figures still come from a picture.
+function finShotVerdict(v){
+  if(!v) return '';
+  const box = (bg,bd,body) => `<div style="margin:0 0 10px;padding:9px 11px;border:1px solid ${bd};`
+    + `border-radius:8px;background:${bg};font-size:12.5px;line-height:1.5">${body}</div>`;
+  if(v.status === 'agreed'){
+    return box('rgba(34,197,94,.08)','rgba(34,197,94,.35)',
+      `<b>✓ Independently verified</b> — ${escapeHtml(v.primary_model||'?')} extracted this and `
+      + `${escapeHtml(v.checked_by||'the other model')} read the same image and matched on amounts, dates, signs and account. `
+      + `<span class="pf-meta">Agreement is not proof; check the figures against the statement before applying.</span>`);
+  }
+  if(v.status === 'unverified'){
+    return box('rgba(148,163,184,.10)','var(--line)',
+      `<b>Not cross-checked</b> — <span class="pf-meta">${escapeHtml(v.note||'')}</span>`);
+  }
+  const rows = (v.differences||[]).map(d=>`<tr>
+      <td class="pf-meta" style="padding:2px 10px 2px 0">${escapeHtml(String(d.field).replace(/_/g,' '))}</td>
+      <td style="padding:2px 10px 2px 0"><b>${escapeHtml(String(d.primary))}</b></td>
+      <td>${escapeHtml(String(d.second))}</td></tr>`).join('');
+  return box('rgba(239,68,68,.10)','rgba(239,68,68,.45)',
+    `<b>⚠ The two models disagree — verify manually before applying</b>`
+    + `<table style="margin-top:6px;border-collapse:collapse"><tr><th class="pf-meta" style="text-align:left;padding-right:10px">field</th>`
+    + `<th class="pf-meta" style="text-align:left;padding-right:10px">${escapeHtml(v.primary_model||'primary')}</th>`
+    + `<th class="pf-meta" style="text-align:left">${escapeHtml(v.checked_by||'second')}</th></tr>${rows}</table>`);
+}
+
 function finShotResult(){
   const d=window._finShot, out=$('#fin-shot-result'); if(!d||!out) return;
   const cats=d.categories||[], fields=d.fields||{};
@@ -5376,6 +5403,7 @@ function finShotResult(){
   out.innerHTML=`<div class="card">
     <div class="up-label" style="margin-bottom:6px">Review &amp; Apply${d.source?(' — '+escapeHtml(d.source)):''}
       ${conf!=null?`<span class="pf-meta" style="margin-left:8px">confidence ${conf}%${lowConf?' ⚠ needs review':''}</span>`:''}</div>
+    ${finShotVerdict(d.verification)}
     ${d.summary?`<div class="pf-meta" style="margin-bottom:8px">${escapeHtml(d.summary)}</div>`:''}
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
       <span class="pf-meta">Statement month:</span><input type="month" id="fs-month" value="${escapeHtml(d.month||new Date().toISOString().slice(0,7))}" style="background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px">
@@ -5397,7 +5425,7 @@ function finShotResult(){
     <div style="display:flex;gap:8px;margin-top:10px">
       <button class="ghost" onclick="window._finShot=null;window._pay.impStep=2;payRenderPTab()">Cancel</button>
       <button class="ghost" onclick="finShotDraft()" title="Keep the extraction for later — find it under Recent Imports">Save Draft</button>
-      <button class="ex-btn" id="fs-apply" onclick="finShotApply()">Apply to Account</button>
+      <button class="ex-btn" id="fs-apply" onclick="finShotApply()"${d.requires_manual_review?' title="The independent check did not agree — confirm you have verified these figures"':''}>${d.requires_manual_review?'Apply anyway — I verified these':'Apply to Account'}</button>
     </div></div>`;
   out.scrollIntoView({behavior:'smooth',block:'nearest'});
 }

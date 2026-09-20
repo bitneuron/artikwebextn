@@ -2152,6 +2152,57 @@ def _fin_extract_openai(b64: str, media: str, hint: str, key: str):
     return json.loads(calls[0].function.arguments) if calls else None
 
 
+def _fin_cross_check(primary: dict, second: dict | None) -> dict:
+    """Compare two independent extractions of the SAME image.
+
+    Money reaches the ledger through this path, so one model's confident answer is
+    not evidence. The second provider re-reads the image and the fields that would
+    be wrong in a costly way — amounts, dates, signs and account — are compared.
+    Returns a verdict the caller surfaces; it never edits the extraction.
+    """
+    if not second:
+        return {"status": "unverified", "checked": False,
+                "note": "The second model did not return an extraction, so nothing was cross-checked."}
+
+    def money(v):
+        try:
+            return round(float(str(v).replace(",", "").replace("$", "").strip()), 2)
+        except Exception:  # noqa: BLE001
+            return None
+
+    diffs = []
+    for field in ("statement_month", "due_date", "statement_close_date", "masked_account_number"):
+        a, b = primary.get(field), second.get(field)
+        if a and b and str(a).strip() != str(b).strip():
+            diffs.append({"field": field, "primary": a, "second": b})
+    for field in ("current_balance", "statement_balance", "previous_balance", "credit_limit",
+                  "available_credit", "minimum_payment_due", "total_payment_due"):
+        a, b = money(primary.get(field)), money(second.get(field))
+        if a is not None and b is not None and a != b:
+            diffs.append({"field": field, "primary": a, "second": b})
+
+    pl, sl = primary.get("lines") or [], second.get("lines") or []
+    if len(pl) != len(sl):
+        diffs.append({"field": "line_count", "primary": len(pl), "second": len(sl)})
+    else:
+        pt, st = sum(money(x.get("amount")) or 0 for x in pl), sum(money(x.get("amount")) or 0 for x in sl)
+        if round(pt, 2) != round(st, 2):
+            diffs.append({"field": "lines_total", "primary": round(pt, 2), "second": round(st, 2)})
+        # A sign flip turns a refund into a charge, so compare direction line by line.
+        flips = [i for i, (x, y) in enumerate(zip(pl, sl))
+                 if (money(x.get("amount")) or 0) * (money(y.get("amount")) or 0) < 0]
+        if flips:
+            diffs.append({"field": "sign_disagreement", "primary": f"{len(flips)} line(s)", "second": "opposite sign"})
+
+    return {"status": "disagreement" if diffs else "agreed", "checked": True,
+            "differences": diffs,
+            "note": ("Both models read this image the same way. Agreement is not proof — "
+                     "check the figures against the statement before applying."
+                     if not diffs else
+                     "The two models disagree on the fields below. Verify against the statement "
+                     "manually before applying.")}
+
+
 @app.post("/api/finance/screenshot")
 async def finance_screenshot(request: Request):
     """Analyze a pasted/dropped payment-site screenshot → proposed expense lines.
@@ -2191,11 +2242,25 @@ async def finance_screenshot(request: Request):
         return JSONResponse({"error": "no ANTHROPIC_API_KEY or OPENAI_API_KEY configured"}, status_code=503)
     out, provider, err = _models.cascade(akey, okey,
         claude_fn=lambda k: _fin_extract_claude(b64, media, hint, k),
-        gpt_fn=lambda k: _fin_extract_openai(b64, media, hint, k))
+        gpt_fn=lambda k: _fin_extract_openai(b64, media, hint, k), task="extraction")
     last_err = _err_detail(err) if err else None
     if not out:
         return JSONResponse({"error": f"could not analyze screenshot: {last_err or 'no extraction returned'}"},
                             status_code=422)
+
+    # Independent second read of the SAME image by the OTHER provider. Costs one extra
+    # call on a path that writes money into the ledger, which is where a second opinion
+    # is worth paying for. Skipped when only one provider has a key.
+    second = None
+    if akey and okey:
+        try:
+            second = (_fin_extract_openai(b64, media, hint, okey) if provider == "claude"
+                      else _fin_extract_claude(b64, media, hint, akey))
+        except Exception:  # noqa: BLE001
+            second = None
+    verification = _fin_cross_check(out, second)
+    verification["primary_model"] = provider
+    verification["checked_by"] = ("gpt" if provider == "claude" else "claude") if second else None
     out["lines"] = out.get("lines") or []
     for ln in out["lines"]:
         if not ln.get("category"):
@@ -2208,6 +2273,8 @@ async def finance_screenshot(request: Request):
     return {"id": sid, "provider": provider, "month": month or out.get("statement_month") or "",
             "source": out.get("source") or app_name, "summary": out.get("summary") or "",
             "confidence": out.get("confidence"), "fields": fields,
+            "verification": verification,
+            "requires_manual_review": verification["status"] != "agreed",
             "lines": out["lines"], "categories": _FIN_CATEGORIES}
 
 
@@ -2497,7 +2564,7 @@ def _alert_interpret_llm(prompt: str):
         calls = resp.choices[0].message.tool_calls
         return json.loads(calls[0].function.arguments) if calls else None
 
-    out, _prov, err = _models.cascade(akey, okey, claude_fn=_claude, gpt_fn=_gpt)
+    out, _prov, err = _models.cascade(akey, okey, claude_fn=_claude, gpt_fn=_gpt, task="structured")
     if out is not None:
         return out
     if err:
@@ -3076,67 +3143,18 @@ def _av_fundamental_row(t: str) -> dict | None:
     }
 
 
-def _llm_fundamental_row(t: str) -> dict | None:
-    """Last-resort fallback: ask Claude/GPT for a qualitative analysis when Yahoo AND
-    Alpha Vantage are unavailable. Estimated (may be less current) and clearly labeled."""
-    akey, okey = _anthropic_key(), _openai_key()
-    if not (akey or okey):
-        return None
-    sysmsg = ("You are an equity analyst. For the given US stock ticker return ONLY a JSON object "
-              "with keys: company (str), sector (str), score (int 0-100; 75+ = BUY, 50-74 = HOLD, "
-              "<50 = SELL), rating (BUY|HOLD|SELL), strengths (array of 3 short strings), "
-              "risks (array of 3 short strings), summary (one sentence). Base it on the company's "
-              "known fundamentals, growth, and risks. JSON only, no prose.")
-    # FAST chain (this can run on many tickers), primary provider first.
-    def _claude(k):
-        import anthropic
-        client = anthropic.Anthropic(api_key=k)
-        msg = _models.with_fallback(_models.CLAUDE_FAST, lambda mdl: _models.anthropic_create(client,
-            model=mdl, max_tokens=700, system=sysmsg,
-            messages=[{"role": "user", "content": f"Ticker: {t}"}]))
-        return "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
+def _fallback_row(t: str, reason: str) -> dict:
+    """Yahoo failed → Alpha Vantage fundamentals, else price-only, else unavailable.
 
-    def _gpt(k):
-        from openai import OpenAI
-        client = OpenAI(api_key=k)
-        r = _models.with_fallback(_models.GPT_FAST, lambda mdl: _models.openai_create(client,
-            model=mdl, max_completion_tokens=700, reasoning_effort="minimal",
-            messages=[{"role": "system", "content": sysmsg}, {"role": "user", "content": f"Ticker: {t}"}]))
-        return r.choices[0].message.content or ""
-
-    txt, _prov, _err = _models.cascade(akey, okey, claude_fn=_claude, gpt_fn=_gpt)
-    if not txt:
-        return None
-    try:
-        data = json.loads(txt[txt.find("{"):txt.rfind("}") + 1])
-    except Exception:  # noqa: BLE001
-        return None
-    if not data or data.get("score") is None:
-        return None
-    final = round(float(data.get("score") or 0), 1)
-    note = "AI-estimated analysis (Yahoo & Alpha Vantage unavailable)"
-    return {
-        "ticker": t, "company": data.get("company"), "sector": data.get("sector"),
-        "price": None, "score": final, "rating": data.get("rating") or _status(final),
-        "status": _status(final), "rsi": None, "data_source": "ai_estimate", "note": note,
-        "breakdown": {"categories": [], "archetype": "—", "final": final,
-                      "base": final, "penalties": 0, "multiplier": 1.0,
-                      "multiplier_reason": note,
-                      "peer_explanation": [data.get("summary") or "", note]},
-        "strengths": data.get("strengths") or [], "risks": data.get("risks") or [],
-        "technicals": {},
-    }
-
-
-def _fallback_row(t: str, reason: str, allow_llm: bool = True) -> dict:
-    """Yahoo failed → try Alpha Vantage fundamentals, then an LLM, then price-only."""
+    There is deliberately NO model in this path. It used to ask an LLM to produce a
+    0-100 score from memory when both data providers failed, and that score landed in
+    the same field as an engine-computed one and was ranked against it, with nothing
+    in the UI to tell them apart. A model cannot recover current financial facts it
+    was not given; saying so is the accurate answer.
+    """
     row = _av_fundamental_row(t)
     if row:
         return row
-    if allow_llm:
-        row = _llm_fundamental_row(t)
-        if row:
-            return row
     out = {"ticker": t, "error": reason}
     try:
         gq = (av.global_quote(t) or {}).get("Global Quote") or {}
@@ -3152,9 +3170,10 @@ def _fallback_row(t: str, reason: str, allow_llm: bool = True) -> dict:
 def analyze_one(ticker: str, allow_llm: bool = True) -> dict:
     """Run the engine for one ticker and shape it for the UI.
 
-    When Yahoo rate-limits, falls back to Alpha Vantage fundamentals (and, for single
-    tickers, an LLM). `allow_llm=False` is used for bulk index scoring to avoid dozens
-    of LLM calls."""
+    When Yahoo rate-limits, falls back to Alpha Vantage fundamentals, then to a
+    price-only row, then to an explicit "data unavailable". `allow_llm` is accepted
+    for call-site compatibility and ignored: no model is consulted for market data.
+    """
     t = ticker.strip().upper()
     if not t:
         return None
@@ -3172,12 +3191,12 @@ def analyze_one(ticker: str, allow_llm: bool = True) -> dict:
             if "RateLimit" in name and attempt < 2:
                 time.sleep(1.5 * (attempt + 1))
                 continue
-            return _fallback_row(t, f"could not analyze ({name})", allow_llm=allow_llm)
+            return _fallback_row(t, f"could not analyze ({name})")
 
     s = r.get("scores") or {}
     final = s.get("final")
     if final is None:
-        return _fallback_row(t, "no data returned", allow_llm=allow_llm)
+        return _fallback_row(t, "no data returned")
 
     tech = r.get("technicals") or {}
     rsi = tech.get("rsi")
@@ -3423,7 +3442,7 @@ def api_search(
     # ARTIK_PRIMARY_MODEL); on ANY failure (e.g. low credits) fall back to the other.
     plan, provider, err = _models.cascade(akey, okey,
         claude_fn=lambda k: _parse_anthropic(query, k),
-        gpt_fn=lambda k: _parse_openai(query, k))
+        gpt_fn=lambda k: _parse_openai(query, k), task="structured")
     last_err = _err_detail(err) if err else None
 
     if plan is None:
@@ -3645,7 +3664,7 @@ async def api_copilot(request: Request):
         return JSONResponse({"error": "Copilot unavailable: no ANTHROPIC_API_KEY or OPENAI_API_KEY configured."}, status_code=503)
     out, provider, err = _models.cascade(akey, okey,
         claude_fn=lambda k: _copilot_anthropic(conv, sys_text, k),
-        gpt_fn=lambda k: _copilot_openai(conv, sys_text, k))
+        gpt_fn=lambda k: _copilot_openai(conv, sys_text, k), task="structured")
     last_err = _err_detail(err) if err else None
     if not out:
         return JSONResponse({"error": f"Copilot failed: {last_err or 'no provider available'}"}, status_code=502)
@@ -3685,7 +3704,7 @@ async def api_copilot_analyze_page(request: Request):
                             status_code=503)
     out, provider, err = _models.cascade(akey, okey,
         claude_fn=lambda k: _copilot_anthropic(conv, sys_text, k),
-        gpt_fn=lambda k: _copilot_openai(conv, sys_text, k))
+        gpt_fn=lambda k: _copilot_openai(conv, sys_text, k), task="structured")
     last_err = _err_detail(err) if err else None
     if not out:
         return JSONResponse({"error": f"Copilot failed: {last_err or 'no provider available'}"}, status_code=502)
@@ -4160,7 +4179,7 @@ def _pc_narrative(result: dict, question: str, mode: str) -> str | None:
     akey, okey = _anthropic_key(), _openai_key()
     out, _prov, _err = _models.cascade(akey, okey,
         claude_fn=lambda k: _summarize_anthropic(prompt, k),
-        gpt_fn=lambda k: _summarize_openai(prompt, k))
+        gpt_fn=lambda k: _summarize_openai(prompt, k), task="questions")
     return out
 
 
@@ -4815,7 +4834,7 @@ def _ai_deep_analysis(context: dict):
             messages=[{"role": "system", "content": _DEEP_SYSTEM}, {"role": "user", "content": payload}]))
         return r.choices[0].message.content or ""
 
-    txt, _prov, err = _models.cascade(akey, okey, claude_fn=_claude, gpt_fn=_gpt)
+    txt, _prov, err = _models.cascade(akey, okey, claude_fn=_claude, gpt_fn=_gpt, task="reports")
     if not txt:
         return None, str(err) if err else "no provider returned a result"
     try:
@@ -4936,7 +4955,7 @@ def _ai_intel_summary(ticker: str, signals: dict):
             messages=[{"role": "system", "content": _INTEL_SYSTEM}, {"role": "user", "content": prompt}]))
         return r.choices[0].message.content or ""
 
-    txt, _prov, _err = _models.cascade(akey, okey, claude_fn=_claude, gpt_fn=_gpt)
+    txt, _prov, _err = _models.cascade(akey, okey, claude_fn=_claude, gpt_fn=_gpt, task="summaries")
     if not txt:
         return None
     try:
@@ -5391,7 +5410,7 @@ def api_news_summary(ticker: str = Query(..., description="ticker to summarize n
         return {"ok": False, "ticker": tk, "error": "no AI provider configured", "count": len(rows)}
     summary, provider, err = _models.cascade(akey, okey,
         claude_fn=lambda k: _summarize_anthropic(prompt, k),
-        gpt_fn=lambda k: _summarize_openai(prompt, k))
+        gpt_fn=lambda k: _summarize_openai(prompt, k), task="summaries")
     last_err = _err_detail(err) if err else None
     if not summary:
         return {"ok": False, "ticker": tk, "error": last_err or "summary failed", "count": len(rows)}

@@ -117,6 +117,22 @@ agents with `save_*` tools persist memory back into their KB across sessions.
 
 ## Cross-cutting conventions
 
+- **Model policy is per task, not one winner.** `tasks` in `models.json` maps a workload to the
+  provider that leads it; the other stays the fallback, so this changes order, never availability.
+  Accuracy-first assignments: `extraction` (financial screenshots), `structured` (search planning,
+  alerts, copilot commands), `reports` (deep analysis) and `summaries` (news, intelligence) lead with
+  Claude; `questions` (data gathering, charts, free-form financial questions) leads with Astra.
+  `ARTIK_PRIMARY_MODEL` overrides `primary` but deliberately NOT `tasks` — it is the blunt
+  "send everything one way" switch, and it must not silently undo an accuracy assignment.
+  Code: `models.task_provider()`, `models.cascade(..., task=...)`; read it at `GET /api/config/models`.
+- **No model is ever asked for market data.** When Yahoo and Alpha Vantage both fail, the row says
+  "data unavailable". The old path asked an LLM for a 0-100 score from memory, and that score landed
+  in the same field as engine-computed ones and was ranked against them with nothing in the UI to
+  tell them apart. Do not reintroduce it; a test asserts it is gone.
+- **Financial screenshot extraction is cross-checked.** The other provider independently re-reads the
+  same image and amounts, dates, signs, line count and account are compared. Disagreements are shown
+  and the Apply button changes to require explicit confirmation. Agreement is reported as agreement,
+  not as proof.
 - **Primary provider: `primary` in `models.json`** (`"openai"` = gpt-6-astra, `"anthropic"` = claude).
   Every AI feature in artikBroker can run on either; `primary` picks which is tried first and the
   other stays as the fallback. Change it with `POST /api/config/models {"primary":"astra"|"claude"}`

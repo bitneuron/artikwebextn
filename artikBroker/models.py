@@ -16,12 +16,16 @@ from pathlib import Path
 
 _HERE = Path(__file__).resolve().parent
 _DEFAULT = {"primary": "openai",
+            "tasks": {"extraction": "anthropic", "structured": "anthropic",
+                      "reports": "anthropic", "summaries": "anthropic",
+                      "questions": "openai"},
             "anthropic": {"default": "claude-opus-5", "synthesis": "claude-opus-5"},
             "openai": {"data": "gpt-6-astra", "chat": "gpt-6-astra", "vision": "gpt-6-astra"}}
 
 
 def _load() -> dict:
-    for p in (os.environ.get("MODELS_JSON"), str(_HERE / "models.json")):
+    for p in (os.environ.get("MODELS_JSON"), str(_HERE / "models.json"),
+              str(_HERE.parent / "artikAgents/agents/shared/models.json")):
         if p and Path(p).exists():
             try:
                 return json.loads(Path(p).read_text())
@@ -53,6 +57,29 @@ SECONDARY = "anthropic" if PRIMARY == "openai" else "openai"
 
 # Provider name → the label the API already reports to the UI.
 _LABEL = {"anthropic": "claude", "openai": "gpt"}
+
+# ── Per-task policy ──────────────────────────────────────────────────────────
+# One model does not win everywhere, so the provider is assigned per workload
+# instead. `tasks` in models.json maps a task name to the provider that LEADS it;
+# the other provider remains the fallback, so this changes order, never
+# availability. A task with no entry falls back to PRIMARY.
+#
+# ARTIK_PRIMARY_MODEL deliberately does NOT override these: it is the blunt
+# instrument for "route everything at one provider" (an outage, a billing stop),
+# and letting it silently retarget an accuracy-assigned task would defeat the point.
+TASKS = {k: _primary(v) for k, v in (_M.get("tasks") or {}).items()
+         if not k.startswith("_") and isinstance(v, str)}
+
+
+def task_provider(task: str | None) -> str:
+    """Which provider leads this task. Unknown or unset → the global primary."""
+    return TASKS.get(task or "", PRIMARY)
+
+
+def task_order(task: str | None) -> tuple[str, str]:
+    """(leader, fallback) for a task."""
+    lead = task_provider(task)
+    return lead, ("anthropic" if lead == "openai" else "openai")
 
 
 def _dedupe(xs):
@@ -140,15 +167,16 @@ def set_primary(choice: str) -> str:
     return canon
 
 
-def providers(akey: str | None, okey: str | None) -> list[tuple[str, str]]:
+def providers(akey: str | None, okey: str | None, task: str | None = None) -> list[tuple[str, str]]:
     """[(label, api_key), ...] in preference order, skipping providers with no key.
 
-    label is the name the API already reports to the UI ("claude" / "gpt")."""
+    label is the name the API already reports to the UI ("claude" / "gpt").
+    `task` selects the per-workload order; omit it for the global primary."""
     keys = {"anthropic": akey, "openai": okey}
-    return [(_LABEL[p], keys[p]) for p in (PRIMARY, SECONDARY) if keys[p]]
+    return [(_LABEL[p], keys[p]) for p in task_order(task) if keys[p]]
 
 
-def cascade(akey: str | None, okey: str | None, claude_fn=None, gpt_fn=None):
+def cascade(akey: str | None, okey: str | None, claude_fn=None, gpt_fn=None, task: str | None = None):
     """Try each configured provider in preference order; return (result, label, error).
 
     Runs the primary first and falls back to the other on an exception OR a None
@@ -158,7 +186,7 @@ def cascade(akey: str | None, okey: str | None, claude_fn=None, gpt_fn=None):
     simply returned None without raising."""
     fns = {"claude": claude_fn, "gpt": gpt_fn}
     last = None
-    for label, key in providers(akey, okey):
+    for label, key in providers(akey, okey, task):
         fn = fns.get(label)
         if fn is None:
             continue
@@ -174,7 +202,8 @@ def cascade(akey: str | None, okey: str | None, claude_fn=None, gpt_fn=None):
 
 def info() -> dict:
     """Introspection for /api/config etc. (which chains are in effect)."""
-    return {"primary": PRIMARY, "secondary": SECONDARY,
+    return {"primary": PRIMARY, "secondary": SECONDARY, "tasks": dict(TASKS),
+            "task_models": {k: (GPT if v == "openai" else CLAUDE)[0] for k, v in TASKS.items()},
             "primary_label": _LABEL[PRIMARY], "primary_model": (GPT if PRIMARY == "openai" else CLAUDE)[0],
             "claude": CLAUDE, "gpt": GPT, "claude_fast": CLAUDE_FAST, "gpt_fast": GPT_FAST}
 
