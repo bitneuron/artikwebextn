@@ -1098,6 +1098,8 @@
           <option value="3">3 months</option>
           <option value="6" selected>6 months</option>
           <option value="12">12 months</option>
+          <option value="18">18 months</option>
+          <option value="24">24 months</option>
         </select>
         <button id="pf-pc-btn" class="ex-btn" onclick="togglePriceChanges()" title="Month-by-month price change for each holding, and the change over the whole window">📊 Price Changes</button>
       </span>
@@ -6792,6 +6794,8 @@ function pcBarChart(series, title){
   const n = pts.length;
   const slot = (W-L-R)/n;
   const bw = Math.max(6, Math.min(48, slot*0.6));
+  // ~34px per label is the tightest "YY-MM" can sit without characters touching.
+  const step = Math.max(1, Math.ceil(34 / slot));
   const y = v => zero - (v/mx)*half;
   const grid = [mx, mx/2, 0, -mx/2, -mx].map(v =>
     `<line x1="${L}" y1="${y(v).toFixed(1)}" x2="${W-R}" y2="${y(v).toFixed(1)}" stroke="var(--line)" stroke-dasharray="${v===0?'':'3,4'}"/>
@@ -6806,9 +6810,12 @@ function pcBarChart(series, title){
     const mtd = p.month === thisMonth;          // current month is still running
     if(mtd) partial = true;
     const extra = p.value!=null ? `\nValue: $${Math.round(p.value).toLocaleString()}` : '';
+    const sel = p.month === window._pcMonth;
     return `<rect x="${(cx-bw/2).toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}"
-      fill="${col}" opacity="${mtd?'.42':'.85'}" ${mtd?'stroke="'+col+'" stroke-dasharray="3,2" ':''}rx="2"><title>${escapeHtml(p.month)}${mtd?' (month to date)':''}: ${p.pct>=0?'+':''}${p.pct}%${extra}</title></rect>
-      <text x="${cx.toFixed(1)}" y="${H-B+15}" fill="var(--mut)" font-size="10" text-anchor="middle">${escapeHtml(p.month.slice(2))}${mtd?'*':''}</text>`;
+      fill="${col}" opacity="${sel?'1':(mtd?'.42':'.85')}" ${sel?'stroke="#fff" stroke-width="2.5" ':(mtd?'stroke="'+col+'" stroke-dasharray="3,2" ':'')}rx="2"
+      style="cursor:pointer" onclick="pcShowMonth('${p.month}')"><title>${escapeHtml(p.month)}${mtd?' (month to date)':''}: ${p.pct>=0?'+':''}${p.pct}%${extra}\nClick for month-end prices</title></rect>
+      ${((n-1-i) % step === 0) ? `<text x="${cx.toFixed(1)}" y="${H-B+15}" fill="${sel?'var(--fg)':'var(--mut)'}" font-size="10" text-anchor="middle"
+        style="cursor:pointer" onclick="pcShowMonth('${p.month}')">${escapeHtml(p.month.slice(2))}${mtd?'*':''}</text>` : ''}`;
   }).join('');
   const note = partial ? `<div class="pf-meta" style="margin-top:2px">* ${escapeHtml(thisMonth)} is month to date — that bar covers a part-month only.</div>` : '';
   return `<div class="up-label" style="margin-bottom:4px">${escapeHtml(title)}</div>
@@ -6828,8 +6835,10 @@ function pcSpark(monthly){
     const bh = Math.max(1, Math.abs(p.pct)/mx*(h/2-1));
     const yy = p.pct>=0 ? zero-bh : zero;
     const mtd = p.month === new Date().toISOString().slice(0,7);
+    const tip = p.price!=null ? `\n$${p.price}` : '';
     return `<rect x="${i*w+2}" y="${yy.toFixed(1)}" width="${w-4}" height="${bh.toFixed(1)}"
-      fill="${p.pct>=0?'var(--buy)':'var(--sell)'}" opacity="${mtd?'.42':'.85'}"><title>${escapeHtml(p.month)}${mtd?' (month to date)':''}: ${p.pct>=0?'+':''}${p.pct}%</title></rect>`;
+      fill="${p.pct>=0?'var(--buy)':'var(--sell)'}" opacity="${mtd?'.42':'.85'}"
+      style="cursor:pointer" onclick="pcShowMonth('${p.month}')"><title>${escapeHtml(p.month)}${mtd?' (month to date)':''}: ${p.pct>=0?'+':''}${p.pct}%${tip}</title></rect>`;
   }).join('');
   return `<svg width="${pts.length*w}" height="${h}" style="vertical-align:middle">
     <line x1="0" y1="${zero}" x2="${pts.length*w}" y2="${zero}" stroke="var(--line)"/>${bars}</svg>`;
@@ -6877,11 +6886,88 @@ function renderPriceChanges(d){
 
   $('#pf-pc').innerHTML = `<div class="card" style="padding:14px">
     ${cards}
-    ${pcBarChart(p.monthly, 'Portfolio value change by month')}
+    <div id="pf-pc-chart">${pcBarChart(p.monthly, 'Portfolio value change by month')}</div>
+    <div id="pf-pc-detail"></div>
     <div style="margin-top:14px">${tbl}</div>
     <div class="pf-meta" style="margin-top:8px">${escapeHtml(d.basis||'')}</div>
     ${excNote}${miss}
   </div>`;
+  window._pcMonth = null;   // a new window means no month is open yet
+}
+
+// Repaint only the chart, so the selected bar can be highlighted without
+// rebuilding the card (which would wipe the detail panel below it).
+function pcRepaintChart(){
+  const el = $('#pf-pc-chart'), d = window._pcData;
+  if(el && d) el.innerHTML = pcBarChart((d.portfolio||{}).monthly, 'Portfolio value change by month');
+}
+
+// ── One month, in detail ──────────────────────────────────────────────────────
+// Clicking a bar answers "what was each holding actually priced at, that month
+// end?" — the question the percentage alone cannot.
+function pcShowMonth(month, keepScroll){
+  const d = window._pcData; if(!d) return;
+  const host = $('#pf-pc-detail'); if(!host) return;
+  // Clicking the open month closes it.
+  if(window._pcMonth === month){
+    window._pcMonth = null; host.innerHTML = ''; pcRepaintChart();
+    return;
+  }
+  window._pcMonth = month;
+  pcRepaintChart();
+
+  const pm = (d.portfolio?.monthly || []).find(x => x.month === month) || {};
+  const idx = (d.labels || []).indexOf(month);
+  const prevLabel = idx > 0 ? d.labels[idx-1] : (d.window_from || '');
+  const inBasket = new Set(d.portfolio?.basket || []);
+
+  const rows = (d.rows || []).map(r => {
+    const e = (r.monthly || []).find(x => x.month === month);
+    if(!e || e.price == null) return null;
+    const qty = r.qty || 0;
+    return { ticker: r.ticker, qty, price: e.price, prev: e.prev_price,
+             pct: e.pct, value: qty * e.price, counted: inBasket.has(r.ticker) };
+  }).filter(Boolean).sort((a,b) => b.value - a.value);
+
+  const mtd = month === new Date().toISOString().slice(0,7);
+  const priced = rows.length, total = (d.rows||[]).length;
+
+  const head = `<div class="row" style="justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px">
+      <div><b>${escapeHtml(month)}</b> month-end prices${mtd?' <span class="pf-meta">(month to date — latest close, not a closed month)</span>':''}
+        <span class="pf-meta"> · vs ${escapeHtml(prevLabel)}</span></div>
+      <button class="ex-btn" onclick="pcShowMonth('${month}')">Close ✕</button>
+    </div>`;
+
+  const stats = `<div class="exec" style="margin:8px 0">
+      <div class="estat"><div class="lbl">Portfolio Value</div><div class="big">${money(pm.value)}</div>
+        <div class="sub">end of ${escapeHtml(month)}</div></div>
+      <div class="estat"><div class="lbl">Change vs ${escapeHtml(prevLabel)}</div>
+        <div class="big ${pm.pct>=0?'pos':'neg'}">${pm.pct!=null?(pm.pct>=0?'+':'')+pm.pct.toFixed(2)+'%':'—'}</div>
+        <div class="sub">${(pm.value!=null&&pm.prev_value!=null)?((pm.value-pm.prev_value)>=0?'+':'−')+'$'+Math.abs(Math.round(pm.value-pm.prev_value)).toLocaleString():'—'}</div></div>
+      <div class="estat"><div class="lbl">Holdings Priced</div><div class="big">${priced}</div>
+        <div class="sub">of ${total} in the snapshot</div></div>
+    </div>`;
+
+  const body = rows.map(r => `<tr class="row">
+      <td class="tick">${escapeHtml(r.ticker)}${r.counted?'':' <span class="pf-meta" title="Not in the fixed basket, so not in the portfolio total">*</span>'}</td>
+      <td class="num">${r.qty.toLocaleString()}</td>
+      <td class="num">${r.prev!=null?'$'+r.prev.toLocaleString():'—'}</td>
+      <td class="num"><b>$${r.price.toLocaleString()}</b></td>
+      <td class="num">${pcPct(r.pct)}</td>
+      <td class="num">${money(r.value)}</td>
+    </tr>`).join('');
+
+  const starred = rows.some(r => !r.counted)
+    ? '<div class="pf-meta" style="margin-top:6px">* Priced for this month but outside the fixed basket, so excluded from the portfolio total above.</div>' : '';
+
+  host.innerHTML = `<div class="card" style="padding:12px;margin-top:10px;border:1px solid var(--line)">
+      ${head}${stats}
+      <div style="overflow-x:auto"><table style="min-width:620px"><thead><tr>
+        <th>Ticker</th><th class="num">Qty</th><th class="num">${escapeHtml(prevLabel)} Close</th>
+        <th class="num">${escapeHtml(month)} Close</th><th class="num">Change</th><th class="num">Value</th>
+      </tr></thead><tbody>${body}</tbody></table></div>${starred}
+    </div>`;
+  if(!keepScroll) host.scrollIntoView({behavior:'smooth', block:'nearest'});
 }
 
 // (explainPf removed — Portfolio "Explain" now opens the canonical Stock Analysis view via openStock.)

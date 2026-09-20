@@ -2102,7 +2102,7 @@ _FIN_EXTRACT_PROMPT = (
 def _fin_extract_claude(b64: str, media: str, hint: str, key: str):
     import anthropic
     client = anthropic.Anthropic(api_key=key)
-    msg = _models.with_fallback(_models.CLAUDE, lambda mdl: client.messages.create(
+    msg = _models.with_fallback(_models.CLAUDE, lambda mdl: _models.anthropic_create(client,
         model=mdl, max_tokens=3000,
         tools=[{"name": "record_expenses", "description": "Record the extracted expense lines.",
                 "input_schema": _FIN_EXTRACT_SCHEMA}],
@@ -2116,7 +2116,7 @@ def _fin_extract_claude(b64: str, media: str, hint: str, key: str):
 def _fin_extract_openai(b64: str, media: str, hint: str, key: str):
     from openai import OpenAI
     client = OpenAI(api_key=key)
-    resp = _models.with_fallback(_models.GPT, lambda mdl: client.chat.completions.create(
+    resp = _models.with_fallback(_models.GPT, lambda mdl: _models.openai_create(client,
         model=mdl,
         messages=[{"role": "user", "content": [
             {"type": "image_url", "image_url": {"url": f"data:{media};base64,{b64}"}},
@@ -2463,7 +2463,7 @@ def _alert_interpret_llm(prompt: str):
         try:
             import anthropic
             client = anthropic.Anthropic(api_key=akey)
-            msg = _models.with_fallback(_models.CLAUDE, lambda mdl: client.messages.create(
+            msg = _models.with_fallback(_models.CLAUDE, lambda mdl: _models.anthropic_create(client,
                 model=mdl, max_tokens=1200, system=_ALERT_SYSTEM,
                 tools=[{"name": _ALERT_TOOL_NAME, "description": "Return the structured alert.",
                         "input_schema": _ALERT_TOOL_SCHEMA}],
@@ -2476,7 +2476,7 @@ def _alert_interpret_llm(prompt: str):
     if okey:
         from openai import OpenAI
         client = OpenAI(api_key=okey)
-        resp = _models.with_fallback(_models.GPT, lambda mdl: client.chat.completions.create(
+        resp = _models.with_fallback(_models.GPT, lambda mdl: _models.openai_create(client,
             model=mdl, messages=[{"role": "system", "content": _ALERT_SYSTEM}] + msgs,
             tools=[{"type": "function", "function": {"name": _ALERT_TOOL_NAME,
                     "description": "Return the structured alert.", "parameters": _ALERT_TOOL_SCHEMA}}],
@@ -3075,14 +3075,14 @@ def _llm_fundamental_row(t: str) -> dict | None:
         if akey:  # FAST chain (this can run on many tickers) with version fallback
             import anthropic
             client = anthropic.Anthropic(api_key=akey)
-            msg = _models.with_fallback(_models.CLAUDE_FAST, lambda mdl: client.messages.create(
+            msg = _models.with_fallback(_models.CLAUDE_FAST, lambda mdl: _models.anthropic_create(client,
                 model=mdl, max_tokens=700, system=sysmsg,
                 messages=[{"role": "user", "content": f"Ticker: {t}"}]))
             txt = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
         else:
             from openai import OpenAI
             client = OpenAI(api_key=okey)
-            r = _models.with_fallback(_models.GPT_FAST, lambda mdl: client.chat.completions.create(
+            r = _models.with_fallback(_models.GPT_FAST, lambda mdl: _models.openai_create(client,
                 model=mdl, max_completion_tokens=700, reasoning_effort="minimal",
                 messages=[{"role": "system", "content": sysmsg}, {"role": "user", "content": f"Ticker: {t}"}]))
             txt = r.choices[0].message.content or ""
@@ -3350,7 +3350,7 @@ def _err_detail(e) -> str:
 def _parse_anthropic(query: str, key: str) -> dict | None:
     import anthropic
     client = anthropic.Anthropic(api_key=key)
-    msg = _models.with_fallback(_models.CLAUDE, lambda mdl: client.messages.create(
+    msg = _models.with_fallback(_models.CLAUDE, lambda mdl: _models.anthropic_create(client,
         model=mdl,
         max_tokens=2000,
         system=_SEARCH_SYSTEM,
@@ -3365,7 +3365,7 @@ def _parse_openai(query: str, key: str) -> dict | None:
     """OpenAI GPT fallback — same structured plan via function calling (GPT-5 API)."""
     from openai import OpenAI
     client = OpenAI(api_key=key)
-    resp = _models.with_fallback(_models.GPT, lambda mdl: client.chat.completions.create(
+    resp = _models.with_fallback(_models.GPT, lambda mdl: _models.openai_create(client,
         model=mdl,
         messages=[
             {"role": "system", "content": _SEARCH_SYSTEM},
@@ -3569,7 +3569,7 @@ def _copilot_context_block(context_type: str, context: dict) -> str:
 def _copilot_anthropic(messages, sys_text, key):
     import anthropic
     client = anthropic.Anthropic(api_key=key)
-    msg = _models.with_fallback(_models.CLAUDE, lambda mdl: client.messages.create(
+    msg = _models.with_fallback(_models.CLAUDE, lambda mdl: _models.anthropic_create(client,
         model=mdl, max_tokens=1500, system=sys_text,
         tools=[{"name": _COPILOT_TOOL_NAME, "description": _COPILOT_TOOL_DESC,
                 "input_schema": _COPILOT_TOOL_SCHEMA}],
@@ -3581,7 +3581,7 @@ def _copilot_anthropic(messages, sys_text, key):
 def _copilot_openai(messages, sys_text, key):
     from openai import OpenAI
     client = OpenAI(api_key=key)
-    resp = _models.with_fallback(_models.GPT, lambda mdl: client.chat.completions.create(
+    resp = _models.with_fallback(_models.GPT, lambda mdl: _models.openai_create(client,
         model=mdl,
         messages=[{"role": "system", "content": sys_text}] + messages,
         tools=[{"type": "function", "function": {
@@ -4409,7 +4409,7 @@ def _monthly_closes(tickers: list, months: int) -> dict:
 @app.get("/api/portfolio/price-changes")
 def api_portfolio_price_changes(request: Request, date: str = Query(None),
                                 file: str = Query(None), key: str = Query(None),
-                                months: int = Query(6, ge=1, le=12)):
+                                months: int = Query(6, ge=1, le=24)):
     """Per-ticker monthly % change plus the trailing N-month change, and the same
     two views for the portfolio as a whole (current quantities, historic prices)."""
     holdings, err = _pf_holdings_light(request, date=date, file=file, key=key)
@@ -4449,7 +4449,9 @@ def api_portfolio_price_changes(request: Request, date: str = Query(None),
         for i, m in enumerate(window[1:], start=1):
             prev, cur = ser.get(window[i - 1]), ser.get(m)
             pct = round((cur - prev) / prev * 100, 2) if (prev and cur) else None
-            monthly.append({"month": m, "pct": pct})
+            monthly.append({"month": m, "pct": pct,
+                            "price": round(cur, 2) if cur else None,
+                            "prev_price": round(prev, 2) if prev else None})
         first = next((ser[m] for m in window if ser.get(m)), None)
         last = next((ser[m] for m in reversed(window) if ser.get(m)), None)
         rows.append({
@@ -4478,7 +4480,8 @@ def api_portfolio_price_changes(request: Request, date: str = Query(None),
         pv = port_vals[i - 1][1]
         p_monthly.append({"month": m,
                           "pct": round((v - pv) / pv * 100, 2) if (pv and v) else None,
-                          "value": round(v, 2) if v else None})
+                          "value": round(v, 2) if v else None,
+                          "prev_value": round(pv, 2) if pv else None})
     p_first = port_vals[0][1] if port_vals else None
     p_last = port_vals[-1][1] if port_vals else None
 
@@ -4770,14 +4773,14 @@ def _ai_deep_analysis(context: dict):
         if akey:
             import anthropic
             client = anthropic.Anthropic(api_key=akey)
-            msg = _models.with_fallback(_models.CLAUDE, lambda mdl: client.messages.create(
+            msg = _models.with_fallback(_models.CLAUDE, lambda mdl: _models.anthropic_create(client,
                 model=mdl, max_tokens=1400, system=_DEEP_SYSTEM,
                 messages=[{"role": "user", "content": payload}]))
             txt = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
         else:
             from openai import OpenAI
             client = OpenAI(api_key=okey)
-            r = _models.with_fallback(_models.GPT, lambda mdl: client.chat.completions.create(
+            r = _models.with_fallback(_models.GPT, lambda mdl: _models.openai_create(client,
                 model=mdl, max_completion_tokens=1400, reasoning_effort="minimal",
                 messages=[{"role": "system", "content": _DEEP_SYSTEM}, {"role": "user", "content": payload}]))
             txt = r.choices[0].message.content or ""
@@ -4886,14 +4889,14 @@ def _ai_intel_summary(ticker: str, signals: dict):
         if akey:
             import anthropic
             client = anthropic.Anthropic(api_key=akey)
-            msg = _models.with_fallback(_models.CLAUDE_FAST, lambda mdl: client.messages.create(
+            msg = _models.with_fallback(_models.CLAUDE_FAST, lambda mdl: _models.anthropic_create(client,
                 model=mdl, max_tokens=500, system=_INTEL_SYSTEM,
                 messages=[{"role": "user", "content": prompt}]))
             txt = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
         else:
             from openai import OpenAI
             client = OpenAI(api_key=okey)
-            r = _models.with_fallback(_models.GPT_FAST, lambda mdl: client.chat.completions.create(
+            r = _models.with_fallback(_models.GPT_FAST, lambda mdl: _models.openai_create(client,
                 model=mdl, max_completion_tokens=500, reasoning_effort="minimal",
                 messages=[{"role": "system", "content": _INTEL_SYSTEM}, {"role": "user", "content": prompt}]))
             txt = r.choices[0].message.content or ""
@@ -5270,7 +5273,7 @@ _SUMMARY_SYSTEM = (
 def _summarize_anthropic(prompt: str, key: str) -> str | None:
     import anthropic
     client = anthropic.Anthropic(api_key=key)
-    msg = _models.with_fallback(_models.CLAUDE_FAST, lambda mdl: client.messages.create(
+    msg = _models.with_fallback(_models.CLAUDE_FAST, lambda mdl: _models.anthropic_create(client,
         model=mdl, max_tokens=350,
         system=_SUMMARY_SYSTEM,
         messages=[{"role": "user", "content": prompt}],
@@ -5281,7 +5284,7 @@ def _summarize_anthropic(prompt: str, key: str) -> str | None:
 def _summarize_openai(prompt: str, key: str) -> str | None:
     from openai import OpenAI
     client = OpenAI(api_key=key)
-    resp = _models.with_fallback(_models.GPT_FAST, lambda mdl: client.chat.completions.create(
+    resp = _models.with_fallback(_models.GPT_FAST, lambda mdl: _models.openai_create(client,
         model=mdl,
         messages=[{"role": "system", "content": _SUMMARY_SYSTEM},
                   {"role": "user", "content": prompt}],
