@@ -10,11 +10,19 @@ import models
 # ── policy ───────────────────────────────────────────────────────────────────
 
 def test_accuracy_policy_assignments():
+    # Claude leads where a structured extraction must be exactly right.
     assert models.task_provider("extraction") == "anthropic"
     assert models.task_provider("structured") == "anthropic"
-    assert models.task_provider("reports") == "anthropic"
-    assert models.task_provider("summaries") == "anthropic"
+    # Astra leads synthesis, summaries and free-form questions.
+    assert models.task_provider("reports") == "openai"
+    assert models.task_provider("summaries") == "openai"
     assert models.task_provider("questions") == "openai"
+
+
+def test_every_task_keeps_the_other_provider_behind_it():
+    for task in ("extraction", "structured", "reports", "summaries", "questions"):
+        lead, fallback = models.task_order(task)
+        assert {lead, fallback} == {"anthropic", "openai"}
 
 
 def test_unknown_task_uses_the_global_primary():

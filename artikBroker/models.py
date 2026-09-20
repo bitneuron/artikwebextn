@@ -17,12 +17,12 @@ from pathlib import Path
 _HERE = Path(__file__).resolve().parent
 _DEFAULT = {"primary": "openai",
             "tasks": {"extraction": "anthropic", "structured": "anthropic",
-                      "reports": "anthropic", "summaries": "anthropic",
-                      "questions": "openai"},
+                      "reports": "openai", "summaries": "openai", "questions": "openai"},
             "anthropic": {"default": "claude-opus-5", "synthesis": "claude-opus-5",
-                          "fallback": "claude-opus-4-8", "fast": "claude-haiku-4-5-20251001"},
+                          "fallback": "claude-opus-4-8", "fast": "claude-haiku-4-5-20251001",
+                          "fast_fallback": "claude-haiku-4-5-20251001"},
             "openai": {"data": "gpt-6-astra", "chat": "gpt-6-astra", "vision": "gpt-6-astra",
-                       "fallback": "gpt-5", "fast": "gpt-5-mini"}}
+                       "fallback": "gpt-5", "fast": "gpt-6-astra", "fast_fallback": "gpt-5-mini"}}
 
 
 def _load() -> dict:
@@ -115,11 +115,13 @@ GPT = _dedupe([
 CLAUDE_FAST = _dedupe([
     os.environ.get("ANTHROPIC_FAST_MODEL"),
     _AN.get("fast"),
+    _AN.get("fast_fallback"),
     _AN.get("default"), "claude-opus-5",
 ])
 GPT_FAST = _dedupe([
     os.environ.get("OPENAI_FAST_MODEL"),
     _OA.get("fast"),
+    _OA.get("fast_fallback"),
     _OA.get("data"), "gpt-6-astra",
 ])
 

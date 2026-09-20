@@ -13,13 +13,14 @@ def test_chains_lead_with_the_flagship_and_keep_a_version_fallback():
     assert len(models.CLAUDE) > 1 and len(models.GPT) > 1
 
 
-def test_bulk_chains_lead_with_a_small_model():
-    # Short, bounded, high-volume work must not run a flagship by default.
+def test_bulk_chains_lead_with_astra():
+    # Bulk routes lead with Astra by choice; the small models stay behind it as
+    # cheap degradation rather than as the default.
+    assert models.GPT_FAST[0] == "gpt-6-astra"
+    assert "gpt-5-mini" in models.GPT_FAST
+    # The Anthropic bulk chain is only reached as the cross-provider fallback.
     assert "haiku" in models.CLAUDE_FAST[0]
-    assert models.GPT_FAST[0] == "gpt-5-mini"
-    # ...and still degrade to the flagship rather than failing outright.
     assert models.CLAUDE[0] in models.CLAUDE_FAST
-    assert models.GPT[0] in models.GPT_FAST
 
 
 def test_env_override(monkeypatch):

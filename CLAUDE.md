@@ -119,9 +119,11 @@ agents with `save_*` tools persist memory back into their KB across sessions.
 
 - **Model policy is per task, not one winner.** `tasks` in `models.json` maps a workload to the
   provider that leads it; the other stays the fallback, so this changes order, never availability.
-  Accuracy-first assignments: `extraction` (financial screenshots), `structured` (search planning,
-  alerts, copilot commands), `reports` (deep analysis) and `summaries` (news, intelligence) lead with
-  Claude; `questions` (data gathering, charts, free-form financial questions) leads with Astra.
+  Assignments: `extraction` (financial screenshots) and `structured` (search planning, alerts,
+  copilot commands, NL→tickers) lead with Claude, where a schema must come back exactly right;
+  `reports` (deep analysis), `summaries` (news, intelligence, AI estimate) and `questions`
+  (free-form financial questions) lead with Astra. Bulk routes lead with Astra too — the small
+  models (`fast_fallback`) sit behind it as cheap degradation, not as the default.
   `ARTIK_PRIMARY_MODEL` overrides `primary` but deliberately NOT `tasks` — it is the blunt
   "send everything one way" switch, and it must not silently undo an accuracy assignment.
   Code: `models.task_provider()`, `models.cascade(..., task=...)`; read it at `GET /api/config/models`.
