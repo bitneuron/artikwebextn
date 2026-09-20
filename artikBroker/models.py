@@ -22,7 +22,10 @@ _DEFAULT = {"primary": "openai",
                           "fallback": "claude-opus-4-8", "fast": "claude-haiku-4-5-20251001",
                           "fast_fallback": "claude-haiku-4-5-20251001"},
             "openai": {"data": "gpt-6-astra", "chat": "gpt-6-astra", "vision": "gpt-6-astra",
-                       "fallback": "gpt-5", "fast": "gpt-6-astra", "fast_fallback": "gpt-5-mini"}}
+                       "fallback": "gpt-5", "fast": "gpt-6-astra", "fast_fallback": "gpt-5-mini"},
+            "selectable": [{"id": "claude-opus-5", "label": "Claude Opus 5", "provider": "anthropic"},
+                           {"id": "claude-fable-5-1", "label": "Fable 5.1", "provider": "anthropic"},
+                           {"id": "gpt-6-astra", "label": "GPT Astra", "provider": "openai"}]}
 
 
 def _load() -> dict:
@@ -126,20 +129,65 @@ GPT_FAST = _dedupe([
 ])
 
 
-def with_fallback(models: list[str], fn):
-    """Call fn(model) for each model in order until one succeeds.
+# ── User-picked model (one request) ──────────────────────────────────────────
+# The Copilot lets the user pin a single model for a single question. That is a
+# different question from `tasks`, which sets the default for a whole workload:
+# a pin reorders the providers and puts the picked model at the head of its
+# chain, while the rest of that chain — and then the other provider — stay behind
+# it, so a pin changes what leads, never whether an answer comes back. The reply
+# reports the model that ACTUALLY ran, so the UI badge is never a guess.
+SELECTABLE = [
+    {"id": str(m.get("id")), "label": str(m.get("label") or m.get("id")),
+     "provider": _primary(m.get("provider"))}
+    for m in (_M.get("selectable") or _DEFAULT["selectable"])
+    if isinstance(m, dict) and m.get("id")
+]
+
+_CHOICE_ALIASES = {"opus": "claude-opus-5", "claude": "claude-opus-5",
+                   "fable": "claude-fable-5-1",
+                   "astra": "gpt-6-astra", "gpt": "gpt-6-astra", "openai": "gpt-6-astra"}
+
+
+def resolve_choice(raw) -> dict | None:
+    """The selectable model the user picked, or None for auto/blank/unknown.
+
+    An unrecognised id resolves to None instead of being forwarded: a bad pin must
+    degrade to the normal per-task policy, never send a made-up model name."""
+    key = str(raw or "").strip().lower()
+    if not key or key == "auto":
+        return None
+    key = _CHOICE_ALIASES.get(key, key)
+    return next((m for m in SELECTABLE if m["id"].lower() == key), None)
+
+
+def model_chain(choice) -> list[str] | None:
+    """Picked model first, then its provider's usual chain as version fallback."""
+    pick = choice if isinstance(choice, dict) else resolve_choice(choice)
+    if not pick:
+        return None
+    base = CLAUDE if pick["provider"] == "anthropic" else GPT
+    return _dedupe([pick["id"]] + list(base))
+
+
+def call_model(models: list[str], fn):
+    """Call fn(model) down the chain until one succeeds → (result, model used).
 
     Falls back to the previous version if the latest errors; re-raises the last
     error only if every model in the chain fails."""
     last = None
     for m in models:
         try:
-            return fn(m)
+            return fn(m), m
         except Exception as e:  # noqa: BLE001
             last = e
     if last:
         raise last
     raise RuntimeError("no model configured")
+
+
+def with_fallback(models: list[str], fn):
+    """call_model for callers that do not need to know which model answered."""
+    return call_model(models, fn)[0]
 
 
 def primary_source() -> str:
@@ -190,16 +238,23 @@ def set_primary(choice: str) -> str:
     return canon
 
 
-def providers(akey: str | None, okey: str | None, task: str | None = None) -> list[tuple[str, str]]:
+def providers(akey: str | None, okey: str | None, task: str | None = None,
+              pin: str | None = None) -> list[tuple[str, str]]:
     """[(label, api_key), ...] in preference order, skipping providers with no key.
 
     label is the name the API already reports to the UI ("claude" / "gpt").
-    `task` selects the per-workload order; omit it for the global primary."""
+    `task` selects the per-workload order; omit it for the global primary.
+    `pin` is a provider a user explicitly picked for this one call and leads when
+    given — an unrecognised value is ignored rather than guessed at, so a typo
+    falls back to the task policy instead of silently retargeting it."""
     keys = {"anthropic": akey, "openai": okey}
-    return [(_LABEL[p], keys[p]) for p in task_order(task) if keys[p]]
+    order = ((pin, "anthropic" if pin == "openai" else "openai")
+             if pin in ("anthropic", "openai") else task_order(task))
+    return [(_LABEL[p], keys[p]) for p in order if keys[p]]
 
 
-def cascade(akey: str | None, okey: str | None, claude_fn=None, gpt_fn=None, task: str | None = None):
+def cascade(akey: str | None, okey: str | None, claude_fn=None, gpt_fn=None, task: str | None = None,
+            pin: str | None = None):
     """Try each configured provider in preference order; return (result, label, error).
 
     Runs the primary first and falls back to the other on an exception OR a None
@@ -209,7 +264,7 @@ def cascade(akey: str | None, okey: str | None, claude_fn=None, gpt_fn=None, tas
     simply returned None without raising."""
     fns = {"claude": claude_fn, "gpt": gpt_fn}
     last = None
-    for label, key in providers(akey, okey, task):
+    for label, key in providers(akey, okey, task, pin):
         fn = fns.get(label)
         if fn is None:
             continue
@@ -226,6 +281,7 @@ def cascade(akey: str | None, okey: str | None, claude_fn=None, gpt_fn=None, tas
 def info() -> dict:
     """Introspection for /api/config etc. (which chains are in effect)."""
     return {"primary": PRIMARY, "secondary": SECONDARY, "tasks": dict(TASKS),
+            "selectable": [dict(m) for m in SELECTABLE],
             "task_models": {k: (GPT if v == "openai" else CLAUDE)[0] for k, v in TASKS.items()},
             "primary_label": _LABEL[PRIMARY], "primary_model": (GPT if PRIMARY == "openai" else CLAUDE)[0],
             "claude": CLAUDE, "gpt": GPT, "claude_fast": CLAUDE_FAST, "gpt_fast": GPT_FAST}

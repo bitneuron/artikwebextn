@@ -127,6 +127,18 @@ agents with `save_*` tools persist memory back into their KB across sessions.
   `ARTIK_PRIMARY_MODEL` overrides `primary` but deliberately NOT `tasks` — it is the blunt
   "send everything one way" switch, and it must not silently undo an accuracy assignment.
   Code: `models.task_provider()`, `models.cascade(..., task=...)`; read it at `GET /api/config/models`.
+- **A user may pin ONE model for ONE Copilot question.** The Copilot header has a Model picker
+  (Auto / Claude Opus 5 / Fable 5.1 / GPT Astra, from `selectable` in `models.json`). A pin leads
+  that single request — the rest of its provider chain and then the other provider stay behind it,
+  so a pin changes order, never availability, and it never rewrites `tasks`. An unknown id degrades
+  to the normal policy instead of being forwarded. The reply carries the model that ACTUALLY ran
+  (`model`/`model_label`/`requested_model`) and the badge says "(fallback from X)" when they differ.
+  Fable rejects a forced `tool_choice`, so it answers in plain markdown shaped into the same reply.
+  Code: `models.resolve_choice()`, `models.model_chain()`, `models.call_model()`, `cascade(..., pin=)`.
+- **The Copilot can research a saved snapshot.** Its Snapshot picker (admin-only, like every
+  `/api/portfolio` route) loads a broker/Excel snapshot through `/api/portfolio?key=…`, so holdings
+  arrive re-scored LIVE by the engine; shares and cost basis stay as of the snapshot and the card
+  says so. `contextType:"snapshot"` is refused server-side for non-admins.
 - **A model may estimate, but never score.** When Yahoo and Alpha Vantage both fail on a SINGLE
   ticker, `_llm_estimate_row()` returns a qualitative read. It never sets `score`, `status` or
   `rating` — those are the engine's and the engine did not run. It carries a coarse band

@@ -2909,12 +2909,142 @@ async function askCopilotPage(pageType, query){
        +': executive summary, key insights, risks, opportunities, recommendations (buy/hold/sell/reduce/increase/monitor), notable company analysis and comparisons, and suggested next questions.');
   copilotAsk(q);
 }
+/* ── Research target + answering model (the two Copilot header pickers) ──────
+   Two independent choices:
+   • Snapshot — WHICH holdings to research. The rows come back re-scored live by
+     the engine (the same /api/portfolio path the Portfolio tab uses), so the
+     answer is grounded in engine output, never in the model's own recollection
+     of a portfolio. Admin-only, because the snapshot APIs are.
+   • Model — WHO answers. "Auto" follows the per-task policy; picking one pins it
+     at the head of the chain for that request only. The reply reports the model
+     that actually ran, so a fallback is visible instead of silent.            */
+window._copModel  = (()=>{ try { return localStorage.getItem('artik_cop_model')||''; } catch(e){ return ''; } })();
+window._copModels = null;   // [{id,label,provider}] from /api/config/models
+window._copSnaps  = null;   // [{key,label,…}] from /api/portfolio/snapshots (admin only)
+window._copSnapKey = '';    // the snapshot being researched ('' = none)
+
+async function copLoadModels(){
+  if(window._copModels) return;
+  try { const d = await (await fetch('/api/config/models')).json();
+        window._copModels = (d.selectable||[]).filter(m=>m&&m.id); }
+  catch(e){ window._copModels = []; }
+}
+async function copLoadSnapshots(){
+  if(window._copSnaps) return;
+  if(!window._isAdmin){ window._copSnaps = []; return; }   // 403 for everyone else
+  try { const d = await (await fetch('/api/portfolio/snapshots')).json();
+        window._copSnaps = d.snapshots || []; }
+  catch(e){ window._copSnaps = []; }
+}
+// Fetch both lists once, then re-render so the pickers appear.
+async function copLoadPickers(){
+  const had = [(window._copModels||[]).length, (window._copSnaps||[]).length].join();
+  await Promise.all([copLoadModels(), copLoadSnapshots()]);
+  if([(window._copModels||[]).length, (window._copSnaps||[]).length].join() !== had) renderCopilot();
+}
+function copSnapLabel(s){
+  const dt  = (s.datetime||s.date||'').slice(0,16).replace('T',' ');
+  const val = (s.value!=null) ? (' · $'+Math.round(s.value).toLocaleString()) : '';
+  return [(s.source_label||s.source||'Snapshot'), (s.masked_account||'')].filter(Boolean).join(' ')
+         + (dt?(' · '+dt):'') + val;
+}
+function copModelLabel(id){
+  const m = (window._copModels||[]).find(x=>x.id===id);
+  return m ? m.label : (id||'Auto');
+}
+function copilotSetModel(id){
+  window._copModel = id||'';
+  try { localStorage.setItem('artik_cop_model', window._copModel); } catch(e){}
+  renderCopilot();
+}
+function copModelSelect(){
+  const opts = ['<option value="">Auto (per task)</option>'].concat(
+    (window._copModels||[]).map(m=>`<option value="${escapeHtml(m.id)}"${m.id===window._copModel?' selected':''}>${escapeHtml(m.label)}</option>`));
+  return `<span class="cmeta"><i>Model</i><select onchange="copilotSetModel(this.value)">${opts.join('')}</select></span>`;
+}
+function copSnapshotSelect(){
+  const snaps = window._copSnaps||[];
+  if(!snaps.length) return '';
+  const opts = ['<option value="">None</option>'].concat(
+    snaps.map(s=>`<option value="${escapeHtml(s.key)}"${s.key===window._copSnapKey?' selected':''}>${escapeHtml(copSnapLabel(s))}</option>`));
+  return `<span class="cmeta" style="max-width:250px"><i>Snapshot</i><select style="max-width:100%" onchange="copilotSetSnapshot(this.value)">${opts.join('')}</select></span>`;
+}
+// Normalize a snapshot's live-scored rows into the same business-data shape the page
+// contexts use (no tokens, no PII). Figures are the engine's; nothing is invented.
+function buildSnapshotContext(meta, d){
+  const rows = (d.rows||[]).filter(r=>r && !r.error);
+  const stocks = rows.map(r=>{
+    const s = { ticker:r.ticker, company_name:r.company||r.company_name, sector:r.sector,
+      archetype:(r.breakdown&&r.breakdown.archetype)||r.archetype,
+      artik_score:num(r.score), recommendation:r.status, current_price:num(r.price),
+      rsi:num(r.rsi), quantity:num(r.qty), total_cost:num(r.cost_basis),
+      market_value:num(r.value), unrealized_gain_loss:num(r.pl),
+      unrealized_gain_loss_percent:num(r.pl_pct) };
+    if(s.quantity && s.total_cost!=null) s.average_cost = +(s.total_cost/s.quantity).toFixed(2);
+    return s;
+  });
+  const scored = stocks.map(s=>s.artik_score).filter(x=>x!=null);
+  const avg = scored.length ? Math.round(scored.reduce((a,b)=>a+b,0)/scored.length) : null;
+  const cnt = st => rows.filter(r=>(r.status||'')===st).length;
+  const sec={}, sw={}; let tv=0;
+  stocks.forEach(s=>{ const k=s.sector||'—'; sec[k]=(sec[k]||0)+1; sw[k]=(sw[k]||0)+(s.market_value||0); tv+=s.market_value||0; });
+  const t = d.totals||{};
+  const summary = { holdings:stocks.length, avg_artik_score:avg,
+    buy:cnt('BUY'), hold:cnt('HOLD'), sell:cnt('SELL'),
+    total_value:num(t.value), total_cost:num(t.cost), total_gain_loss:num(t.pl),
+    total_gain_loss_pct:num(t.pl_pct), sector_allocation:sec, sector_weight_pct:{} };
+  for(const k in sw) summary.sector_weight_pct[k] = tv ? +(sw[k]/tv*100).toFixed(1) : 0;
+  return { page_type:'snapshot',
+    snapshot:{ key:meta.key||d.key, label:copSnapLabel(meta), source:meta.source||d.source,
+      account:meta.masked_account||d.account_ending, taken_at:meta.datetime||d.date, as_of:d.as_of,
+      // The broker's recorded total at snapshot time. It can exceed the live total of the
+      // scored rows (cash, options and anything the engine cannot price are not rows).
+      recorded_total_value:(meta.value!=null?meta.value:null) },
+    page_summary:summary, stocks,
+    user_context:{ page_type:'snapshot', timestamp:new Date().toISOString(), visible_stocks:stocks.length } };
+}
+async function copilotSetSnapshot(key){
+  window._copSnapKey = key||'';
+  const c = window._cop;
+  if(!key){
+    if(c.ctxType==='snapshot'){
+      c.ctxType='search'; c.ctx=((window._rows||[]).length ? copilotSearchContext() : null);
+    }
+    renderCopilot(); return;
+  }
+  const meta = (window._copSnaps||[]).find(s=>s.key===key) || {key};
+  c.ctxType='snapshot'; c.ctx={ snapshot:{...meta, label:copSnapLabel(meta)}, loading:true };
+  renderCopilot();
+  try {
+    const d = await (await fetch('/api/portfolio?key='+encodeURIComponent(key))).json();
+    if(window._copSnapKey !== key) return;          // the user picked another one meanwhile
+    c.ctx = d.error ? { snapshot:{...meta, label:copSnapLabel(meta)}, error:d.error }
+                    : buildSnapshotContext(meta, d);
+  } catch(e){
+    if(window._copSnapKey !== key) return;
+    c.ctx = { snapshot:{...meta, label:copSnapLabel(meta)}, error:'Could not load this snapshot: '+e };
+  }
+  renderCopilot();
+}
+// Record the model that actually answered. When a pinned model errored and the
+// chain fell through, the badge says which model really replied — the pick is
+// not silently reported as if it had run.
+function copNoteModel(c, d){
+  c.provider = d.provider;
+  const ran = d.model_label || d.model;
+  c.model = d.model || null;
+  c.modelLabel = ran ? (d.requested_model && d.model && d.requested_model !== d.model
+                        ? ran + ' (fallback from ' + copModelLabel(d.requested_model) + ')'
+                        : ran)
+                     : null;
+}
 function copilotSetMode(m){ window._cop.uiMode = m; }
 function copilotReset(){
+  const snap = window._copSnapKey;     // the research target survives a new conversation
   window._cop = { ctxType:'search',
     ctx:((window._rows||[]).length ? copilotSearchContext() : null),
     uiMode:'auto', msgs:[], busy:false, provider:null };
-  renderCopilot();
+  if(snap) copilotSetSnapshot(snap); else renderCopilot();
 }
 function copConviction(s){ return s>=80?'High':s>=65?'Elevated':s>=50?'Moderate':'Low'; }
 function inlineMd(s){ return escapeHtml(s).replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/`([^`]+)`/g,'<span class="rcode">$1</span>'); }
@@ -2961,10 +3091,17 @@ function copReport(md){
   flush(); flushTbl();
   return html || `<p class="rp">${inlineMd(md)}</p>`;
 }
+// What to show as the answering model: the one that actually ran, else the pick
+// waiting to run, else Auto. Never claims a model that has not answered.
+function copAnswerSource(c){
+  if(c.modelLabel) return c.modelLabel;
+  if(c.provider) return c.provider==='gpt' ? 'GPT' : 'Claude';
+  return window._copModel ? copModelLabel(window._copModel) : 'Auto';
+}
 function copSourceBadges(c){
-  const prov = c.provider==='gpt'?'GPT':'Claude';
+  const prov = copAnswerSource(c);
   const b = [`<span class="srcbadge">Source <b>Artik Engine</b></span>`,
-             `<span class="srcbadge">AI <b>${prov}</b></span>`];
+             `<span class="srcbadge">AI <b>${escapeHtml(prov)}</b></span>`];
   if(c.ctxType==='stock' && c.ctx && c.ctx.news_overlay) b.push(`<span class="srcbadge">News <b>Collector</b></span>`);
   return `<div class="cs-srcs">${b.join('')}</div>`;
 }
@@ -2986,6 +3123,16 @@ function copContextCard(c){
       <button class="ex-btn" style="margin-top:10px" onclick="window._detSource=null;detailFor(window._cop.ctx)">Open full research →</button>
     </div>`;
   }
+  if(c.ctxType==='snapshot'){
+    const sn = (ctx && ctx.snapshot) || {};
+    if(ctx && ctx.loading) return `<div class="cop-stock"><div class="spin" style="padding:6px">Loading &amp; live-scoring ${escapeHtml(sn.label||'snapshot')}…</div></div>`;
+    if(ctx && ctx.error) return `<div class="cop-stock"><div class="cs-row bad">⚠ ${escapeHtml(ctx.error)}</div></div>`;
+    const s = (ctx && ctx.page_summary) || {};
+    return `<div class="cop-stock">
+      <div class="cs-co" style="white-space:normal;font-size:12.5px">Researching <b style="color:var(--txt)">${escapeHtml(sn.label||'snapshot')}</b> — <b>${s.holdings||0}</b> holdings · avg score <b>${s.avg_artik_score??'—'}</b> · ${s.buy||0} BUY / ${s.hold||0} HOLD / ${s.sell||0} SELL${s.total_value!=null?` · live value $${Math.round(s.total_value).toLocaleString()}`:''}</div>
+      <div class="pf-meta" style="margin-top:4px">Shares and cost basis are as of the snapshot; price, score, RSI and status were re-scored live.${sn.recorded_total_value!=null?` The broker recorded $${Math.round(sn.recorded_total_value).toLocaleString()} at snapshot time — cash and anything the engine cannot price are not scored rows.`:''}</div>
+      ${copSourceBadges(c)}</div>`;
+  }
   if(c.ctxType==='page' && ctx && ctx.page_summary){
     const s=ctx.page_summary, nm={portfolio:'Portfolio',favorites:'Favorites',sp500:'S&P 500',dow:'Dow 30',ibkr_portfolio:'IBKR account'}[ctx.page_type]||'this page';
     return `<div class="cop-stock"><div class="cs-co" style="white-space:normal;font-size:12.5px">Analyzing <b style="color:var(--txt)">${nm}</b> — <b>${s.stock_count}</b> stocks · avg score <b>${s.avg_artik_score??'—'}</b> · ${s.buy||0} BUY / ${s.hold||0} HOLD / ${s.sell||0} SELL${ctx.page_type==='portfolio'&&s.total_value!=null?` · value $${(s.total_value).toLocaleString()}`:''}</div>${copSourceBadges(c)}</div>`;
@@ -2997,6 +3144,15 @@ function copContextCard(c){
 }
 function copFollowups(c){
   if(c.busy) return '';
+  if(c.ctxType==='snapshot'){
+    const snap = [['🧭 Full review','Give me a full review of this snapshot: health, concentration, winners, losers and what to do next'],
+      ['✂️ Trim candidates','Which holdings should I trim or sell, and why?'],
+      ['➕ Add candidates','Which holdings deserve more capital?'],
+      ['⚠️ Biggest risks','What are the biggest risks in this snapshot?'],
+      ['🥧 Diversification','Review the sector concentration'],
+      ['🏆 Winners vs losers','Compare the winners and the losers']];
+    return `<div class="cop-fups">${snap.map(([l,q])=>`<button class="fchip" onclick="copilotAsk(${JSON.stringify(q).replace(/"/g,'&quot;')})">${escapeHtml(l)}</button>`).join('')}</div>`;
+  }
   const set = c.ctxType==='stock'
     ? [['💬 Compare peers','Compare this stock to its closest peers'],
        ['📰 Recent news','What is the latest news and how does it affect the thesis?'],
@@ -3013,7 +3169,9 @@ function copFollowups(c){
 }
 function renderCopilot(){
   const c = window._cop, ctx = c.ctx||{};
+  if(window._copModels===null || window._copSnaps===null) copLoadPickers();   // once, then re-renders
   const ctxLabel = c.ctxType==='stock' ? (ctx.ticker||'Stock')
+                 : c.ctxType==='snapshot' ? ((ctx.snapshot&&(ctx.snapshot.source_label||ctx.snapshot.source))||'Snapshot')
                  : (c.ctx&&c.ctx.count) ? `${c.ctx.count} Results` : 'General';
   const prov = c.provider==='gpt'?'GPT':'Claude';
   const conv = (c.ctxType==='stock'&&ctx.score!=null) ? copConviction(ctx.score) : null;
@@ -3021,8 +3179,10 @@ function renderCopilot(){
     + COP_MODES.map(([v,l])=>`<option value="${v}" ${c.uiMode===v?'selected':''}>${l}</option>`).join('')+`</select>`;
   const meta = `<div class="cop-meta">
     <span class="cmeta"><i>Context</i>${escapeHtml(ctxLabel)}</span>
+    ${copSnapshotSelect()}
     <span class="cmeta"><i>Mode</i>${modeSel}</span>
-    <span class="cmeta"><i>Source</i>Engine + ${prov}</span>
+    ${copModelSelect()}
+    <span class="cmeta"><i>Source</i>Engine + ${escapeHtml(copAnswerSource(c))}</span>
     ${conv?`<span class="cmeta"><i>Conviction</i><b style="color:${scoreColor(ctx.score)}">${conv}</b></span>`:''}
   </div>`;
 
@@ -3035,14 +3195,14 @@ function renderCopilot(){
         `<button class="fchip" title="${escapeHtml(o.description||'')}" onclick="copilotAsk(${JSON.stringify(o.label).replace(/"/g,'&quot;')})">${escapeHtml(o.label)}</button>`).join('')+`</div>`;
     }
     return `<div class="cop-report">
-      <div class="rep-head"><span class="rep-badge">📊 Artik Copilot</span>${m.mode&&m.mode!=='clarification'?`<span class="rep-mode">${escapeHtml(m.mode)}</span>`:''}<span class="rep-src">Engine + ${prov}</span></div>
+      <div class="rep-head"><span class="rep-badge">📊 Artik Copilot</span>${m.mode&&m.mode!=='clarification'?`<span class="rep-mode">${escapeHtml(m.mode)}</span>`:''}<span class="rep-src">Engine + ${escapeHtml(m.src||prov)}</span></div>
       <div class="rep-body">${copReport(m.content)}</div>${clar}</div>`;
   }).join('');
   if(c.busy) msgs += `<div class="cop-report"><div class="rep-body"><span style="color:var(--mut)">⟳ Analyzing with the Artik engine…</span></div></div>`;
 
   const ctxCard = copContextCard(c);
   const welcome = c.msgs.length ? '' :
-    `<div class="hint" style="padding:2px 2px 8px">Ask anything about ${c.ctxType==='stock'?'this stock':'these results'} — the Artik engine is the source of truth.</div>`;
+    `<div class="hint" style="padding:2px 2px 8px">Ask anything about ${c.ctxType==='stock'?'this stock':c.ctxType==='snapshot'?'this snapshot':'these results'} — the Artik engine is the source of truth.</div>`;
 
   $('#copilot').innerHTML = `
     <div class="cop-head"><div class="cop-brand">🤖 <b>Artik Copilot</b></div>
@@ -3079,19 +3239,19 @@ async function copilotAsk(text){
   c.busy = true; renderCopilot();
   try {
     const res = await fetch('/api/copilot', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({mode:c.uiMode, contextType:c.ctxType, context:c.ctx,
+      body: JSON.stringify({mode:c.uiMode, model:window._copModel, contextType:c.ctxType, context:c.ctx,
         messages: c.msgs.map(m=>({role:m.role, content:m.content}))})});
     const d = await res.json();
     c.busy = false;
     if(d.error){ c.msgs.push({role:'assistant', content:'⚠️ '+d.error}); }
     else if(d.needs_clarification){
-      c.provider = d.provider;
-      c.msgs.push({role:'assistant', mode:'clarification',
+      copNoteModel(c, d);
+      c.msgs.push({role:'assistant', mode:'clarification', src:copAnswerSource(c),
         content: d.clarification_question || 'Which would you like?',
         clar: {options: d.clarification_options||[]}});
     } else {
-      c.provider = d.provider;
-      c.msgs.push({role:'assistant', content:d.reply, mode:d.mode});
+      copNoteModel(c, d);
+      c.msgs.push({role:'assistant', content:d.reply, mode:d.mode, src:copAnswerSource(c)});
     }
   } catch(e){
     c.busy = false; c.msgs.push({role:'assistant', content:'⚠️ Request failed: '+e});
@@ -3136,11 +3296,11 @@ async function copilotAskNormal(q){
   const c = window._cop; c.msgs.push({role:'user', content:q}); c.busy=true; renderCopilot();
   try{
     const res = await fetch('/api/copilot',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({mode:c.uiMode, contextType:c.ctxType, context:c.ctx,
+      body:JSON.stringify({mode:c.uiMode, model:window._copModel, contextType:c.ctxType, context:c.ctx,
         messages:c.msgs.map(m=>({role:m.role, content:m.content}))})});
     const d = await res.json(); c.busy=false;
     if(d.error) c.msgs.push({role:'assistant', content:'⚠️ '+d.error});
-    else c.msgs.push({role:'assistant', content:d.reply, mode:d.mode});
+    else { copNoteModel(c, d); c.msgs.push({role:'assistant', content:d.reply, mode:d.mode, src:copAnswerSource(c)}); }
   }catch(e){ c.busy=false; c.msgs.push({role:'assistant', content:'⚠️ Request failed: '+e}); }
   renderCopilot();
 }
@@ -7709,6 +7869,7 @@ async function initMe(){
   // Admin-only sidebar items (Users, E*TRADE, Portfolio). Backend also enforces 403.
   const isAdmin = (window._me && window._me.role==='admin') || window._devOpen;
   window._isAdmin = isAdmin;
+  window._copSnaps = null; copLoadPickers();   // the snapshot picker needs the role first
   ['tab-users','tab-etrade','tab-schwab','tab-ibkr','tab-portfolio'].forEach(id=>{
     const el=$('#'+id); if(el) el.classList.toggle('hidden', !isAdmin);
   });

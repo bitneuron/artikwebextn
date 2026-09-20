@@ -3689,6 +3689,48 @@ _COPILOT_TOOL_DESC = ("Return the ArtikFinance AI response together with routing
                       "(mode, confidence, and an optional clarification request).")
 
 
+_CTX_BUDGET = 22000
+
+
+def _fit_context(context: dict) -> tuple[str, str]:
+    """Serialize a context under the prompt budget WITHOUT cutting a row in half.
+
+    A plain slice used to hand the model a truncated final row — numbers with no ticker
+    attached, which is exactly the kind of thing that turns into a wrong figure. Whole
+    rows are dropped instead, largest positions kept when the rows carry a market value,
+    and what was left out is STATED rather than hidden. Returns (json, note)."""
+    def dump(c):
+        try:
+            return json.dumps(c, default=str)
+        except Exception:  # noqa: BLE001
+            return "{}"
+    blob = dump(context)
+    if len(blob) <= _CTX_BUDGET:
+        return blob, ""
+    rows = context.get("stocks")
+    if not isinstance(rows, list) or len(rows) < 2:
+        return blob[:_CTX_BUDGET], ""
+    by_value = all(isinstance(r, dict) and isinstance(r.get("market_value"), (int, float))
+                   for r in rows)
+    ordered = sorted(rows, key=lambda r: -r["market_value"]) if by_value else list(rows)
+    lo, hi, best = 1, len(ordered), None
+    while lo <= hi:                         # largest prefix of `ordered` that still fits
+        mid = (lo + hi) // 2
+        cand = dump({**context, "stocks": ordered[:mid]})
+        if len(cand) <= _CTX_BUDGET:
+            best, lo = (cand, mid), mid + 1
+        else:
+            hi = mid - 1
+    if not best:
+        return dump({**context, "stocks": []}), (
+            f"NOTE: all {len(rows)} holdings were too large for one prompt; only the summary is "
+            "below. Say so rather than answering per holding.\n")
+    cand, kept = best
+    which = "largest by market value" if by_value else "first in page order"
+    return cand, (f"NOTE: {kept} of {len(rows)} holdings are included ({which}); the remaining "
+                  f"{len(rows) - kept} were omitted to fit. Do not describe the list as complete.\n")
+
+
 def _copilot_context_block(context_type: str, context: dict) -> str:
     if context_type == "finance":
         # Server-built digest of the WHOLE personal financial statement (all sections), so the
@@ -3697,41 +3739,77 @@ def _copilot_context_block(context_type: str, context: dict) -> str:
                 "workbook; do not invent figures beyond it):\n"
                 + finance.copilot_context((context or {}).get("page")))
     label = {"stock": "CURRENT STOCK DETAIL", "search": "CURRENT SEARCH RESULTS",
-             "page": "CURRENT PAGE (all visible stocks + page summary + any loaded research)"}.get(
+             "page": "CURRENT PAGE (all visible stocks + page summary + any loaded research)",
+             "snapshot": ("SELECTED PORTFOLIO SNAPSHOT (the holdings the user picked to research: "
+                          "share counts and cost basis are as of the snapshot date; price, score, "
+                          "RSI and status were re-scored live just now)")}.get(
         context_type, "CONTEXT")
     if not context:
         return "No stock/search context is attached — answer generally (research/discovery/screening), and never invent Artik scores."
-    try:
-        blob = json.dumps(context, default=str)[:22000]
-    except Exception:  # noqa: BLE001
-        blob = "{}"
+    blob, note = _fit_context(context)
     return (f"{label} — Artik Engine output (source of truth; do not invent anything beyond it):\n"
-            f"```json\n{blob}\n```")
+            f"{note}```json\n{blob}\n```")
 
 
-def _copilot_anthropic(messages, sys_text, key):
+# Some models reject a FORCED tool_choice (Fable does). Dropping them from the picker
+# would be the easy answer; instead those models answer in plain markdown and the reply
+# is shaped into the same dict. The prose is the model's own — only the routing metadata
+# (mode/confidence) is left to the endpoint's default instead of being declared.
+_COPILOT_PLAIN = ("\n\nReply with the markdown answer only — no JSON, no tool call, no preamble. "
+                  "The same rules apply: the Artik engine is the source of truth and you never "
+                  "invent a score, price or rating that is not in the context above.")
+
+
+def _forced_tools_unsupported(err) -> bool:
+    """True for the 400 a model returns when tool_choice 'tool'/'any' is not supported."""
+    s = str(err).lower()
+    return "tool_choice" in s and "not supported" in s
+
+
+def _copilot_anthropic(messages, sys_text, key, chain=None, used=None):
+    """`chain` pins a user-picked model at the head; `used` receives the model that ran."""
     import anthropic
     client = anthropic.Anthropic(api_key=key)
-    msg = _models.with_fallback(_models.CLAUDE, lambda mdl: _models.anthropic_create(client,
-        model=mdl, max_tokens=1500, system=sys_text,
-        tools=[{"name": _COPILOT_TOOL_NAME, "description": _COPILOT_TOOL_DESC,
-                "input_schema": _COPILOT_TOOL_SCHEMA}],
-        tool_choice={"type": "tool", "name": _COPILOT_TOOL_NAME},
-        messages=messages))
-    return next((b.input for b in msg.content if getattr(b, "type", "") == "tool_use"), None)
+
+    def once(m):
+        try:
+            msg = _models.anthropic_create(client,
+                model=m, max_tokens=1500, system=sys_text,
+                tools=[{"name": _COPILOT_TOOL_NAME, "description": _COPILOT_TOOL_DESC,
+                        "input_schema": _COPILOT_TOOL_SCHEMA}],
+                tool_choice={"type": "tool", "name": _COPILOT_TOOL_NAME},
+                messages=messages)
+        except Exception as e:  # noqa: BLE001
+            if not _forced_tools_unsupported(e):
+                raise                      # a real failure still falls down the chain
+            msg = _models.anthropic_create(client, model=m, max_tokens=1500,
+                                           system=sys_text + _COPILOT_PLAIN, messages=messages)
+            text = "".join(getattr(b, "text", "") for b in msg.content
+                           if getattr(b, "type", "") == "text").strip()
+            return {"mode": "", "confidence": None, "needs_clarification": False,
+                    "answer": text} if text else None
+        return next((b.input for b in msg.content if getattr(b, "type", "") == "tool_use"), None)
+
+    out, mdl = _models.call_model(chain or _models.CLAUDE, once)
+    if used is not None:
+        used["model"] = mdl
+    return out
 
 
-def _copilot_openai(messages, sys_text, key):
+def _copilot_openai(messages, sys_text, key, chain=None, used=None):
+    """`chain` pins a user-picked model at the head; `used` receives the model that ran."""
     from openai import OpenAI
     client = OpenAI(api_key=key)
-    resp = _models.with_fallback(_models.GPT, lambda mdl: _models.openai_create(client,
-        model=mdl,
+    resp, mdl = _models.call_model(chain or _models.GPT, lambda m: _models.openai_create(client,
+        model=m,
         messages=[{"role": "system", "content": sys_text}] + messages,
         tools=[{"type": "function", "function": {
             "name": _COPILOT_TOOL_NAME, "description": _COPILOT_TOOL_DESC,
             "parameters": _COPILOT_TOOL_SCHEMA}}],
         tool_choice={"type": "function", "function": {"name": _COPILOT_TOOL_NAME}},
         max_completion_tokens=1500, reasoning_effort="minimal"))
+    if used is not None:
+        used["model"] = mdl
     calls = resp.choices[0].message.tool_calls
     return json.loads(calls[0].function.arguments) if calls else None
 
@@ -3756,10 +3834,12 @@ async def api_copilot(request: Request):
     if sel_mode not in _COPILOT_MODES + ["auto"]:
         sel_mode = "auto"
     ctx_type = body.get("contextType") or ("stock" if body.get("mode") == "stock" else "")
-    if ctx_type not in ("stock", "search", "page", "finance"):
+    if ctx_type not in ("stock", "search", "page", "snapshot", "finance"):
         ctx_type = "stock" if (body.get("context") or {}).get("ticker") else ("search" if body.get("context") else "")
     if ctx_type == "finance" and not _is_admin(request):
         ctx_type = ""   # personal financial data is admin-only — never injected for other roles
+    if ctx_type == "snapshot" and not _is_admin(request):
+        ctx_type = ""   # portfolio snapshots are admin-only, exactly like /api/portfolio
 
     mode_line = (f"The user explicitly selected mode = {sel_mode.upper()}. Use it; do not ask for clarification."
                  if sel_mode != "auto" else
@@ -3770,16 +3850,31 @@ async def api_copilot(request: Request):
     akey, okey = _anthropic_key(), _openai_key()
     if not akey and not okey:
         return JSONResponse({"error": "Copilot unavailable: no ANTHROPIC_API_KEY or OPENAI_API_KEY configured."}, status_code=503)
+    # A model the user picked in the UI leads this one call; the rest of its chain and
+    # then the other provider stay behind it, so a pin never costs an answer. An unknown
+    # id resolves to None and the normal per-task policy applies.
+    pick = _models.resolve_choice(body.get("model"))
+    chain = _models.model_chain(pick)
+    a_chain = chain if (pick and pick["provider"] == "anthropic") else None
+    g_chain = chain if (pick and pick["provider"] == "openai") else None
+    used: dict = {}
     out, provider, err = _models.cascade(akey, okey,
-        claude_fn=lambda k: _copilot_anthropic(conv, sys_text, k),
-        gpt_fn=lambda k: _copilot_openai(conv, sys_text, k), task="structured")
+        claude_fn=lambda k: _copilot_anthropic(conv, sys_text, k, a_chain, used),
+        gpt_fn=lambda k: _copilot_openai(conv, sys_text, k, g_chain, used),
+        task="structured", pin=(pick["provider"] if pick else None))
     last_err = _err_detail(err) if err else None
     if not out:
         return JSONResponse({"error": f"Copilot failed: {last_err or 'no provider available'}"}, status_code=502)
 
     needs = bool(out.get("needs_clarification"))
+    ran = used.get("model")
     return {
         "provider": provider,
+        # The model that actually answered — not the one requested. They differ when a
+        # pinned model errors and the chain falls through, and the badge must say so.
+        "model": ran,
+        "model_label": next((m["label"] for m in _models.SELECTABLE if m["id"] == ran), ran),
+        "requested_model": pick["id"] if pick else None,
         "mode": out.get("mode") or (sel_mode if sel_mode != "auto" else "analysis"),
         "confidence": out.get("confidence"),
         "needs_clarification": needs,
@@ -4057,6 +4152,9 @@ def _score_holdings(holdings: list) -> tuple:
         t_pl += pl or 0
         rows.append({
             "n": i, "ticker": t, "qty": qty,
+            # Name + sector come free from the same engine call; the table ignores them,
+            # but the Copilot needs them to answer sector/concentration questions.
+            "company": sr.get("company") or "", "sector": sr.get("sector") or "",
             "archetype": (sr.get("breakdown") or {}).get("archetype", "") or "",
             "cost_basis": cost, "price": price, "value": value,
             "score": sr.get("score"), "rating": sr.get("rating"),
