@@ -4333,6 +4333,183 @@ def api_portfolio_refresh(request: Request, date: str = Query(None), file: str =
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Portfolio price changes — month-by-month bars and a trailing 6-month change.
+#
+# Quantities come from the snapshot and are held constant across the window, so the
+# portfolio series answers "what would today's holdings have been worth then", not
+# "what was the account actually worth". That distinction is surfaced in the UI.
+# ──────────────────────────────────────────────────────────────────────────────
+def _pf_holdings_light(request, date=None, file=None, key=None):
+    """(holdings, error_response). Holdings only — no scoring, so this stays fast."""
+    if _is_stored_key(key):
+        try:
+            sid = int(key.split(":", 1)[1])
+        except (ValueError, IndexError):
+            return None, JSONResponse({"error": "invalid snapshot key"}, status_code=400)
+        snap = portfolio_store.get(sid)
+        if not snap:
+            return None, JSONResponse({"error": "snapshot not found."}, status_code=404)
+        u = _user(request) if request is not None else None
+        if u and u.get("role") != "admin" and snap.get("user_id") not in (None, u.get("id")):
+            return None, JSONResponse({"error": "snapshot not found."}, status_code=404)
+        return snap.get("holdings") or [], None
+
+    if key and key.startswith("xl:"):
+        file = key[3:]
+    snaps = _list_portfolio_snapshots()
+    if not snaps:
+        return None, JSONResponse({"error": "No saved portfolio snapshots found."}, status_code=404)
+    chosen = None
+    if file:
+        chosen = next((s for s in snaps if s["file"] == file), None)
+    elif date:
+        chosen = next((s for s in snaps if s["date"] == date), None)
+    chosen = chosen or snaps[0]
+    holdings = []
+    for r in csv.DictReader((PORTFOLIO_DIR / chosen["file"]).read_text().splitlines()):
+        tag = (r.get("#") or "").strip()
+        if tag in ("TOTAL", "AS_OF") or not tag:
+            continue
+        t = (r.get("Ticker") or "").strip().upper()
+        if t:
+            holdings.append({"ticker": t, "qty": _num(r.get("Qty"))})
+    return holdings, None
+
+
+def _monthly_closes(tickers: list, months: int) -> dict:
+    """{TICKER: [(YYYY-MM, close), ...]} oldest first, from one batched request.
+
+    Monthly bars: each bar's Close is that month's last traded close, and the final
+    bar is the current month to date. yfinance 1.3.x can append a trailing all-NaN
+    row, so every series is dropna()'d (same guard as _pc_bulk_prices)."""
+    plain = [t for t in tickers if t and " " not in t]
+    out = {t: [] for t in tickers}
+    if not plain:
+        return out
+    period = f"{max(months + 2, 8)}mo"
+    try:
+        df = yf.download(plain, period=period, interval="1mo", progress=False,
+                         group_by="ticker", threads=True, auto_adjust=False)
+    except Exception:  # noqa: BLE001
+        return out
+    for t in plain:
+        try:
+            if len(plain) == 1:
+                ser = df["Close"].dropna()
+            else:
+                ser = df[t]["Close"].dropna() if t in df.columns.get_level_values(0) else None
+            if ser is None or not len(ser):
+                continue
+            out[t] = [(ix.strftime("%Y-%m"), float(v)) for ix, v in ser.items() if v == v]
+        except Exception:  # noqa: BLE001
+            continue
+    return out
+
+
+@app.get("/api/portfolio/price-changes")
+def api_portfolio_price_changes(request: Request, date: str = Query(None),
+                                file: str = Query(None), key: str = Query(None),
+                                months: int = Query(6, ge=1, le=12)):
+    """Per-ticker monthly % change plus the trailing N-month change, and the same
+    two views for the portfolio as a whole (current quantities, historic prices)."""
+    holdings, err = _pf_holdings_light(request, date=date, file=file, key=key)
+    if err is not None:
+        return err
+    if not holdings:
+        return JSONResponse({"error": "snapshot has no holdings."}, status_code=404)
+
+    qty_by_ticker, order = {}, []
+    for h in holdings:
+        t = (h.get("ticker") or "").strip().upper()
+        if not t:
+            continue
+        if t not in qty_by_ticker:
+            order.append(t)
+            qty_by_ticker[t] = 0.0
+        qty_by_ticker[t] += _num(h.get("qty")) or 0.0
+
+    closes = _monthly_closes(order, months)
+
+    # Month labels: the union of every series, newest `months + 1` points so we can
+    # difference them into `months` changes.
+    all_months = sorted({m for ser in closes.values() for m, _ in ser})
+    window = all_months[-(months + 1):]
+    labels = window[1:]                      # one change per month after the first
+
+    rows, skipped = [], []
+    for t in order:
+        ser = dict(closes.get(t) or [])
+        if not ser:
+            skipped.append(t)
+            rows.append({"ticker": t, "qty": qty_by_ticker[t], "monthly": [],
+                         "change_pct": None, "price_now": None, "price_then": None,
+                         "unavailable": True})
+            continue
+        monthly = []
+        for i, m in enumerate(window[1:], start=1):
+            prev, cur = ser.get(window[i - 1]), ser.get(m)
+            pct = round((cur - prev) / prev * 100, 2) if (prev and cur) else None
+            monthly.append({"month": m, "pct": pct})
+        first = next((ser[m] for m in window if ser.get(m)), None)
+        last = next((ser[m] for m in reversed(window) if ser.get(m)), None)
+        rows.append({
+            "ticker": t, "qty": qty_by_ticker[t], "monthly": monthly,
+            "price_then": round(first, 2) if first else None,
+            "price_now": round(last, 2) if last else None,
+            "change_pct": round((last - first) / first * 100, 2) if (first and last) else None,
+        })
+
+    # Portfolio value per month = Σ qty × that month's close, over a FIXED basket.
+    #
+    # The basket is only those holdings priced in *every* month of the window. A
+    # ticker that appears partway through (a money-market line such as SPAXX often
+    # has just one monthly bar) would otherwise be added to the later totals and not
+    # the earlier ones, inventing a jump that no holding actually made.
+    basket = [t for t in order
+              if all(dict(closes.get(t) or []).get(m) for m in window)]
+    excluded = [t for t in order if t not in basket]
+
+    port_vals = []
+    for m in window:
+        total = sum(qty_by_ticker[t] * dict(closes[t]).get(m, 0.0) for t in basket)
+        port_vals.append((m, total if basket else None))
+    p_monthly = []
+    for i, (m, v) in enumerate(port_vals[1:], start=1):
+        pv = port_vals[i - 1][1]
+        p_monthly.append({"month": m,
+                          "pct": round((v - pv) / pv * 100, 2) if (pv and v) else None,
+                          "value": round(v, 2) if v else None})
+    p_first = port_vals[0][1] if port_vals else None
+    p_last = port_vals[-1][1] if port_vals else None
+
+    # What the fixed basket leaves out, valued at the latest close we do have.
+    excl_value = 0.0
+    for t in excluded:
+        ser = closes.get(t) or []
+        if ser:
+            excl_value += qty_by_ticker[t] * ser[-1][1]
+
+    return {
+        "months": months, "labels": labels,
+        "window_from": window[0] if window else None,
+        "window_to": window[-1] if window else None,
+        "rows": rows,
+        "unavailable": skipped,
+        "portfolio": {
+            "monthly": p_monthly,
+            "value_then": round(p_first, 2) if p_first else None,
+            "value_now": round(p_last, 2) if p_last else None,
+            "change_pct": round((p_last - p_first) / p_first * 100, 2) if (p_first and p_last) else None,
+            "basket": basket,
+            "excluded": excluded,
+            "excluded_value": round(excl_value, 2) if excl_value else 0,
+        },
+        "basis": "Current snapshot quantities priced at each month's close. "
+                 "Not the account's actual historic value.",
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Search history — persisted server-side (S3 on AWS, local folder in dev) so it
 # survives browser close / redeploys and is shared across devices.
 # ──────────────────────────────────────────────────────────────────────────────
