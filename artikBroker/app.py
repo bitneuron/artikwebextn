@@ -3143,18 +3143,107 @@ def _av_fundamental_row(t: str) -> dict | None:
     }
 
 
-def _fallback_row(t: str, reason: str) -> dict:
-    """Yahoo failed → Alpha Vantage fundamentals, else price-only, else unavailable.
+_ESTIMATE_BANDS = ("strong", "mixed", "weak")
 
-    There is deliberately NO model in this path. It used to ask an LLM to produce a
-    0-100 score from memory when both data providers failed, and that score landed in
-    the same field as an engine-computed one and was ranked against it, with nothing
-    in the UI to tell them apart. A model cannot recover current financial facts it
-    was not given; saying so is the accurate answer.
+_ESTIMATE_SYSTEM = (
+    "You are an equity analyst. Live market data for this ticker is UNAVAILABLE, so you are "
+    "being asked for a qualitative read from what you already know. Your knowledge is not live "
+    "and may be out of date.\n"
+    "Return ONLY a JSON object with keys: company (str), sector (str), "
+    "band (one of \"strong\", \"mixed\", \"weak\" — a coarse qualitative read, NOT a score), "
+    "strengths (array of up to 3 short strings), risks (array of up to 3 short strings), "
+    "summary (one sentence), known (bool).\n"
+    "Do NOT return a numeric score and do NOT return a buy/hold/sell rating — those belong to the "
+    "scoring engine, which did not run.\n"
+    "If you do not actually know this company, set known=false and leave band null rather than "
+    "guessing. Declining is a valid and useful answer. JSON only, no prose."
+)
+
+
+def _llm_estimate_row(t: str) -> dict | None:
+    """No live data: a qualitative, clearly-labelled estimate — never a score.
+
+    This deliberately does NOT populate `score`. It used to, which put a value
+    generated from model memory into the same field as an engine-computed one,
+    where it was ranked against real scores with nothing in the UI to tell them
+    apart. The estimate now lives in its own field, sorts in its own group, and
+    is badged wherever it is shown.
+
+    Returns None when the model says it does not know the company, so "no data"
+    stays "no data" instead of becoming a confident guess.
+    """
+    akey, okey = _anthropic_key(), _openai_key()
+    if not (akey or okey):
+        return None
+
+    def _claude(k):
+        import anthropic
+        client = anthropic.Anthropic(api_key=k)
+        msg = _models.with_fallback(_models.CLAUDE, lambda mdl: _models.anthropic_create(client,
+            model=mdl, max_tokens=700, system=_ESTIMATE_SYSTEM,
+            messages=[{"role": "user", "content": f"Ticker: {t}"}]))
+        return "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
+
+    def _gpt(k):
+        from openai import OpenAI
+        client = OpenAI(api_key=k)
+        r = _models.with_fallback(_models.GPT, lambda mdl: _models.openai_create(client,
+            model=mdl, max_completion_tokens=700, reasoning_effort="minimal",
+            messages=[{"role": "system", "content": _ESTIMATE_SYSTEM},
+                      {"role": "user", "content": f"Ticker: {t}"}]))
+        return r.choices[0].message.content or ""
+
+    txt, provider, _err = _models.cascade(akey, okey, claude_fn=_claude, gpt_fn=_gpt,
+                                          task="summaries")
+    if not txt:
+        return None
+    try:
+        data = json.loads(txt[txt.find("{"):txt.rfind("}") + 1])
+    except Exception:  # noqa: BLE001
+        return None
+    if not data or data.get("known") is False:
+        return None                      # the model declined; respect that
+
+    band = str(data.get("band") or "").strip().lower()
+    if band not in _ESTIMATE_BANDS:
+        return None                      # no usable read
+
+    note = ("AI estimate — no live market data was available, so this is a qualitative read "
+            "from model knowledge, which is not current. It is not an Artik Score.")
+    return {
+        "ticker": t,
+        "company": data.get("company"), "sector": data.get("sector"),
+        "price": None, "rsi": None,
+        "score": None,                   # never an engine score
+        "status": None,                  # never a BUY/HOLD/SELL verdict
+        "rating": None,
+        "estimated_band": band,
+        "data_source": "ai_estimate",
+        "estimated_by": provider,
+        "note": note,
+        "strengths": (data.get("strengths") or [])[:3],
+        "risks": (data.get("risks") or [])[:3],
+        "summary": data.get("summary") or "",
+        "technicals": {},
+    }
+
+
+def _fallback_row(t: str, reason: str, allow_llm: bool = True) -> dict:
+    """Yahoo failed → Alpha Vantage, else a labelled AI estimate, else unavailable.
+
+    The estimate never carries a `score`, a `status` or a `rating`: those are the
+    engine's, and the engine did not run. It carries a coarse band in its own field,
+    sorts in its own group, and is badged in the UI. `allow_llm=False` keeps it out
+    of bulk index sweeps — it is for a single ticker somebody actually asked for.
     """
     row = _av_fundamental_row(t)
     if row:
         return row
+    if allow_llm:
+        row = _llm_estimate_row(t)
+        if row:
+            row["error"] = None
+            return row
     out = {"ticker": t, "error": reason}
     try:
         gq = (av.global_quote(t) or {}).get("Global Quote") or {}
@@ -3170,9 +3259,9 @@ def _fallback_row(t: str, reason: str) -> dict:
 def analyze_one(ticker: str, allow_llm: bool = True) -> dict:
     """Run the engine for one ticker and shape it for the UI.
 
-    When Yahoo rate-limits, falls back to Alpha Vantage fundamentals, then to a
-    price-only row, then to an explicit "data unavailable". `allow_llm` is accepted
-    for call-site compatibility and ignored: no model is consulted for market data.
+    When Yahoo rate-limits, falls back to Alpha Vantage fundamentals, then (for a
+    single ticker) to a clearly-labelled AI estimate, then to "data unavailable".
+    `allow_llm=False` is used for bulk index scoring to avoid dozens of LLM calls.
     """
     t = ticker.strip().upper()
     if not t:
@@ -3191,12 +3280,12 @@ def analyze_one(ticker: str, allow_llm: bool = True) -> dict:
             if "RateLimit" in name and attempt < 2:
                 time.sleep(1.5 * (attempt + 1))
                 continue
-            return _fallback_row(t, f"could not analyze ({name})")
+            return _fallback_row(t, f"could not analyze ({name})", allow_llm=allow_llm)
 
     s = r.get("scores") or {}
     final = s.get("final")
     if final is None:
-        return _fallback_row(t, "no data returned")
+        return _fallback_row(t, "no data returned", allow_llm=allow_llm)
 
     tech = r.get("technicals") or {}
     rsi = tech.get("rsi")
@@ -3342,6 +3431,12 @@ def _score_many(tickers: List[str]) -> List[dict]:
 
 
 def _passes(r: dict, f: dict) -> bool:
+    # A labelled estimate has no score by design. It is allowed through only when the
+    # query applied no numeric filters — an estimate cannot honestly satisfy
+    # "score > 80" or an RSI band, so it must not appear to.
+    if r.get("data_source") == "ai_estimate":
+        numeric = {"score_min", "score_max", "rsi_min", "rsi_max", "status"}
+        return not any(f.get(k) is not None for k in numeric)
     if r.get("error") or r.get("score") is None:
         return False
     if "sector" in f and f["sector"]:
@@ -3458,13 +3553,19 @@ def api_search(
     matched = [r for r in rows if _passes(r, filters)]
     # If filters eliminate everything, fall back to all scorable candidates (still ranked).
     if not matched:
-        matched = [r for r in rows if not r.get("error") and r.get("score") is not None]
+        matched = [r for r in rows if not r.get("error")
+                   and (r.get("score") is not None or r.get("data_source") == "ai_estimate")]
     for r in matched:
         r["why"] = reasons.get(r["ticker"], "")
     if news:
         for r in matched:
             news_signals.apply_overlay(r)
-    matched.sort(key=lambda r: -(r.get("score") or 0))
+    # Estimates are not scores, so they never compete with one. Real rows rank by
+    # score; estimates follow as a separate group, ordered by band.
+    _BAND_RANK = {"strong": 0, "mixed": 1, "weak": 2}
+    matched.sort(key=lambda r: (r.get("data_source") == "ai_estimate",
+                                _BAND_RANK.get(r.get("estimated_band"), 3)
+                                if r.get("data_source") == "ai_estimate" else -(r.get("score") or 0)))
 
     return {
         "query": query,

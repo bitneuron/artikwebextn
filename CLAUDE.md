@@ -125,10 +125,15 @@ agents with `save_*` tools persist memory back into their KB across sessions.
   `ARTIK_PRIMARY_MODEL` overrides `primary` but deliberately NOT `tasks` — it is the blunt
   "send everything one way" switch, and it must not silently undo an accuracy assignment.
   Code: `models.task_provider()`, `models.cascade(..., task=...)`; read it at `GET /api/config/models`.
-- **No model is ever asked for market data.** When Yahoo and Alpha Vantage both fail, the row says
-  "data unavailable". The old path asked an LLM for a 0-100 score from memory, and that score landed
-  in the same field as engine-computed ones and was ranked against them with nothing in the UI to
-  tell them apart. Do not reintroduce it; a test asserts it is gone.
+- **A model may estimate, but never score.** When Yahoo and Alpha Vantage both fail on a SINGLE
+  ticker, `_llm_estimate_row()` returns a qualitative read. It never sets `score`, `status` or
+  `rating` — those are the engine's and the engine did not run. It carries a coarse band
+  (strong/mixed/weak) in `estimated_band`, is marked `data_source: "ai_estimate"`, sorts in its own
+  group BELOW every real score, is excluded from any numeric filter (it cannot honestly satisfy
+  "score > 80"), and is badged by `statusCell()` wherever a status would appear. The model is told
+  its knowledge is not live and may decline with `known: false`, which keeps "no data" as no data.
+  Bulk index sweeps pass `allow_llm=False` and never call a model. Do not let the estimate back into
+  the `score` field; tests assert every one of these.
 - **Financial screenshot extraction is cross-checked.** The other provider independently re-reads the
   same image and amounts, dates, signs, line count and account are compared. Disagreements are shown
   and the Apply button changes to require explicit confirmation. Agreement is reported as agreement,

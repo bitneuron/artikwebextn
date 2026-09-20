@@ -1697,6 +1697,14 @@ async function runCopilotQuery(query, mode){
 }
 
 function statusCell(r){
+  // An AI estimate is not a verdict. It gets its own badge everywhere a status would
+  // appear, because this function feeds every table and the detail header.
+  if(r.data_source === 'ai_estimate'){
+    const band = r.estimated_band || '—';
+    return `<span class="badge est" title="${escapeHtml(r.note || 'AI estimate — no live market data')}"`
+      + ` style="background:rgba(148,163,184,.18);color:var(--mut);border:1px dashed var(--mut)">`
+      + `~ ${escapeHtml(band)} · AI estimate</span>`;
+  }
   return r.status ? `<span class="badge ${r.status}">${r.status}</span>`
                   : `<span style="color:var(--mut)">${r.error?'—':''}</span>`;
 }
@@ -1997,7 +2005,7 @@ function analyzeListTable(view){
       <td class="muted">${escapeHtml(r.sector||'—')}</td>
       <td class="muted" style="font-size:12px">${escapeHtml(arch)}</td>
       <td class="num">$${r.price!=null?r.price.toLocaleString():'—'}</td>
-      <td class="num"><b>${r.score}</b></td>
+      <td class="num"><b>${r.score ?? '—'}</b></td>
       <td class="num">${r.rsi!=null?r.rsi:'—'}</td>
       <td>${statusCell(r)}</td>
       <td class="num">${news}</td>
@@ -2132,7 +2140,7 @@ function favListTable(view){
       <td class="muted">${escapeHtml(r.sector||'—')}</td>
       <td class="muted" style="font-size:12px">${escapeHtml(arch)}</td>
       <td class="num">$${r.price!=null?r.price.toLocaleString():'—'}</td>
-      <td class="num"><b>${r.score}</b></td>
+      <td class="num"><b>${r.score ?? '—'}</b></td>
       <td class="num">${r.rsi!=null?r.rsi:'—'}</td>
       <td>${statusCell(r)}</td>
       <td class="num">${news}</td>
@@ -2428,7 +2436,10 @@ function detContent(r, name){
   }
   if(name==='overview'){
     const arch = b.archetype ? `a <b>${escapeHtml(b.archetype)}</b>` : 'a company';
-    const summary = `${r.ticker}${r.company?` (${escapeHtml(r.company)})`:''} scores <b>${r.score}</b> — <b>${r.status}</b> — as ${arch} in ${escapeHtml(r.sector||'its sector')}.`
+    const summary = (r.data_source === 'ai_estimate')
+      ? `${r.ticker}${r.company?` (${escapeHtml(r.company)})`:''} — <b>AI estimate, no live market data</b>. `
+        + `Qualitative read: <b>${escapeHtml(r.estimated_band||'—')}</b>. This is not an Artik Score.`
+      : `${r.ticker}${r.company?` (${escapeHtml(r.company)})`:''} scores <b>${r.score}</b> — <b>${r.status}</b> — as ${arch} in ${escapeHtml(r.sector||'its sector')}.`
       + (r.strengths&&r.strengths[0]?` Its standout strength is ${escapeHtml(r.strengths[0].toLowerCase())}.`:'')
       + (r.risks&&r.risks[0]?` The key risk to watch is ${escapeHtml(r.risks[0].toLowerCase())}.`:'')
       + (b.multiplier_reason?` Archetype multiplier: ${escapeHtml(b.multiplier_reason)}.`:'');
