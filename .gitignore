@@ -64,3 +64,14 @@ artikBroker/config/
 .claude/
 .agents/
 skills-lock.json
+
+# OpenAI Codex local tooling (machine-specific) — kept separate from .claude/
+.codex/
+
+# Shared Claude/Codex file-claim registry (machine-local, see scripts/agent-claims.py)
+.agent-claims.json
+.agent-claims.json.tmp
+
+# Private keys — never commit
+*.pem
+*.key

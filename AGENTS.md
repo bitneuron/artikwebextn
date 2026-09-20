@@ -1,15 +1,15 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to OpenAI Codex when working with code in this repository.
 
 ## Claude and Codex coexistence
 
-- Claude Code instructions belong in `CLAUDE.md`; Claude project settings, agents, and
-  session memory belong in `.claude/`.
-- `AGENTS.md` and `.codex/` belong to OpenAI Codex. Do not modify them unless the user
-  explicitly requests Codex configuration changes. Do not import them as Claude instructions.
+- Codex instructions belong in `AGENTS.md`; Codex project settings belong in `.codex/`.
+- `CLAUDE.md` and `.claude/` belong to Claude Code. Do not modify them unless the user
+  explicitly requests Claude configuration changes. Do not import them as Codex instructions.
 - Keep the tools' settings, permissions, hooks, credentials, and session memory separate.
-  Do not symlink or synchronize their configuration directories.
+  Do not symlink or synchronize their configuration directories, or configure `CLAUDE.md`
+  as a Codex instruction fallback.
 - `memory/` contains shared project documentation; application model settings and `.env`
   files configure the application, not the coding assistant. Preserve actual provider/model
   names regardless of which assistant edits the code.
@@ -22,9 +22,9 @@ Both assistants share one machine-local registry, `.agent-claims.json` (gitignor
 `scripts/agent-claims.py`. A claim records which agent is editing which repo-relative paths; a
 claim on a directory covers everything beneath it, and claims older than 8 hours are ignored.
 
-Claude enforces this automatically: a `PreToolUse` hook in `.claude/settings.json` runs the
-registry check before every Edit/Write and denies the edit when Codex holds the path. A
-`SessionStart` hook reports active claims. Claim with `--agent claude`.
+Codex has no equivalent hook, so Codex must run these commands itself: check before editing
+and claim at the start of a task. Claim with `--agent codex`. Claude's side is enforced
+automatically by a hook, so an unclaimed Codex edit is the one gap in the system.
 
 ```bash
 python3 scripts/agent-claims.py list                                  # who holds what
