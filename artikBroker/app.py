@@ -2167,17 +2167,10 @@ async def finance_screenshot(request: Request):
     akey, okey = _anthropic_key(), _openai_key()
     if not akey and not okey:
         return JSONResponse({"error": "no ANTHROPIC_API_KEY or OPENAI_API_KEY configured"}, status_code=503)
-    out, provider, last_err = None, None, None
-    if akey:
-        try:
-            out, provider = _fin_extract_claude(b64, media, hint, akey), "claude"
-        except Exception as e:  # noqa: BLE001
-            last_err = _err_detail(e)
-    if out is None and okey:
-        try:
-            out, provider = _fin_extract_openai(b64, media, hint, okey), "gpt"
-        except Exception as e:  # noqa: BLE001
-            last_err = _err_detail(e)
+    out, provider, err = _models.cascade(akey, okey,
+        claude_fn=lambda k: _fin_extract_claude(b64, media, hint, k),
+        gpt_fn=lambda k: _fin_extract_openai(b64, media, hint, k))
+    last_err = _err_detail(err) if err else None
     if not out:
         return JSONResponse({"error": f"could not analyze screenshot: {last_err or 'no extraction returned'}"},
                             status_code=422)
@@ -2459,23 +2452,20 @@ def _alert_interpret_llm(prompt: str):
     if not akey and not okey:
         raise RuntimeError("no ANTHROPIC_API_KEY or OPENAI_API_KEY configured")
     msgs = [{"role": "user", "content": prompt[:2000]}]
-    if akey:
-        try:
-            import anthropic
-            client = anthropic.Anthropic(api_key=akey)
-            msg = _models.with_fallback(_models.CLAUDE, lambda mdl: _models.anthropic_create(client,
-                model=mdl, max_tokens=1200, system=_ALERT_SYSTEM,
-                tools=[{"name": _ALERT_TOOL_NAME, "description": "Return the structured alert.",
-                        "input_schema": _ALERT_TOOL_SCHEMA}],
-                tool_choice={"type": "tool", "name": _ALERT_TOOL_NAME}, messages=msgs))
-            out = next((b.input for b in msg.content if getattr(b, "type", "") == "tool_use"), None)
-            if out:
-                return out
-        except Exception as e:  # noqa: BLE001
-            last = _err_detail(e)
-    if okey:
+
+    def _claude(k):
+        import anthropic
+        client = anthropic.Anthropic(api_key=k)
+        msg = _models.with_fallback(_models.CLAUDE, lambda mdl: _models.anthropic_create(client,
+            model=mdl, max_tokens=1200, system=_ALERT_SYSTEM,
+            tools=[{"name": _ALERT_TOOL_NAME, "description": "Return the structured alert.",
+                    "input_schema": _ALERT_TOOL_SCHEMA}],
+            tool_choice={"type": "tool", "name": _ALERT_TOOL_NAME}, messages=msgs))
+        return next((b.input for b in msg.content if getattr(b, "type", "") == "tool_use"), None)
+
+    def _gpt(k):
         from openai import OpenAI
-        client = OpenAI(api_key=okey)
+        client = OpenAI(api_key=k)
         resp = _models.with_fallback(_models.GPT, lambda mdl: _models.openai_create(client,
             model=mdl, messages=[{"role": "system", "content": _ALERT_SYSTEM}] + msgs,
             tools=[{"type": "function", "function": {"name": _ALERT_TOOL_NAME,
@@ -2483,8 +2473,13 @@ def _alert_interpret_llm(prompt: str):
             tool_choice={"type": "function", "function": {"name": _ALERT_TOOL_NAME}},
             max_completion_tokens=1200, reasoning_effort="minimal"))
         calls = resp.choices[0].message.tool_calls
-        if calls:
-            return json.loads(calls[0].function.arguments)
+        return json.loads(calls[0].function.arguments) if calls else None
+
+    out, _prov, err = _models.cascade(akey, okey, claude_fn=_claude, gpt_fn=_gpt)
+    if out is not None:
+        return out
+    if err:
+        raise RuntimeError(_err_detail(err))
     raise RuntimeError("interpreter returned nothing")
 
 
@@ -3070,22 +3065,27 @@ def _llm_fundamental_row(t: str) -> dict | None:
               "<50 = SELL), rating (BUY|HOLD|SELL), strengths (array of 3 short strings), "
               "risks (array of 3 short strings), summary (one sentence). Base it on the company's "
               "known fundamentals, growth, and risks. JSON only, no prose.")
-    data = None
+    # FAST chain (this can run on many tickers), primary provider first.
+    def _claude(k):
+        import anthropic
+        client = anthropic.Anthropic(api_key=k)
+        msg = _models.with_fallback(_models.CLAUDE_FAST, lambda mdl: _models.anthropic_create(client,
+            model=mdl, max_tokens=700, system=sysmsg,
+            messages=[{"role": "user", "content": f"Ticker: {t}"}]))
+        return "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
+
+    def _gpt(k):
+        from openai import OpenAI
+        client = OpenAI(api_key=k)
+        r = _models.with_fallback(_models.GPT_FAST, lambda mdl: _models.openai_create(client,
+            model=mdl, max_completion_tokens=700, reasoning_effort="minimal",
+            messages=[{"role": "system", "content": sysmsg}, {"role": "user", "content": f"Ticker: {t}"}]))
+        return r.choices[0].message.content or ""
+
+    txt, _prov, _err = _models.cascade(akey, okey, claude_fn=_claude, gpt_fn=_gpt)
+    if not txt:
+        return None
     try:
-        if akey:  # FAST chain (this can run on many tickers) with version fallback
-            import anthropic
-            client = anthropic.Anthropic(api_key=akey)
-            msg = _models.with_fallback(_models.CLAUDE_FAST, lambda mdl: _models.anthropic_create(client,
-                model=mdl, max_tokens=700, system=sysmsg,
-                messages=[{"role": "user", "content": f"Ticker: {t}"}]))
-            txt = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
-        else:
-            from openai import OpenAI
-            client = OpenAI(api_key=okey)
-            r = _models.with_fallback(_models.GPT_FAST, lambda mdl: _models.openai_create(client,
-                model=mdl, max_completion_tokens=700, reasoning_effort="minimal",
-                messages=[{"role": "system", "content": sysmsg}, {"role": "user", "content": f"Ticker: {t}"}]))
-            txt = r.choices[0].message.content or ""
         data = json.loads(txt[txt.find("{"):txt.rfind("}") + 1])
     except Exception:  # noqa: BLE001
         return None
@@ -3362,7 +3362,7 @@ def _parse_anthropic(query: str, key: str) -> dict | None:
 
 
 def _parse_openai(query: str, key: str) -> dict | None:
-    """OpenAI GPT fallback — same structured plan via function calling (GPT-5 API)."""
+    """OpenAI path — same structured plan via function calling."""
     from openai import OpenAI
     client = OpenAI(api_key=key)
     resp = _models.with_fallback(_models.GPT, lambda mdl: _models.openai_create(client,
@@ -3397,18 +3397,12 @@ def api_search(
     if not akey and not okey:
         return JSONResponse({"error": "AI search unavailable: no ANTHROPIC_API_KEY or OPENAI_API_KEY configured."}, status_code=503)
 
-    # Provider cascade: Claude first; on ANY failure (e.g. low credits) fall back to OpenAI GPT.
-    plan, provider, last_err = None, None, None
-    if akey:
-        try:
-            plan, provider = _parse_anthropic(query, akey), "claude"
-        except Exception as e:  # noqa: BLE001
-            last_err = _err_detail(e)
-    if plan is None and okey:
-        try:
-            plan, provider = _parse_openai(query, okey), "gpt"
-        except Exception as e:  # noqa: BLE001
-            last_err = _err_detail(e)
+    # Provider cascade: the configured primary first (models.json `primary`, or
+    # ARTIK_PRIMARY_MODEL); on ANY failure (e.g. low credits) fall back to the other.
+    plan, provider, err = _models.cascade(akey, okey,
+        claude_fn=lambda k: _parse_anthropic(query, k),
+        gpt_fn=lambda k: _parse_openai(query, k))
+    last_err = _err_detail(err) if err else None
 
     if plan is None:
         return JSONResponse({"error": f"AI search failed: {last_err or 'no provider available'}"}, status_code=502)
@@ -3627,17 +3621,10 @@ async def api_copilot(request: Request):
     akey, okey = _anthropic_key(), _openai_key()
     if not akey and not okey:
         return JSONResponse({"error": "Copilot unavailable: no ANTHROPIC_API_KEY or OPENAI_API_KEY configured."}, status_code=503)
-    out, provider, last_err = None, None, None
-    if akey:
-        try:
-            out, provider = _copilot_anthropic(conv, sys_text, akey), "claude"
-        except Exception as e:  # noqa: BLE001
-            last_err = _err_detail(e)
-    if out is None and okey:
-        try:
-            out, provider = _copilot_openai(conv, sys_text, okey), "gpt"
-        except Exception as e:  # noqa: BLE001
-            last_err = _err_detail(e)
+    out, provider, err = _models.cascade(akey, okey,
+        claude_fn=lambda k: _copilot_anthropic(conv, sys_text, k),
+        gpt_fn=lambda k: _copilot_openai(conv, sys_text, k))
+    last_err = _err_detail(err) if err else None
     if not out:
         return JSONResponse({"error": f"Copilot failed: {last_err or 'no provider available'}"}, status_code=502)
 
@@ -3674,17 +3661,10 @@ async def api_copilot_analyze_page(request: Request):
     if not akey and not okey:
         return JSONResponse({"error": "Copilot unavailable: no ANTHROPIC_API_KEY or OPENAI_API_KEY configured."},
                             status_code=503)
-    out, provider, last_err = None, None, None
-    if akey:
-        try:
-            out, provider = _copilot_anthropic(conv, sys_text, akey), "claude"
-        except Exception as e:  # noqa: BLE001
-            last_err = _err_detail(e)
-    if out is None and okey:
-        try:
-            out, provider = _copilot_openai(conv, sys_text, okey), "gpt"
-        except Exception as e:  # noqa: BLE001
-            last_err = _err_detail(e)
+    out, provider, err = _models.cascade(akey, okey,
+        claude_fn=lambda k: _copilot_anthropic(conv, sys_text, k),
+        gpt_fn=lambda k: _copilot_openai(conv, sys_text, k))
+    last_err = _err_detail(err) if err else None
     if not out:
         return JSONResponse({"error": f"Copilot failed: {last_err or 'no provider available'}"}, status_code=502)
     return {"provider": provider, "page_type": context.get("page_type"),
@@ -4156,14 +4136,10 @@ def _pc_narrative(result: dict, question: str, mode: str) -> str | None:
         + json.dumps(compact, default=str)[:9000]
         + f"\n\nQUESTION: {question}\n\nAnswer concisely and clearly for Slack/web display.")
     akey, okey = _anthropic_key(), _openai_key()
-    try:
-        if akey:
-            return _summarize_anthropic(prompt, akey)
-        if okey:
-            return _summarize_openai(prompt, okey)
-    except Exception:  # noqa: BLE001
-        return None
-    return None
+    out, _prov, _err = _models.cascade(akey, okey,
+        claude_fn=lambda k: _summarize_anthropic(prompt, k),
+        gpt_fn=lambda k: _summarize_openai(prompt, k))
+    return out
 
 
 @app.post("/api/portfolio/multi-analyze")
@@ -4769,21 +4745,27 @@ def _ai_deep_analysis(context: dict):
     if not (akey or okey):
         return None, "no LLM key configured"
     payload = json.dumps(context)[:60000]
+
+    def _claude(k):
+        import anthropic
+        client = anthropic.Anthropic(api_key=k)
+        msg = _models.with_fallback(_models.CLAUDE, lambda mdl: _models.anthropic_create(client,
+            model=mdl, max_tokens=1400, system=_DEEP_SYSTEM,
+            messages=[{"role": "user", "content": payload}]))
+        return "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
+
+    def _gpt(k):
+        from openai import OpenAI
+        client = OpenAI(api_key=k)
+        r = _models.with_fallback(_models.GPT, lambda mdl: _models.openai_create(client,
+            model=mdl, max_completion_tokens=1400, reasoning_effort="minimal",
+            messages=[{"role": "system", "content": _DEEP_SYSTEM}, {"role": "user", "content": payload}]))
+        return r.choices[0].message.content or ""
+
+    txt, _prov, err = _models.cascade(akey, okey, claude_fn=_claude, gpt_fn=_gpt)
+    if not txt:
+        return None, str(err) if err else "no provider returned a result"
     try:
-        if akey:
-            import anthropic
-            client = anthropic.Anthropic(api_key=akey)
-            msg = _models.with_fallback(_models.CLAUDE, lambda mdl: _models.anthropic_create(client,
-                model=mdl, max_tokens=1400, system=_DEEP_SYSTEM,
-                messages=[{"role": "user", "content": payload}]))
-            txt = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
-        else:
-            from openai import OpenAI
-            client = OpenAI(api_key=okey)
-            r = _models.with_fallback(_models.GPT, lambda mdl: _models.openai_create(client,
-                model=mdl, max_completion_tokens=1400, reasoning_effort="minimal",
-                messages=[{"role": "system", "content": _DEEP_SYSTEM}, {"role": "user", "content": payload}]))
-            txt = r.choices[0].message.content or ""
         return json.loads(txt[txt.find("{"):txt.rfind("}") + 1]), None
     except Exception as e:  # noqa: BLE001
         return None, str(e)
@@ -4885,21 +4867,26 @@ def _ai_intel_summary(ticker: str, signals: dict):
                    if kk not in ("topHeadlines", "recent", "topChanges", "momChanges", "latest")}
                for k in ("news", "analyst", "insider", "institutional", "sec", "earnings", "composite")}
     prompt = f"Ticker: {ticker}\nSignals: {json.dumps(trimmed)[:8000]}"
+    def _claude(k):
+        import anthropic
+        client = anthropic.Anthropic(api_key=k)
+        msg = _models.with_fallback(_models.CLAUDE_FAST, lambda mdl: _models.anthropic_create(client,
+            model=mdl, max_tokens=500, system=_INTEL_SYSTEM,
+            messages=[{"role": "user", "content": prompt}]))
+        return "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
+
+    def _gpt(k):
+        from openai import OpenAI
+        client = OpenAI(api_key=k)
+        r = _models.with_fallback(_models.GPT_FAST, lambda mdl: _models.openai_create(client,
+            model=mdl, max_completion_tokens=500, reasoning_effort="minimal",
+            messages=[{"role": "system", "content": _INTEL_SYSTEM}, {"role": "user", "content": prompt}]))
+        return r.choices[0].message.content or ""
+
+    txt, _prov, _err = _models.cascade(akey, okey, claude_fn=_claude, gpt_fn=_gpt)
+    if not txt:
+        return None
     try:
-        if akey:
-            import anthropic
-            client = anthropic.Anthropic(api_key=akey)
-            msg = _models.with_fallback(_models.CLAUDE_FAST, lambda mdl: _models.anthropic_create(client,
-                model=mdl, max_tokens=500, system=_INTEL_SYSTEM,
-                messages=[{"role": "user", "content": prompt}]))
-            txt = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
-        else:
-            from openai import OpenAI
-            client = OpenAI(api_key=okey)
-            r = _models.with_fallback(_models.GPT_FAST, lambda mdl: _models.openai_create(client,
-                model=mdl, max_completion_tokens=500, reasoning_effort="minimal",
-                messages=[{"role": "system", "content": _INTEL_SYSTEM}, {"role": "user", "content": prompt}]))
-            txt = r.choices[0].message.content or ""
         return json.loads(txt[txt.find("{"):txt.rfind("}") + 1])
     except Exception:  # noqa: BLE001
         return None
@@ -4967,7 +4954,41 @@ def api_config():
         "news_signals": news_signals.available(),
         "news_signals_backend": news_signals.backend(),
         "agents": True,
+        "primary_model": _models.info()["primary_label"],
+        "primary_model_name": _models.info()["primary_model"],
     }
+
+
+@app.get("/api/config/models")
+def api_config_models(request: Request):
+    """Which provider leads and which models each chain will try, in order."""
+    info = _models.info()
+    return {**info, "options": [
+        {"value": "astra", "label": "Astra (OpenAI)", "model": _models.GPT[0]},
+        {"value": "claude", "label": "Claude (Anthropic)", "model": _models.CLAUDE[0]},
+    ], "source": _models.primary_source()}
+
+
+@app.post("/api/config/models")
+async def api_config_models_set(request: Request):
+    """Admin-only: switch which provider leads. Persists to the shared models.json
+    so every app reading that file follows, and takes effect on the next request."""
+    if not _require_admin(request):
+        return JSONResponse({"error": "admin only"}, status_code=403)
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"error": "invalid JSON body"}, status_code=400)
+    choice = str(body.get("primary") or "").strip().lower()
+    if choice not in ("astra", "claude", "openai", "anthropic"):
+        return JSONResponse({"error": "primary must be 'astra' or 'claude'"}, status_code=400)
+    try:
+        _models.set_primary(choice)
+    except PermissionError as e:
+        return JSONResponse({"error": str(e)}, status_code=409)
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": f"could not save: {_err_detail(e)}"}, status_code=500)
+    return {"ok": True, **_models.info(), "source": _models.primary_source()}
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -5295,7 +5316,7 @@ def _summarize_openai(prompt: str, key: str) -> str | None:
 
 @app.get("/api/news_summary")
 def api_news_summary(ticker: str = Query(..., description="ticker to summarize news for")):
-    """AI summary of a ticker's recent collected headlines (Claude→GPT cascade)."""
+    """AI summary of a ticker's recent collected headlines (primary provider, then the other)."""
     tk = (ticker or "").strip().upper()
     if not tk:
         return JSONResponse({"ok": False, "error": "empty ticker"}, status_code=400)
@@ -5315,17 +5336,10 @@ def api_news_summary(ticker: str = Query(..., description="ticker to summarize n
     akey, okey = _anthropic_key(), _openai_key()
     if not akey and not okey:
         return {"ok": False, "ticker": tk, "error": "no AI provider configured", "count": len(rows)}
-    summary, provider, last_err = None, None, None
-    if akey:
-        try:
-            summary, provider = _summarize_anthropic(prompt, akey), "claude"
-        except Exception as e:  # noqa: BLE001
-            last_err = _err_detail(e)
-    if not summary and okey:
-        try:
-            summary, provider = _summarize_openai(prompt, okey), "gpt"
-        except Exception as e:  # noqa: BLE001
-            last_err = _err_detail(e)
+    summary, provider, err = _models.cascade(akey, okey,
+        claude_fn=lambda k: _summarize_anthropic(prompt, k),
+        gpt_fn=lambda k: _summarize_openai(prompt, k))
+    last_err = _err_detail(err) if err else None
     if not summary:
         return {"ok": False, "ticker": tk, "error": last_err or "summary failed", "count": len(rows)}
     return {"ok": True, "ticker": tk, "summary": summary, "provider": provider, "count": len(rows)}

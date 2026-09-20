@@ -117,6 +117,13 @@ agents with `save_*` tools persist memory back into their KB across sessions.
 
 ## Cross-cutting conventions
 
+- **Primary provider: `primary` in `models.json`** (`"openai"` = gpt-6-astra, `"anthropic"` = claude).
+  Every AI feature in artikBroker can run on either; `primary` picks which is tried first and the
+  other stays as the fallback. Change it with `POST /api/config/models {"primary":"astra"|"claude"}`
+  (admin only, writes the file) or the `ARTIK_PRIMARY_MODEL` env var, which wins and makes the API
+  refuse to write. Current default: **astra**. On AWS the container filesystem is ephemeral, so set
+  the env var there — a file write is lost on the next deploy. Code: `models.PRIMARY`,
+  `models.providers()`, `models.cascade()`; read it back at `GET /api/config/models`.
 - **Models: one source of truth → `artikAgents/agents/shared/models.json`.** Update versions there.
   Python reads it via `shared/model_config.py`; artikAPIs via `app/model_config.py`; React via
   `src/config/models.js`. The lens-extension keeps its own constants (can't import). Env vars

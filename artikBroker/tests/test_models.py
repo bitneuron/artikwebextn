@@ -54,3 +54,109 @@ def test_with_fallback_raises_if_all_fail():
         assert False, "expected the last error to propagate"
     except ValueError:
         pass
+
+
+# ── Primary-provider switch (astra ⇄ claude) ─────────────────────────────────
+
+def test_default_primary_is_astra():
+    assert models.PRIMARY == "openai"
+    assert models.SECONDARY == "anthropic"
+    assert models.info()["primary_label"] == "gpt"
+    assert models.info()["primary_model"] == "gpt-6-astra"
+
+
+def test_primary_aliases_are_accepted():
+    for word in ("astra", "openai", "gpt", "GPT-6-Astra"):
+        assert models._primary(word) == "openai"
+    for word in ("claude", "anthropic", "opus", "Claude-Opus-5"):
+        assert models._primary(word) == "anthropic"
+
+
+def test_unknown_primary_falls_back_to_astra_not_crash():
+    assert models._primary("llama") == "openai"
+    assert models._primary(None) == "openai"
+    assert models._primary("") == "openai"
+
+
+def test_env_selects_claude_as_primary(monkeypatch):
+    monkeypatch.setenv("ARTIK_PRIMARY_MODEL", "claude")
+    m = importlib.reload(models)
+    assert m.PRIMARY == "anthropic" and m.SECONDARY == "openai"
+    assert [lbl for lbl, _ in m.providers("A", "O")] == ["claude", "gpt"]
+    monkeypatch.delenv("ARTIK_PRIMARY_MODEL")
+    importlib.reload(models)
+
+
+def test_provider_order_follows_primary_and_skips_missing_keys():
+    assert [lbl for lbl, _ in models.providers("A", "O")] == ["gpt", "claude"]
+    assert [lbl for lbl, _ in models.providers("A", None)] == ["claude"]
+    assert [lbl for lbl, _ in models.providers(None, "O")] == ["gpt"]
+    assert models.providers(None, None) == []
+
+
+def test_cascade_calls_primary_first():
+    called = []
+    out, label, err = models.cascade("A", "O",
+                                     claude_fn=lambda k: called.append("claude") or "c",
+                                     gpt_fn=lambda k: called.append("gpt") or "g")
+    assert (out, label, err) == ("g", "gpt", None)
+    assert called == ["gpt"]                       # claude never ran
+
+
+def test_cascade_falls_back_when_primary_raises():
+    def boom(k):
+        raise RuntimeError("astra down")
+    out, label, err = models.cascade("A", "O", claude_fn=lambda k: "c", gpt_fn=boom)
+    assert (out, label, err) == ("c", "claude", None)
+
+
+def test_cascade_falls_back_when_primary_returns_none():
+    # A provider that yields nothing useful must not shadow the other one.
+    out, label, _ = models.cascade("A", "O", claude_fn=lambda k: "c", gpt_fn=lambda k: None)
+    assert (out, label) == ("c", "claude")
+
+
+def test_cascade_reports_last_error_when_all_fail():
+    def boom(k):
+        raise ValueError("no credit")
+    out, label, err = models.cascade("A", "O", claude_fn=boom, gpt_fn=boom)
+    assert out is None and label is None and isinstance(err, ValueError)
+
+
+def test_cascade_skips_provider_without_a_key():
+    called = []
+    out, label, _ = models.cascade(None, "O",
+                                   claude_fn=lambda k: called.append("claude") or "c",
+                                   gpt_fn=lambda k: "g")
+    assert (out, label) == ("g", "gpt") and called == []
+
+
+def test_set_primary_refuses_while_env_override_is_set(monkeypatch):
+    monkeypatch.setenv("ARTIK_PRIMARY_MODEL", "astra")
+    m = importlib.reload(models)
+    try:
+        m.set_primary("claude")
+        assert False, "expected PermissionError: the env var would silently win"
+    except PermissionError:
+        pass
+    monkeypatch.delenv("ARTIK_PRIMARY_MODEL")
+    importlib.reload(models)
+
+
+def test_set_primary_round_trips_through_the_file(tmp_path, monkeypatch):
+    cfg = tmp_path / "models.json"
+    cfg.write_text('{"primary": "openai", "anthropic": {"default": "claude-opus-5"},'
+                   ' "openai": {"data": "gpt-6-astra", "chat": "gpt-6-astra"}}')
+    monkeypatch.setenv("MODELS_JSON", str(cfg))
+    monkeypatch.delenv("ARTIK_PRIMARY_MODEL", raising=False)
+    m = importlib.reload(models)
+    assert m.PRIMARY == "openai"
+    m.set_primary("claude")
+    assert m.PRIMARY == "anthropic"
+    import json as _json
+    assert _json.loads(cfg.read_text())["primary"] == "anthropic"   # persisted
+    assert [lbl for lbl, _ in m.providers("A", "O")] == ["claude", "gpt"]
+    m.set_primary("astra")                                          # and back
+    assert _json.loads(cfg.read_text())["primary"] == "openai"
+    monkeypatch.delenv("MODELS_JSON")
+    importlib.reload(models)
