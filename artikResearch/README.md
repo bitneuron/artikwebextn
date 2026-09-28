@@ -12,7 +12,7 @@ Part of the **ArtikProjects** superproject (a sibling of `artikBroker`, `artikNo
 ## Status — Iteration 1 (runnable end-to-end)
 
 The core publication lifecycle works today with real multi-provider LLM reasoning
-(Claude → GPT‑5 → Gemini fallback):
+(Claude Opus 5.5 → GPT Astra fallback):
 
 **Upload paper → learn journal → gap analysis → readiness score → AI rewrite → reviewer
 simulation → reference reformatting → submission package.**
@@ -57,7 +57,7 @@ simulation → reference reformatting → submission package.**
 
 Reuses the superproject's shared Python venv (`../artikAPIs/venv`) which already has FastAPI,
 PyMuPDF, python‑docx, anthropic, openai. API keys are read from `../artikAgents/agents/.env`
-(`ANTHROPIC_API_KEY` / `OPENAI_API_KEY`, optional `GEMINI_API_KEY`).
+(`ANTHROPIC_API_KEY` / `OPENAI_API_KEY`).
 
 ```bash
 cd artikResearch
@@ -86,7 +86,6 @@ production swap‑ins behind the same functions/paths:
 | Auth | none (local) | shared Artik auth (per‑user scoping) before any deploy |
 | DOCX/PDF binary export | **DONE** — python‑docx (template‑aware) + reportlab | richer LaTeX/theme fidelity |
 | Figure / Table agents | structured checks + roadmap | image analysis + relabeling |
-| Gemini | wired in `llm.py` | set `GEMINI_API_KEY` |
 
 **Roadmap agents (spec'd, not in iter 1):** Literature Review, Experiment Design, Grant
 Proposal, Patent, Conference; Research Notebook; and the external integrations (CrossRef,
