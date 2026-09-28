@@ -54,6 +54,14 @@ RUN rm -rf /opt/news_collector_agent/__pycache__ /opt/news_collector_agent/data/
 ENV NEWS_COLLECTOR_DIR=/opt/news_collector_agent \
     NEWS_COLLECTOR_DATA_DIR=/app/data/news_collector
 
+# 5b) Stock Analysis agent — same subprocess pattern; it imports artik_engine (installed
+#     above) and yfinance. Per-instance output under STOCK_ANALYSIS_DATA_DIR; the Broker
+#     keeps a durable copy of each run in the users DB.
+COPY artikAgents/agents/stock_analysis_agent /opt/stock_analysis_agent
+RUN rm -rf /opt/stock_analysis_agent/__pycache__ /opt/stock_analysis_agent/data /opt/stock_analysis_agent/tests
+ENV STOCK_ANALYSIS_DIR=/opt/stock_analysis_agent \
+    STOCK_ANALYSIS_DATA_DIR=/app/data/stock_analysis
+
 # 6) Persistent users DB (Litestream-backed). The DB lives at /data/users.db (outside
 #    /app/config, which is wiped above); Litestream restores/replicates it to S3.
 COPY artikBroker/litestream.yml /etc/litestream.yml

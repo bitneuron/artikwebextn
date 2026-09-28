@@ -144,6 +144,117 @@ def _run_blocking(agent_id: str, cfg: dict, tickers_override: list[str] | None =
     return rec or {"status": "partial", "errors": ["no run_history record written"]}
 
 
+# ---------------------------------------------------------------------------
+# Stock Analysis Agent (agent_type "Equity Analysis")
+# ---------------------------------------------------------------------------
+# One subprocess does discovery + engine scoring for ~25-60 names; the engine takes a
+# few seconds a ticker on 4 workers, so this gets a longer ceiling than a news batch.
+ANALYSIS_TIMEOUT = max(60, int(os.environ.get("STOCK_ANALYSIS_TIMEOUT", "1800") or 1800))
+
+
+def _build_analysis_config(cfg: dict, tickers_override: list[str] | None) -> Path:
+    payload = {k: cfg.get(k) for k in store.ANALYSIS_KEYS if k in cfg}
+    payload.update({
+        "agent_name": cfg.get("agent_name", "Stock Analysis Agent"),
+        "tickers": tickers_override if tickers_override is not None else (cfg.get("tickers") or []),
+        "discovery_sources": store.enabled_discovery_sources(cfg),
+    })
+    if tickers_override is not None:
+        payload["discovery_enabled"] = False     # an ad-hoc run analyses exactly what it was given
+    store.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    path = store.CONFIG_DIR / f"_analysis_{cfg['agent_id']}.json"
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return path
+
+
+def _run_analysis_blocking(agent_id: str, cfg: dict, tickers_override: list[str] | None) -> dict:
+    import stock_recs
+    cfg_path = _build_analysis_config(cfg, tickers_override)
+    ddir = stock_recs.data_dir(agent_id)
+    cmd = [sys.executable, str(store.ANALYSIS_SCRIPT), "--once", "--config", str(cfg_path),
+           "--data-dir", str(ddir), "--news-signals", str(store.DATA_DIR / "latest_signals.json")]
+    env = {**_inherit_env(), "PYTHONUNBUFFERED": "1"}
+    logf = _logfile(agent_id)
+    with open(logf, "a", encoding="utf-8") as lf:
+        lf.write(f"\n===== analysis run @ {_now()} · watchlist={len(tickers_override or cfg.get('tickers') or [])}"
+                 f" · discovery={'off' if tickers_override is not None else cfg.get('discovery_enabled', True)} =====\n")
+        lf.flush()
+        try:
+            proc = subprocess.run(cmd, cwd=str(store.ANALYSIS_DIR), env=env,
+                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                  text=True, timeout=ANALYSIS_TIMEOUT)
+            lf.write(proc.stdout or "")
+            lf.write(f"----- exit {proc.returncode} @ {_now()} -----\n")
+        except subprocess.TimeoutExpired:
+            lf.write(f"----- TIMEOUT after {ANALYSIS_TIMEOUT}s -----\n")
+            return {"status": "failed", "errors": [f"timeout after {ANALYSIS_TIMEOUT}s"]}
+        except Exception as e:  # noqa: BLE001
+            lf.write(f"----- ERROR {e} -----\n")
+            return {"status": "failed", "errors": [str(e)]}
+    m = re.search(r"run=(\S+)", proc.stdout or "")
+    rec = stock_recs.agent_run(agent_id, m.group(1) if m else None)
+    if not m or not rec:
+        tail = (proc.stdout or "").strip().splitlines()[-1:] or ["no output"]
+        return {"status": "failed", "errors": [f"agent exited {proc.returncode}: {tail[0][:200]}"]}
+    return rec
+
+
+def _analysis_worker(agent_id: str, cfg: dict, trigger_source: str, query: str,
+                     tickers_override: list[str] | None, started: str) -> None:
+    import stock_recs
+    try:
+        rec = _run_analysis_blocking(agent_id, cfg, tickers_override) or {}
+    except Exception as e:  # noqa: BLE001
+        rec = {"status": "failed", "errors": [str(e)]}
+    errors = rec.get("errors") or []
+    brun = {
+        "run_id": rec.get("run_id") or f"{int(time.time()*1000)}",
+        "agent_id": agent_id, "agent_name": cfg.get("agent_name", "Stock Analysis Agent"),
+        "trigger_source": trigger_source, "query": query or "",
+        "tickers": tickers_override if tickers_override is not None else (cfg.get("tickers") or []),
+        "started_at": started, "completed_at": rec.get("completed_at") or _now(),
+        "status": rec.get("status", "unknown"),
+        **{k: rec.get(k) for k in ("candidates_found", "analyzed", "buy", "hold", "sell",
+                                   "no_score", "disagreements", "duration_s")},
+        "errors": errors[:10],
+    }
+    try:
+        stock_recs.record_run(agent_id, brun)
+    except Exception:  # noqa: BLE001
+        pass
+    _set(agent_id, running=False, last_record=brun, run_id=brun["run_id"],
+         last_error=("; ".join(str(e) for e in errors) or None), finished_at=_now())
+    try:
+        store.save_config(agent_id, {"last_run_at": _now()})
+    except Exception:  # noqa: BLE001
+        pass
+
+    # Optional daily digest → Slack. Full-config runs only (not ad-hoc ticker runs).
+    if cfg.get("slack_digest") and tickers_override is None and brun["status"] != "failed":
+        try:
+            ok, detail = stock_recs.post_digest(cfg.get("agent_name", "Stock Analysis Agent"),
+                                                stock_recs.results(agent_id))
+            print(f"[agent {agent_id}] recommendations digest → Slack: ok={ok} ({detail})")
+        except Exception as e:  # noqa: BLE001 — a digest must never break a run
+            print(f"[agent {agent_id}] recommendations digest error: {e}")
+
+    try:
+        from notifications import notify_agent_terminal
+        notify_agent_terminal(
+            agent_name=cfg.get("agent_name", "Stock Analysis Agent"), agent_id=agent_id,
+            job_id=brun["run_id"],
+            task_name=(query or f"{trigger_source} run")
+                      + (f" · {brun.get('buy') or 0} BUY / {brun.get('hold') or 0} HOLD / {brun.get('sell') or 0} SELL"
+                         if brun["status"] != "failed" else ""),
+            status=("completed" if brun["status"] == "completed" else
+                    "failed" if brun["status"] == "failed" else "completed_with_errors"),
+            started_at=started, completed_at=brun["completed_at"],
+            error_message="; ".join(str(e) for e in errors) or None,
+        )
+    except Exception:  # noqa: BLE001 — notifications must never break a run
+        pass
+
+
 def run_async(agent_id: str, cfg: dict, trigger_source: str = "manual",
               query: str = "", tickers_override: list[str] | None = None) -> dict:
     """Start a run in a background thread. Returns immediately. No-op if running.
@@ -159,6 +270,11 @@ def run_async(agent_id: str, cfg: dict, trigger_source: str = "manual",
     run_tickers = tickers_override or cfg.get("tickers") or []
     _set(agent_id, running=True, started_at=started, run_id=None,
          last_error=None, trigger_source=trigger_source)
+
+    if cfg.get("agent_type") == "Equity Analysis":
+        threading.Thread(target=_analysis_worker, name=f"agent-{agent_id}", daemon=True,
+                         args=(agent_id, cfg, trigger_source, query, tickers_override, started)).start()
+        return {"started": True, "started_at": started, "trigger_source": trigger_source}
 
     def _worker():
         is_news = cfg.get("agent_type") == "News Intelligence"

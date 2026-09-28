@@ -57,6 +57,7 @@ import models as _models  # noqa: E402  (LLM model chains + version fallback)
 import news_runs  # noqa: E402  (run history + results reader)
 import news_data  # noqa: E402  (deletes a config's run history/logs + exclusive-ticker articles)
 import nl_tickers  # noqa: E402  (plain-English statement → tickers, for agent config)
+import stock_recs  # noqa: E402  (Stock Analysis Agent output: latest recs, history, digest)
 from agent_scheduler import get_scheduler, compute_next_run  # noqa: E402
 from fastapi import FastAPI, Query, UploadFile, File, Request, Form  # noqa: E402
 from fastapi.responses import FileResponse, JSONResponse, Response, HTMLResponse, RedirectResponse  # noqa: E402
@@ -5325,6 +5326,8 @@ def _agent_view(agent_id: str) -> dict:
     cfg = agents_store.get_config(agent_id)
     if not cfg:
         return None
+    if cfg.get("template") == agents_store.ANALYSIS_TEMPLATE:
+        return _analysis_agent_view(cfg)
     # Prefer the Broker-side record (correct per-instance + trigger); fall back to
     # the collector's own run_history for the default instance / legacy runs.
     last = (news_runs.latest_broker_run(agents_store.DATA_DIR, agent_id)
@@ -5363,6 +5366,67 @@ def _agent_view(agent_id: str) -> dict:
     }
 
 
+def _analysis_agent_view(cfg: dict) -> dict:
+    """Card/Edit view for a Stock Analysis Agent instance."""
+    aid = cfg["agent_id"]
+    last = stock_recs.latest_broker_run(aid)
+    p = stock_recs.picks(last)
+    ok = last and last.get("status") != "failed"
+    return {
+        "agent_id": aid, "agent_name": cfg["agent_name"], "agent_type": cfg["agent_type"],
+        "template": cfg["template"], "description": cfg["description"],
+        "enabled": cfg.get("enabled", False), "status": _agent_status(cfg),
+        "running": agent_runner.state(aid).get("running", False),
+        "schedule": _schedule_label(cfg), "schedule_type": cfg.get("schedule_type"),
+        "interval_value": cfg.get("interval_value"), "interval_unit": cfg.get("interval_unit"),
+        "daily_time": cfg.get("daily_time"), "timezone": cfg.get("timezone"),
+        "query": cfg.get("query", ""), "tickers": cfg.get("tickers", []),
+        "is_default": aid in agents_store.REGISTRY,
+        "last_run_at": (last or {}).get("completed_at") or cfg.get("last_run_at"),
+        "next_run_at": cfg.get("next_run_at"),
+        "last_result": (f"{p['buy'] or 0} BUY · {p['hold'] or 0} HOLD · {p['sell'] or 0} SELL"
+                        f" of {(last or {}).get('analyzed') or 0} analysed") if ok else "—",
+        "last_status": (last or {}).get("status"),
+        "last_trigger": (last or {}).get("trigger_source"),
+        "picks": p if ok else None,
+        "signals_generated": None,
+        "errors": (last or {}).get("errors", []),
+        "use_llm": cfg.get("use_llm", True),
+        "retention_days": cfg.get("retention_days"),
+        "settings": {k: cfg.get(k) for k in agents_store.ANALYSIS_KEYS},
+        "sources": agents_store.source_catalog_view(cfg),
+    }
+
+
+def _clean_analysis_patch(body: dict) -> dict:
+    """Type-check the Stock Analysis settings from the Edit modal."""
+    out: dict = {}
+    nums = {"max_candidates": (0, 60, int), "min_mentions": (1, 20, int),
+            "lookback_hours": (1, 168, int), "min_market_cap_b": (0, 5000, float),
+            "buy_min_score": (0, 100, float), "sell_below_score": (0, 100, float),
+            "min_score_to_publish": (0, 100, float), "retention_days": (1, 365, int)}
+    for k, (lo, hi, typ) in nums.items():
+        if k in body:
+            try:
+                out[k] = max(lo, min(hi, typ(body[k])))
+            except (TypeError, ValueError):
+                pass
+    for k in ("discovery_enabled", "include_etfs", "verdict_uses_overlay", "street_consensus",
+              "use_llm", "slack_digest"):
+        if k in body:
+            out[k] = bool(body[k])
+    for k in ("sectors_include", "sectors_exclude"):
+        if k in body:
+            v = body[k]
+            if isinstance(v, str):
+                v = v.split(",")
+            out[k] = [str(x).strip() for x in (v or []) if str(x).strip()]
+    b, sb = out.get("buy_min_score"), out.get("sell_below_score")
+    if b is not None and sb is not None and sb > b:
+        out["sell_below_score"] = b
+    return out
+
+
 def _schedule_label(cfg: dict) -> str:
     if cfg.get("schedule_type") == "daily_time":
         return f"Daily at {cfg.get('daily_time', '18:00')} ({cfg.get('timezone', '')})"
@@ -5376,18 +5440,24 @@ def api_agents_list():
     return {
         "scheduler_backend": scheduler.backend(),
         "agents": [_agent_view(aid) for aid in agents_store.all_agent_ids()],
+        "templates": [{"template": t, "agent_name": r["agent_name"], "agent_type": r["agent_type"],
+                       "description": r["description"]} for t, r in agents_store.REGISTRY.items()],
     }
 
 
 @app.post("/api/agents")
 async def api_agent_create(request: Request):
-    """Create a new News Collector configuration (optionally cloned from another)."""
+    """Create a new agent configuration (optionally cloned from another). `template`
+    picks the kind: stock_news_collector (default) or stock_analysis_agent."""
     body = await request.json()
     clone_from = body.get("clone_from")
     if clone_from and agents_store.get_config(clone_from) is None:
         return JSONResponse({"error": "unknown clone source"}, status_code=404)
+    template = body.get("template") or agents_store.BASE_TEMPLATE
+    if template not in agents_store.REGISTRY:
+        return JSONResponse({"error": "unknown template"}, status_code=400)
     cfg = agents_store.create_instance(
-        agent_name=body.get("agent_name"), clone_from=clone_from)
+        agent_name=body.get("agent_name"), clone_from=clone_from, template=template)
     return _agent_view(cfg["agent_id"])
 
 
@@ -5433,6 +5503,8 @@ async def api_agent_schedule(agent_id: str, request: Request):
                "query", "tickers", "sources", "min_relevance_score", "min_impact_score",
                "retention_days", "dedup", "use_llm")
     patch = {k: body[k] for k in allowed if k in body}
+    if agents_store.template_of(agent_id) == agents_store.ANALYSIS_TEMPLATE:
+        patch.update(_clean_analysis_patch(body))
     if isinstance(patch.get("tickers"), str):
         patch["tickers"] = [t.strip().upper() for t in patch["tickers"].replace("\n", ",").split(",") if t.strip()]
     if "tickers" in patch and isinstance(patch["tickers"], list):
@@ -5494,7 +5566,13 @@ def api_agent_delete(agent_id: str, purge: int = 1):
     agents_store.delete_config(agent_id)  # default id reverts to defaults; instance disappears
 
     purged: dict = {}
-    if purge:
+    if purge and cfg.get("template") == agents_store.ANALYSIS_TEMPLATE:
+        purged = {**stock_recs.purge(agent_id),
+                  "logs_deleted": news_data.delete_logs(agents_store.DATA_DIR, agent_id)}
+        cpath = agents_store.CONFIG_DIR / f"_analysis_{agent_id}.json"
+        purged["config_deleted"] = cpath.exists()
+        cpath.unlink(missing_ok=True)
+    elif purge:
         dd, cdir = agents_store.DATA_DIR, agents_store.CONFIG_DIR
         exclusive = sorted(own_tickers - agents_store.tracked_tickers())  # remaining after delete
         purged = {
@@ -5511,8 +5589,12 @@ def api_agent_delete(agent_id: str, purge: int = 1):
 
 @app.get("/api/agents/{agent_id}/results")
 def api_agent_results(agent_id: str):
-    if agents_store.get_config(agent_id) is None:
+    cfg = agents_store.get_config(agent_id)
+    if cfg is None:
         return JSONResponse({"error": "unknown agent"}, status_code=404)
+    if cfg.get("template") == agents_store.ANALYSIS_TEMPLATE:
+        return {**stock_recs.results(agent_id), "agent_name": cfg["agent_name"],
+                "agent_type": cfg["agent_type"], "running": agent_runner.is_running(agent_id)}
     summary = news_runs.results_summary(agents_store.DATA_DIR, agent_id)
     # Prefer the Broker-side record so the header shows the right run for this
     # instance (counts/trigger). Classified/signal storage is shared across configs.
@@ -5583,6 +5665,78 @@ def api_news_collector_runs(trigger_source: str = "all", agent_id: str = "",
         "runs": news_runs.broker_run_history(
             agents_store.DATA_DIR, agent_id or None, trigger_source, limit),
     }
+
+
+_BRIEF_CACHE: dict[str, dict] = {}
+
+
+def _brief_anthropic(prompt: str, key: str) -> str | None:
+    import anthropic
+    client = anthropic.Anthropic(api_key=key)
+    msg = _models.with_fallback(_models.CLAUDE_FAST, lambda mdl: _models.anthropic_create(client,
+        model=mdl, max_tokens=450, system=stock_recs.BRIEF_SYSTEM,
+        messages=[{"role": "user", "content": prompt}]))
+    return "".join(b.text for b in msg.content if getattr(b, "type", "") == "text").strip() or None
+
+
+def _brief_openai(prompt: str, key: str) -> str | None:
+    from openai import OpenAI
+    client = OpenAI(api_key=key)
+    resp = _models.with_fallback(_models.GPT_FAST, lambda mdl: _models.openai_create(client,
+        model=mdl, messages=[{"role": "system", "content": stock_recs.BRIEF_SYSTEM},
+                             {"role": "user", "content": prompt}],
+        max_completion_tokens=500, reasoning_effort="minimal"))
+    return (resp.choices[0].message.content or "").strip() or None
+
+
+@app.get("/api/agents/{agent_id}/brief")
+def api_agent_brief(agent_id: str):
+    """Written summary of the latest Stock Analysis run. The model only describes the
+    engine's verdicts (it is told they are final); it never produces or changes one."""
+    cfg = agents_store.get_config(agent_id)
+    if cfg is None or cfg.get("template") != agents_store.ANALYSIS_TEMPLATE:
+        return JSONResponse({"error": "unknown stock analysis agent"}, status_code=404)
+    if not cfg.get("use_llm", True):
+        return {"ok": False, "error": "the written brief is switched off for this agent"}
+    res = stock_recs.results(agent_id)
+    rid = (res.get("run") or {}).get("run_id")
+    if rid and _BRIEF_CACHE.get(agent_id, {}).get("run_id") == rid:
+        return _BRIEF_CACHE[agent_id]
+    prompt = stock_recs.brief_prompt(res)
+    if not prompt:
+        return {"ok": False, "error": "no recommendations yet — run the agent first"}
+    akey, okey = _anthropic_key(), _openai_key()
+    if not akey and not okey:
+        return {"ok": False, "error": "no AI provider configured"}
+    text, provider, err = _models.cascade(akey, okey,
+        claude_fn=lambda k: _brief_anthropic(prompt, k),
+        gpt_fn=lambda k: _brief_openai(prompt, k), task="summaries")
+    if not text:
+        return {"ok": False, "error": _err_detail(err) if err else "brief failed"}
+    out = {"ok": True, "run_id": rid, "brief": text, "provider": provider}
+    _BRIEF_CACHE[agent_id] = out
+    return out
+
+
+@app.get("/api/recommendations/latest")
+def api_recommendations_latest(agent_id: str = ""):
+    """Latest engine-decided BUY/HOLD/SELL list — one Stock Analysis instance, or the
+    most recently run one when agent_id is omitted."""
+    ids = [a for a in agents_store.all_agent_ids()
+           if agents_store.template_of(a) == agents_store.ANALYSIS_TEMPLATE]
+    if agent_id:
+        if agent_id not in ids:
+            return JSONResponse({"error": "unknown stock analysis agent"}, status_code=404)
+        ids = [agent_id]
+    best = None
+    for a in ids:
+        r = stock_recs.results(a)
+        at = (r.get("run") or {}).get("completed_at") or ""
+        if r["available"] and (best is None or at > best[0]):
+            best = (at, a, r)
+    if not best:
+        return {"available": False}
+    return {**best[2], "agent_name": (agents_store.get_config(best[1]) or {}).get("agent_name")}
 
 
 @app.get("/api/agents/{agent_id}/logs")

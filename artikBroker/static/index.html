@@ -7275,6 +7275,13 @@ function renderAgents(){
     const lastSt = a.last_status ? `<span class="st ${a.last_status}">${a.last_status}</span>` : '';
     const tchips = (a.tickers||[]).map(t=>`<span class="tchip">${escapeHtml(t)}</span>`).join('') || '<span class="muted">—</span>';
     const errN = (a.errors&&a.errors.length) ? a.errors.length : 0;
+    const isSA = a.template==='stock_analysis_agent';
+    const pk = a.picks;
+    const midTile = isSA
+      ? `<div class="ak"><div class="lbl">Picks</div><div class="v" style="font-size:14px">${pk?`<span style="color:var(--buy)">${pk.buy||0}</span> · <span style="color:var(--hold)">${pk.hold||0}</span> · <span style="color:var(--sell)">${pk.sell||0}</span>`:'—'}</div></div>`
+      : `<div class="ak"><div class="lbl">Signals</div><div class="v">${a.signals_generated??'—'}</div></div>`;
+    const stockLbl = isSA ? 'Watchlist (always analysed)' : 'Tracked stocks';
+    const emptyTk = isSA ? '<span class="muted">None — discovery only</span>' : '<span class="muted">—</span>';
     return `<div class="agent-card">
       <div class="agent-head">
         <div style="flex:1;min-width:0">
@@ -7289,11 +7296,11 @@ function renderAgents(){
       <div class="agent-desc">${escapeHtml(a.description||'')}</div>
       <div class="a-kpis">
         <div class="ak"><div class="lbl">Schedule</div><div class="v" style="font-size:13px">${escapeHtml(a.schedule)}</div></div>
-        <div class="ak"><div class="lbl">Signals</div><div class="v">${a.signals_generated??'—'}</div></div>
+        ${midTile}
         <div class="ak"><div class="lbl">Errors</div><div class="v ${errN?'neg':''}">${errN||'0'}</div></div>
       </div>
       ${a.query?`<div style="margin-bottom:10px"><div class="agent-type" style="margin-bottom:4px">Tracking statement</div><div class="muted" style="font-size:12.5px;font-style:italic">“${escapeHtml(a.query)}”</div></div>`:''}
-      <div style="margin-bottom:12px"><div class="agent-type" style="margin-bottom:6px">Tracked stocks</div><div class="tchips">${tchips}</div></div>
+      <div style="margin-bottom:12px"><div class="agent-type" style="margin-bottom:6px">${stockLbl}</div><div class="tchips">${(a.tickers||[]).length?tchips:emptyTk}</div></div>
       <div class="agent-type" style="margin-bottom:13px">Last run ${fmtTime(a.last_run_at)} ${lastSt} ${a.last_trigger?`<span class="trig ${a.last_trigger}">${a.last_trigger}</span>`:''} · Next ${a.enabled?fmtTime(a.next_run_at):'—'}<br><span class="muted">${escapeHtml(a.last_result||'—')}</span></div>
       <div class="agent-actions">
         <button class="ex-btn" onclick="runAgent('${a.agent_id}')" ${a.running?'disabled':''}>${a.running?'⏳ Running…':'▶ Run Now'}</button>
@@ -7326,6 +7333,13 @@ async function toggleAgent(id, on){
 }
 
 async function deleteAgent(id, isDefault){
+  if((agentById(id)||{}).template==='stock_analysis_agent'){
+    if(!confirm('Delete this Stock Analysis configuration, its recommendations, run history and logs?\n\nThis cannot be undone.'
+                + (isDefault ? '\n\n(You can recreate it later with “Add Configuration”.)' : ''))) return;
+    try { await fetch(`/api/agents/${id}/delete`,{method:'POST'}); toast('Configuration deleted.'); }
+    catch(e){ toast('Delete failed: '+e); }
+    return loadAgents();
+  }
   const msg = 'Delete this News Collector job AND the articles behind it?\n\n'
     + 'The collector configuration, its run history and logs are removed, along with '
     + 'collected articles/signals for stocks no longer tracked by any other collector. '
@@ -7345,9 +7359,22 @@ async function deleteAgent(id, isDefault){
 
 // Create a brand-new BLANK News Collector configuration (no default stocks,
 // no inherited values). Opens the edit form in "new" mode with empty fields.
-async function addAgentConfig(){
+function addAgentConfig(){
+  const card = $('#agent-modal-card'); card.classList.remove('wide');
+  card.innerHTML = `<h2>Add Configuration</h2>
+    <div class="muted" style="font-size:12.5px;margin-bottom:14px">Which kind of agent?</div>
+    <div style="display:grid;gap:10px">
+      <button class="ghost" style="text-align:left;padding:14px" onclick="addAgentOf('stock_news_collector')">
+        <b>📰 Stock News Collector</b><div class="muted" style="font-size:12.5px;margin-top:4px;font-weight:400">Collects news for chosen stocks and turns it into optional score overlays.</div></button>
+      <button class="ghost" style="text-align:left;padding:14px" onclick="addAgentOf('stock_analysis_agent')">
+        <b>📈 Stock Analysis Agent</b><div class="muted" style="font-size:12.5px;margin-top:4px;font-weight:400">Finds today's recommended stocks on the web and gives each an engine-decided BUY / HOLD / SELL.</div></button>
+    </div>
+    <div class="modal-actions"><button class="ghost" onclick="closeAgentModal()">Cancel</button></div>`;
+  $('#agent-modal').classList.remove('hidden');
+}
+async function addAgentOf(template){
   const r = await (await fetch('/api/agents',{method:'POST',headers:{'content-type':'application/json'},
-    body:JSON.stringify({})})).json();
+    body:JSON.stringify({template})})).json();
   await loadAgents();
   if(r&&r.agent_id) editAgent(r.agent_id, true);
 }
@@ -7370,8 +7397,11 @@ async function editAgent(id, isNew){
   const isInt = (a.schedule_type||'interval')!=='daily_time';
   const tiers = {1:'Tier 1 — Primary filings / issuer',2:'Tier 2 — Top-tier wires & papers',
                  3:'Tier 3 — Data vendors',4:'Tier 4 — Mainstream finance media',5:'Tier 5 — Social / sentiment'};
+  const isSA = a.template==='stock_analysis_agent';
+  const st = a.settings||{};
   const byTier = {}; (a.sources||[]).forEach(s=>{ (byTier[s.tier]=byTier[s.tier]||[]).push(s); });
   const srcHtml = Object.keys(tiers).map(t=>{
+    if(!(byTier[t]||[]).length) return '';
     const list = (byTier[t]||[]).map(s=>`
       <div class="src-row">
         <label class="sw" style="transform:scale(.85)"><input type="checkbox" data-src="${s.id}" ${s.enabled?'checked':''} ${s.impl?'':'disabled'}><span class="sl"></span></label>
@@ -7390,7 +7420,7 @@ async function editAgent(id, isNew){
     <div class="fld inline"><label style="margin:0">Enabled</label>
       <label class="sw"><input type="checkbox" id="f-enabled" ${a.enabled?'checked':''}><span class="sl"></span></label></div>
 
-    <h4>Stocks to Track</h4>
+    <h4>${isSA?'Watchlist — always analysed':'Stocks to Track'}</h4>
     <div class="fld"><label>Describe in plain English (optional)</label>
       <textarea id="f-query" placeholder="e.g. AI infrastructure & data-center chip leaders">${escapeHtml(a.query||'')}</textarea>
       <div class="inline" style="gap:8px;margin-top:6px">
@@ -7422,6 +7452,7 @@ async function editAgent(id, isNew){
     </div>
     <div class="fld"><label>Timezone</label><input type="text" id="f-tz" value="${escapeHtml(a.timezone||_LOCAL_TZ)}"></div>
 
+    ${isSA ? saEditSections(st, srcHtml) : `
     <h4>Trusted News Sources</h4>
     <div>${srcHtml}</div>
 
@@ -7436,13 +7467,56 @@ async function editAgent(id, isNew){
         <label class="sw"><input type="checkbox" id="f-dedup" ${a.dedup!==false?'checked':''}><span class="sl"></span></label></div>
     </div>
     <div class="fld inline"><label style="margin:0">Use LLM classifier (Claude)</label>
-      <label class="sw"><input type="checkbox" id="f-llm" ${a.use_llm!==false?'checked':''}><span class="sl"></span></label></div>
+      <label class="sw"><input type="checkbox" id="f-llm" ${a.use_llm!==false?'checked':''}><span class="sl"></span></label></div>`}
 
     <div class="modal-actions">
       <button class="ghost" onclick="closeAgentModal()">Cancel</button>
       <button onclick="saveAgent('${a.agent_id}')">Save</button>
     </div>`;
   $('#agent-modal').classList.remove('hidden');
+}
+
+// Stock Analysis Agent: discovery + decision + output sections of the Edit modal.
+function saEditSections(st, srcHtml){
+  const sw = (id, on, label, hint) => `<div class="fld inline" style="justify-content:space-between"><label style="margin:0">${label}${hint?`<div class="muted" style="font-size:11.5px;font-weight:400">${hint}</div>`:''}</label>
+      <label class="sw"><input type="checkbox" id="${id}" ${on?'checked':''}><span class="sl"></span></label></div>`;
+  const num = (id, v, label, attrs) => `<div class="fld"><label>${label}</label><input type="number" id="${id}" value="${v??''}" ${attrs||''}></div>`;
+  return `
+    <h4>Discovery — find today's recommended stocks</h4>
+    ${sw('f-sa-disc', st.discovery_enabled!==false, 'Search the web for recommendations', 'Off = analyse the watchlist only')}
+    <div>${srcHtml}</div>
+    <div class="row2">
+      ${num('f-sa-maxc', st.max_candidates??25, 'Max discovered stocks', 'min="0" max="60"')}
+      ${num('f-sa-minm', st.min_mentions??2, 'Min mentions to qualify', 'min="1" max="20"')}
+    </div>
+    <div class="row2">
+      ${num('f-sa-look', st.lookback_hours??24, 'Look back (hours)', 'min="1" max="168"')}
+      ${num('f-sa-mcap', st.min_market_cap_b??0, 'Min market cap ($B, 0 = any)', 'min="0" step="0.5"')}
+    </div>
+    <div class="row2">
+      <div class="fld"><label>Only these sectors (comma-separated)</label><input type="text" id="f-sa-sinc" placeholder="e.g. Technology, Healthcare" value="${escapeHtml((st.sectors_include||[]).join(', '))}"></div>
+      <div class="fld"><label>Exclude sectors</label><input type="text" id="f-sa-sexc" placeholder="e.g. Energy" value="${escapeHtml((st.sectors_exclude||[]).join(', '))}"></div>
+    </div>
+    ${sw('f-sa-etf', !!st.include_etfs, 'Include ETFs')}
+    <div class="muted" style="font-size:11.5px;margin:-4px 0 6px">Filters apply to discovered stocks only — every watchlist ticker always gets a verdict.</div>
+
+    <h4>Decision — how BUY / HOLD / SELL is set</h4>
+    <div class="muted" style="font-size:12px;margin-bottom:8px">The Artik engine score decides. Defaults match the rest of ArtikFinance: <b style="color:var(--buy)">BUY ≥ 75</b>, <b style="color:var(--hold)">HOLD 50–74</b>, <b style="color:var(--sell)">SELL &lt; 50</b>. Headlines and analyst ratings are shown next to each verdict but never change it.</div>
+    <div class="row2">
+      ${num('f-sa-buy', st.buy_min_score??75, 'BUY at score ≥', 'min="0" max="100"')}
+      ${num('f-sa-sell', st.sell_below_score??50, 'SELL below score', 'min="0" max="100"')}
+    </div>
+    ${num('f-sa-minpub', st.min_score_to_publish??0, 'Hide discovered stocks scoring below (0 = show all)', 'min="0" max="100"')}
+    ${sw('f-sa-ov', !!st.verdict_uses_overlay, 'Let the news overlay move the verdict', 'Uses base + News Collector delta (±10). The engine score is still shown unchanged.')}
+    ${sw('f-sa-street', st.street_consensus!==false, 'Compare with analyst consensus', 'Shows agree / disagree with the street')}
+
+    <h4>Output</h4>
+    <div class="row2">
+      ${num('f-ret', st.retention_days??30, 'Retention days', 'min="1"')}
+      <div></div>
+    </div>
+    ${sw('f-llm', st.use_llm!==false, 'Written daily brief (AI)', 'The model summarises the engine’s verdicts; it cannot change them')}
+    ${sw('f-sa-slack', !!st.slack_digest, 'Post the list to Slack', 'Needs STOCK_RECS_SLACK_WEBHOOK on the server')}`;
 }
 
 function agScheduleMode(){
@@ -7530,6 +7604,34 @@ function agPfMerge(list){
 async function saveAgent(id){
   const sources = {};
   document.querySelectorAll('#agent-modal-card input[data-src]').forEach(c=>{ sources[c.getAttribute('data-src')] = c.checked; });
+  if((agentById(id)||{}).template==='stock_analysis_agent'){
+    const n = (sel, dflt) => { const v = parseFloat($(sel).value); return isNaN(v) ? dflt : v; };
+    const body = {
+      agent_name: $('#f-name').value.trim() || 'Stock Analysis Agent',
+      description: $('#f-desc').value.trim(),
+      enabled: $('#f-enabled').checked,
+      query: ($('#f-query').value||'').trim(),
+      tickers: $('#f-tickers').value,
+      schedule_type: document.querySelector('input[name="f-stype"]:checked').value,
+      interval_value: parseInt($('#f-ival').value)||1,
+      interval_unit: $('#f-iunit').value,
+      daily_time: $('#f-dtime').value||'06:30',
+      timezone: $('#f-tz').value.trim()||_LOCAL_TZ,
+      sources,
+      discovery_enabled: $('#f-sa-disc').checked,
+      max_candidates: n('#f-sa-maxc',25), min_mentions: n('#f-sa-minm',2),
+      lookback_hours: n('#f-sa-look',24), min_market_cap_b: n('#f-sa-mcap',0),
+      sectors_include: $('#f-sa-sinc').value, sectors_exclude: $('#f-sa-sexc').value,
+      include_etfs: $('#f-sa-etf').checked,
+      buy_min_score: n('#f-sa-buy',75), sell_below_score: n('#f-sa-sell',50),
+      min_score_to_publish: n('#f-sa-minpub',0),
+      verdict_uses_overlay: $('#f-sa-ov').checked, street_consensus: $('#f-sa-street').checked,
+      retention_days: n('#f-ret',30), use_llm: $('#f-llm').checked, slack_digest: $('#f-sa-slack').checked,
+    };
+    await fetch(`/api/agents/${id}/schedule`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+    closeAgentModal();
+    return loadAgents();
+  }
   const body = {
     agent_name: $('#f-name').value.trim() || 'New Collector',
     description: $('#f-desc').value.trim(),
@@ -7563,9 +7665,127 @@ async function viewResults(id){
   let d;
   try { d = await (await fetch(`/api/agents/${id}/results`)).json(); }
   catch(e){ card.innerHTML = `<div class="err">Failed to load results: ${e}</div><div class="modal-actions"><button class="ghost" onclick="closeAgentModal()">Close</button></div>`; return; }
+  if(d.agent_type==='Equity Analysis'){ _recs = {id, data:d, open:{}, q:'', only:''}; return renderRecs(); }
   _res = { id, data:d, tickers:aggregateTickers(d), q:'', ticker:'', source:'', sentiment:'',
            sort:'signals', view:'ticker', exp:{}, sub:{}, sig:{}, asum:{} };
   renderResults();
+}
+
+// ── Stock Analysis Agent Results — engine-decided BUY / HOLD / SELL ──────────
+let _recs = null;
+const _VERDICT_COLOR = {BUY:'var(--buy)', HOLD:'var(--hold)', SELL:'var(--sell)', NO_SCORE:'var(--mut)'};
+const _KIND_LABEL = {upgrade:'Upgrade', downgrade:'Downgrade', target_up:'Target raised', target_down:'Target cut',
+                     top_pick:'Top pick', mover:'Market mover', mention:'Mention'};
+function _verdictPill(v){
+  const c=_VERDICT_COLOR[v]||'var(--mut)';
+  return `<span class="st" style="color:${c};background:color-mix(in srgb, ${c} 16%, transparent)">${v==='NO_SCORE'?'No score':v}</span>`;
+}
+function _streetCell(r){
+  const s=r.street||{};
+  if(r.verdict==='NO_SCORE') return '<span class="muted">—</span>';
+  if(!s.street_verdict) return '<span class="muted">no coverage</span>';
+  const icon = r.agreement==='agrees' ? '✓' : '⚠';
+  const col = r.agreement==='agrees' ? 'var(--buy)' : 'var(--hold)';
+  return `<span style="color:${col}" title="${r.agreement==='agrees'?'Street agrees with the engine':'Street disagrees with the engine — context only, the verdict stays the engine’s'}">${icon} ${escapeHtml(s.street_verdict)}</span>${s.analysts?` <span class="muted" style="font-size:11px">(${s.analysts})</span>`:''}`;
+}
+function _changeCell(r){
+  const c=r.change||'';
+  if(c==='new') return r.origin==='discovered' ? '<span class="pill acc" style="padding:1px 8px;font-size:11px">🆕 new</span>' : '<span class="muted">first run</span>';
+  if(c.includes('→')) return `<b style="color:${_VERDICT_COLOR[r.verdict]}">${escapeHtml(c)}</b>`;
+  return '<span class="muted">—</span>';
+}
+function _recDetail(r){
+  if(r.verdict==='NO_SCORE') return `<div class="muted">The engine could not score ${escapeHtml(r.ticker)} (${escapeHtml(r.error||'no data')}). No verdict is given in its place.</div>`;
+  const b=r.breakdown||{}, tp=r.trade_plan||{}, t=r.technicals||{}, s=r.street||{}, ov=r.news_overlay;
+  const cat=[['Value','value'],['Quality','quality'],['Growth','growth'],['Fin. strength','fin_str'],['Technical','technical'],['Risk','risk']]
+    .map(([l,k])=>`<div class="ak"><div class="lbl">${l}</div><div class="v" style="font-size:14px">${b[k]??'—'}</div></div>`).join('');
+  const li = xs => (xs||[]).map(x=>`<li>${escapeHtml(x)}</li>`).join('') || '<li class="muted">—</li>';
+  const ev = ((r.discovery||{}).evidence||[]).map(e=>`<li><span class="muted" style="font-size:11px">${escapeHtml(_KIND_LABEL[e.kind]||e.kind||'')} · ${escapeHtml(e.source||'')}</span> — ${e.url?`<a href="${escapeHtml(e.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(e.title)}</a>`:escapeHtml(e.title)}</li>`).join('');
+  const acts = (s.recent_actions||[]).map(a=>`<li>${escapeHtml(a.date||'')} · <b>${escapeHtml(a.firm||'')}</b> ${escapeHtml(a.action||'')} ${a.from?escapeHtml(a.from)+' → ':''}${escapeHtml(a.to||'')}${a.target?` · PT $${escapeHtml(String(a.target))}`:''}</li>`).join('');
+  return `
+    <div class="muted" style="font-size:12.5px;margin-bottom:8px">
+      <b>Why ${r.verdict}:</b> engine score <b>${r.score}</b> (${escapeHtml(r.rating||'')}) = (base ${b.base??'—'} − penalties ${b.penalties??0}) × ${escapeHtml(r.archetype||'')} multiplier ${b.multiplier??'—'}.
+      ${r.verdict_basis==='adjusted'?` Verdict uses the news-adjusted score <b>${r.adjusted_score}</b>.`:''}
+      ${escapeHtml(r.multiplier_reason||'')}</div>
+    <div class="a-kpis" style="grid-template-columns:repeat(6,minmax(0,1fr))">${cat}</div>
+    <div class="row2" style="gap:14px;margin-top:8px">
+      <div><div class="agent-type">Strengths</div><ul style="margin:4px 0 0 18px;font-size:12.5px">${li(r.strengths)}</ul></div>
+      <div><div class="agent-type">Risks</div><ul style="margin:4px 0 0 18px;font-size:12.5px">${li(r.risks)}</ul></div>
+    </div>
+    <div class="muted" style="font-size:12.5px;margin-top:8px">
+      <b>Plan:</b> size ${escapeHtml(r.position_size||'—')} · entry ${escapeHtml(tp.entry||'—')} · stop ${escapeHtml(tp.stop||'—')} · targets ${escapeHtml(tp.target1||'—')} / ${escapeHtml(tp.target2||'—')}
+      · RSI ${t.rsi!=null?Number(t.rsi).toFixed(0):'—'}
+      ${ov?` · 📰 news overlay ${ov.delta>=0?'+':''}${ov.delta} → ${r.adjusted_score} (${ov.signal_count} signals)`:''}</div>
+    ${acts?`<div class="agent-type" style="margin-top:10px">Recent analyst actions (context)</div><ul style="margin:4px 0 0 18px;font-size:12.5px">${acts}</ul>`:''}
+    ${s.target_mean?`<div class="muted" style="font-size:12px;margin-top:4px">Street mean target $${Number(s.target_mean).toFixed(2)}${r.price?` vs price $${Number(r.price).toFixed(2)}`:''}</div>`:''}
+    ${ev?`<div class="agent-type" style="margin-top:10px">Found via</div><ul class="hl" style="margin:4px 0 0 18px;font-size:12.5px">${ev}</ul>`:''}
+    <div style="margin-top:10px"><button class="ex-btn" onclick="closeAgentModal();openStockDetail('${jsStr(r.ticker)}')">🔬 Open full analysis</button></div>`;
+}
+function renderRecs(){
+  const {data:d, open, q, only} = _recs;
+  const card = $('#agent-modal-card');
+  const run = d.run||{};
+  const close = `<div class="modal-actions"><button class="ghost" onclick="closeAgentModal()">Close</button></div>`;
+  if(!d.available){
+    card.innerHTML = `<h2>${escapeHtml(d.agent_name||'Stock Analysis')} · Results</h2>
+      <div class="muted" style="margin:12px 0">${d.running?'⏳ Running now — results appear when it finishes.':'No recommendations yet. Press ▶ Run Now on the card.'}</div>
+      ${(d.history||[])[0]&&(d.history[0].errors||[]).length?`<div class="err">${escapeHtml(d.history[0].errors.join('; '))}</div>`:''}${close}`;
+    return;
+  }
+  const g = d.groups||{};
+  const match = r => !q || (r.ticker+' '+(r.company||'')+' '+(r.sector||'')).toLowerCase().includes(q.toLowerCase());
+  const seg = ['','BUY','HOLD','SELL','NO_SCORE'].map(v=>`<button class="${only===v?'':'ghost'}" style="padding:4px 11px;font-size:12px" onclick="_recs.only='${v}';renderRecs()">${v===''?'All':v==='NO_SCORE'?'No score':v} ${v?`(${(g[v]||[]).length})`:''}</button>`).join('');
+  const section = v => {
+    const rows = (g[v]||[]).filter(match);
+    if(!rows.length || (only && only!==v)) return '';
+    const trs = rows.map(r=>{
+      const o = !!open[r.ticker];
+      return `<tr style="cursor:pointer" onclick="_recs.open['${jsStr(r.ticker)}']=!_recs.open['${jsStr(r.ticker)}'];renderRecs()">
+        <td><b>${escapeHtml(r.ticker)}</b> <span class="muted">${o?'▾':'▸'}</span></td>
+        <td class="muted" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r.company||'')}</td>
+        <td><b>${r.score??'—'}</b>${r.adjusted_score!=null?` <span class="muted" style="font-size:11px">(${r.adjusted_score} w/ news)</span>`:''}</td>
+        <td>${_verdictPill(r.verdict)}</td>
+        <td class="muted">${escapeHtml(r.archetype||'—')}</td>
+        <td>${_streetCell(r)}</td>
+        <td class="muted">${r.origin==='watchlist'?'watchlist':`web · ${(r.discovery||{}).mentions||0}`}</td>
+        <td>${_changeCell(r)}</td></tr>
+        ${o?`<tr><td colspan="8" style="background:var(--panel2);padding:12px 14px">${_recDetail(r)}</td></tr>`:''}`;
+    }).join('');
+    return `<h4 style="margin-top:16px;color:${_VERDICT_COLOR[v]}">${v==='NO_SCORE'?'No engine score':v} · ${rows.length}</h4>
+      <div style="overflow-x:auto"><table class="mini" style="width:100%;font-size:13px">
+        <thead><tr><th>Ticker</th><th>Company</th><th>Score</th><th>Verdict</th><th>Archetype</th><th>Street</th><th>Source</th><th>Change</th></tr></thead>
+        <tbody>${trs}</tbody></table></div>`;
+  };
+  const changes = (d.changes||[]).map(c=>`<b>${escapeHtml(c.ticker)}</b> ${escapeHtml(c.change)}`).join(' · ');
+  card.innerHTML = `
+    <h2>${escapeHtml(d.agent_name||'Stock Analysis')} · Daily Recommendations</h2>
+    <div class="muted" style="font-size:12.5px;margin-bottom:10px">Run ${fmtTime(run.completed_at)} · found ${run.candidates_found??0} on the web · analysed ${run.analyzed??0}
+      · ${run.disagreements??0} disagree with the street · bands BUY ≥ ${(run.bands||{}).buy_min_score??75}, SELL &lt; ${(run.bands||{}).sell_below_score??50}${(run.bands||{}).verdict_uses_overlay?' (news overlay on)':''}</div>
+    <div class="a-kpis">
+      <div class="ak"><div class="lbl">BUY</div><div class="v" style="color:var(--buy)">${(g.BUY||[]).length}</div></div>
+      <div class="ak"><div class="lbl">HOLD</div><div class="v" style="color:var(--hold)">${(g.HOLD||[]).length}</div></div>
+      <div class="ak"><div class="lbl">SELL</div><div class="v" style="color:var(--sell)">${(g.SELL||[]).length}</div></div>
+    </div>
+    <div id="recs-brief" style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0;background:var(--panel)">
+      <div class="agent-type" style="margin-bottom:4px">📋 Daily brief</div><div class="muted" style="font-size:12.5px">${_recs.brief||'Loading…'}</div></div>
+    ${changes?`<div style="font-size:12.5px;margin-bottom:8px">🔁 Verdict changes since the last run: ${changes}</div>`:''}
+    <div class="inline" style="gap:8px;flex-wrap:wrap;margin:6px 0">
+      <input type="text" placeholder="Filter ticker, company, sector…" value="${escapeHtml(q)}" oninput="_recs.q=this.value;renderRecs();this.focus();this.setSelectionRange(this.value.length,this.value.length)" style="flex:1;min-width:180px;background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:6px 10px">
+      ${seg}
+    </div>
+    ${['BUY','HOLD','SELL','NO_SCORE'].map(section).join('')}
+    <div class="muted" style="font-size:11.5px;margin-top:14px">${escapeHtml(d.note||'')} Nothing here places an order.</div>
+    ${close}`;
+  if(!_recs.brief) loadRecsBrief();
+}
+async function loadRecsBrief(){
+  const id=_recs.id;
+  try {
+    const b = await (await fetch(`/api/agents/${id}/brief`)).json();
+    if(!_recs || _recs.id!==id) return;
+    _recs.brief = b.ok ? escapeHtml(b.brief) + ` <span style="font-size:11px">· ${escapeHtml(b.provider||'')}</span>` : escapeHtml(b.error||'Brief unavailable.');
+  } catch(e){ if(_recs) _recs.brief = 'Brief unavailable.'; }
+  const el=$('#recs-brief .muted'); if(el && _recs) el.innerHTML=_recs.brief;
 }
 
 // Group the flat results payload into per-ticker intelligence (last_run.per_ticker

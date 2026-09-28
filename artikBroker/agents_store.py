@@ -25,6 +25,7 @@ HERE = Path(__file__).resolve().parent
 # Every managed config is an *instance* of a registry template. The default
 # instance shares its id with the template; cloned/added instances get derived ids.
 BASE_TEMPLATE = "stock_news_collector"
+ANALYSIS_TEMPLATE = "stock_analysis_agent"
 
 # Reserved keys inside agent_schedules.json that are not agent instances.
 # __deleted__ tombstones registry-default ids the user explicitly deleted, so the
@@ -44,6 +45,19 @@ COLLECTOR_SCRIPT = Path(os.environ.get(
     "NEWS_COLLECTOR_SCRIPT", str(COLLECTOR_DIR / "news_collector_agent.py")))
 DATA_DIR = Path(os.environ.get(
     "NEWS_COLLECTOR_DATA_DIR", str(COLLECTOR_DIR / "data" / "news_collector"),
+))
+
+# Stock Analysis Agent (daily engine-decided BUY/HOLD/SELL). Same env-override pattern:
+# a sibling artikAgents/ checkout locally, baked at STOCK_ANALYSIS_DIR in the image.
+# Each instance writes to its own sub-folder of ANALYSIS_DATA_DIR, so a clone never
+# overwrites another instance's latest recommendations.
+ANALYSIS_DIR = Path(os.environ.get(
+    "STOCK_ANALYSIS_DIR",
+    str(HERE.parent / "artikAgents" / "agents" / "stock_analysis_agent"),
+))
+ANALYSIS_SCRIPT = ANALYSIS_DIR / "stock_analysis_agent.py"
+ANALYSIS_DATA_DIR = Path(os.environ.get(
+    "STOCK_ANALYSIS_DATA_DIR", str(ANALYSIS_DIR / "data" / "stock_analysis"),
 ))
 
 CONFIG_DIR = HERE / "config"
@@ -128,9 +142,30 @@ _SRC_BY_ID = {s["id"]: s for s in SOURCE_CATALOG}
 _IMPL_DEFAULT_ON = {"yfinance", "google_news"}  # sane default enabled set
 
 
-def default_sources() -> dict:
+# Discovery sources for the Stock Analysis Agent: where it looks for today's
+# recommended names. `src` is the id the agent's discovery.py understands.
+ANALYSIS_SOURCE_CATALOG = [
+    {"id": "yahoo_screeners", "name": "Yahoo Finance screeners (movers, undervalued, growth)",
+     "tier": 4, "trust": 0.74, "impl": True, "src": "yahoo_screeners"},
+    {"id": "google_news", "name": "Google News — analyst actions & stock picks",
+     "tier": 4, "trust": 0.72, "impl": True, "src": "google_news"},
+    {"id": "cnbc", "name": "CNBC", "tier": 4, "trust": 0.71, "impl": True, "src": "cnbc"},
+    {"id": "marketwatch", "name": "MarketWatch", "tier": 4, "trust": 0.70, "impl": True, "src": "marketwatch"},
+    {"id": "finnhub_ratings", "name": "Finnhub analyst upgrades/downgrades", "tier": 3, "trust": 0.85, "impl": False},
+    {"id": "seeking_alpha", "name": "Seeking Alpha", "tier": 4, "trust": 0.66, "impl": False},
+    {"id": "reddit", "name": "Reddit", "tier": 5, "trust": 0.55, "impl": False},
+]
+_ANALYSIS_DEFAULT_ON = {"yahoo_screeners", "google_news"}
+
+
+def _catalog(template: str = BASE_TEMPLATE) -> list[dict]:
+    return ANALYSIS_SOURCE_CATALOG if template == ANALYSIS_TEMPLATE else SOURCE_CATALOG
+
+
+def default_sources(template: str = BASE_TEMPLATE) -> dict:
     """source_id -> enabled. Implemented defaults on; everything else off."""
-    return {s["id"]: (s["id"] in _IMPL_DEFAULT_ON) for s in SOURCE_CATALOG}
+    on = _ANALYSIS_DEFAULT_ON if template == ANALYSIS_TEMPLATE else _IMPL_DEFAULT_ON
+    return {s["id"]: (s["id"] in on) for s in _catalog(template)}
 
 
 # ---------------------------------------------------------------------------
@@ -165,7 +200,48 @@ REGISTRY = {
             "next_run_at": None,
         },
     },
+    "stock_analysis_agent": {
+        "agent_id": "stock_analysis_agent",
+        "agent_name": "Stock Analysis Agent",
+        "agent_type": "Equity Analysis",
+        "description": "Finds the stocks the web is recommending today, scores each with the "
+                       "Artik engine, and publishes a BUY / HOLD / SELL list. The engine score "
+                       "decides every verdict; what analysts and headlines say is shown as context.",
+        "defaults": {
+            "enabled": False,
+            "schedule_type": "daily_time",
+            "interval_value": 1,
+            "interval_unit": "day",
+            "daily_time": "06:30",          # before the US open
+            "timezone": DEFAULT_TZ,
+            "query": "",
+            "tickers": [],                  # watchlist — always gets a verdict
+            "sources": default_sources(ANALYSIS_TEMPLATE),
+            "discovery_enabled": True,
+            "max_candidates": 25,
+            "min_mentions": 2,
+            "lookback_hours": 24,
+            "include_etfs": False,
+            "min_market_cap_b": 0,
+            "sectors_include": [],
+            "sectors_exclude": [],
+            # = the Broker's _status() bands (app.py): BUY >= 75, HOLD >= 50, SELL < 50.
+            "buy_min_score": 75,
+            "sell_below_score": 50,
+            "verdict_uses_overlay": False,
+            "min_score_to_publish": 0,
+            "street_consensus": True,
+            "retention_days": 30,
+            "use_llm": True,                # only for the written daily brief
+            "slack_digest": False,
+            "last_run_at": None,
+            "next_run_at": None,
+        },
+    },
 }
+
+ANALYSIS_KEYS = tuple(k for k in REGISTRY[ANALYSIS_TEMPLATE]["defaults"]
+                      if k not in REGISTRY[BASE_TEMPLATE]["defaults"] or k in ("retention_days", "use_llm"))
 
 
 # ---------------------------------------------------------------------------
@@ -212,6 +288,11 @@ def _template_of(agent_id: str, stored: dict) -> str:
     return agent_id if agent_id in REGISTRY else BASE_TEMPLATE
 
 
+def template_of(agent_id: str) -> str:
+    with _lock:
+        return _template_of(agent_id, _read_all())
+
+
 def _deleted_set(stored: dict) -> set[str]:
     return set(stored.get(_DELETED_KEY) or [])
 
@@ -237,13 +318,15 @@ def _exists(agent_id: str, stored: dict) -> bool:
 
 def _merged_config(agent_id: str, stored: dict) -> dict:
     """Template defaults overlaid with any stored config for one instance."""
-    reg = REGISTRY[_template_of(agent_id, stored)]
+    tmpl = _template_of(agent_id, stored)
+    reg = REGISTRY[tmpl]
     cfg = dict(reg["defaults"])
     cfg.update(stored.get(agent_id, {}))
     # Ensure every catalog source has an explicit enabled flag.
-    src = dict(default_sources())
+    ids = {s["id"] for s in _catalog(tmpl)}
+    src = dict(default_sources(tmpl))
     src.update(cfg.get("sources") or {})
-    cfg["sources"] = {k: bool(v) for k, v in src.items() if k in _SRC_BY_ID}
+    cfg["sources"] = {k: bool(v) for k, v in src.items() if k in ids}
     # Description falls back to the template's only when not explicitly set (a
     # blank-created config stores "" and must stay blank).
     raw_desc = cfg.get("description")
@@ -251,6 +334,7 @@ def _merged_config(agent_id: str, stored: dict) -> dict:
         "agent_id": agent_id,
         "agent_name": cfg.get("agent_name") or reg["agent_name"],
         "agent_type": reg["agent_type"],
+        "template": tmpl,
         "description": reg["description"] if raw_desc is None else raw_desc,
     })
     return cfg
@@ -275,10 +359,11 @@ def save_config(agent_id: str, patch: dict) -> dict:
         allowed = set(REGISTRY[tmpl]["defaults"]) | {"description", "agent_name", "template"}
         cur.update({k: v for k, v in patch.items() if k in allowed})
         if "sources" in patch and isinstance(patch["sources"], dict):
-            merged = dict(default_sources())
+            ids = {s["id"] for s in _catalog(tmpl)}
+            merged = dict(default_sources(tmpl))
             merged.update(cur.get("sources") or {})
             merged.update(patch["sources"])
-            cur["sources"] = {k: bool(v) for k, v in merged.items() if k in _SRC_BY_ID}
+            cur["sources"] = {k: bool(v) for k, v in merged.items() if k in ids}
         data[agent_id] = cur
         _write_all(data)
         return _merged_config(agent_id, data)
@@ -295,7 +380,7 @@ def create_instance(agent_name: str | None = None, clone_from: str | None = None
         cloning = bool(clone_from and _exists(clone_from, data))
         name = (agent_name or "").strip() or (
             (_merged_config(clone_from, data)["agent_name"] + " (copy)")
-            if cloning else "New Collector")
+            if cloning else ("New Stock Analysis" if base == ANALYSIS_TEMPLATE else "New Collector"))
         slug = (re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:24]) or "collector"
         aid = f"{base}__{slug}-{uuid.uuid4().hex[:4]}"
         entry: dict = {"template": base, "agent_name": name,
@@ -321,12 +406,13 @@ def tracked_tickers(exclude: str | None = None) -> set[str]:
     """Union of tickers tracked across all instances (optionally excluding one).
 
     Used before purging a deleted config's data so we never remove articles for a
-    ticker another collector still tracks."""
+    ticker another collector still tracks. Only news collectors count — article
+    storage is theirs; a Stock Analysis watchlist does not keep articles alive."""
     with _lock:
         data = _read_all()
         out: set[str] = set()
         for aid in all_agent_ids(data):
-            if aid == exclude:
+            if aid == exclude or _template_of(aid, data) != BASE_TEMPLATE:
                 continue
             cfg = _merged_config(aid, data)
             out.update((t or "").upper() for t in (cfg.get("tickers") or []) if t)
@@ -356,6 +442,13 @@ def delete_config(agent_id: str) -> None:
 # Source → collector mapping
 # ---------------------------------------------------------------------------
 
+def enabled_discovery_sources(cfg: dict) -> list[str]:
+    """The Stock Analysis Agent's `discovery_sources`: enabled AND implemented."""
+    by_id = {s["id"]: s for s in ANALYSIS_SOURCE_CATALOG}
+    return [by_id[sid]["src"] for sid, on in (cfg.get("sources") or {}).items()
+            if on and sid in by_id and by_id[sid].get("impl")]
+
+
 def enabled_collector_sources(cfg: dict) -> list[str]:
     """The collector `news_sources` list: enabled AND implemented catalog sources."""
     out = []
@@ -369,4 +462,5 @@ def enabled_collector_sources(cfg: dict) -> list[str]:
 def source_catalog_view(cfg: dict) -> list[dict]:
     """Catalog enriched with the agent's enabled flags, for the Edit modal."""
     src = cfg.get("sources") or {}
-    return [{**s, "enabled": bool(src.get(s["id"], False))} for s in SOURCE_CATALOG]
+    return [{**s, "enabled": bool(src.get(s["id"], False))}
+            for s in _catalog(cfg.get("template") or BASE_TEMPLATE)]
