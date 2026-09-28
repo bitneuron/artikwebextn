@@ -105,7 +105,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - run: python -m venv .venv && .venv/bin/pip install -r requirements.txt
+      # cdk.json's app command is `python3 app.py`, i.e. the system interpreter, so
+      # installing into a .venv left aws_cdk invisible to synth (ModuleNotFoundError).
+      # CI runners are disposable — install directly rather than into a venv nothing uses.
+      - run: pip install -r requirements.txt
       - run: npx --yes cdk@2 synth --quiet
         env:
           CDK_DEFAULT_ACCOUNT: "000000000000" # placeholder — synth needs no real account

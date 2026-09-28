@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 
-from app.services.model_config import get_anthropic_api_key, chain, with_fallback
+from app.services.model_config import chain, get_anthropic_api_key, with_fallback
 from app.services.pipeline.prompts import extraction_system
 from app.templates.spec import TemplateSpec
 

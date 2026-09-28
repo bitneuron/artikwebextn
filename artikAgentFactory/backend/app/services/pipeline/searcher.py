@@ -3,7 +3,7 @@ Tolerant of individual query failures (a network hiccup on query 2 shouldn't kil
 4-query run); raises only if every single query failed."""
 from __future__ import annotations
 
-from app.services.model_config import get_anthropic_api_key, chain, with_fallback
+from app.services.model_config import chain, get_anthropic_api_key, with_fallback
 from app.services.pipeline.prompts import SEARCH_SYSTEM
 
 WEB_SEARCH_TOOL_TYPE = "web_search_20250305"
