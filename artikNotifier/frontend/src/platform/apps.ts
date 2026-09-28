@@ -27,6 +27,7 @@ export const PLATFORM_NAME = "Artik Platform";
 /** Deploy URLs are env-overridable so the same build works in any environment. */
 const BROKER_URL = env.VITE_BROKER_URL || "https://hpzkeypha3.us-west-2.awsapprunner.com";
 const NOTIFIER_URL = env.VITE_NOTIFIER_URL || "/"; // self
+const AGENT_FACTORY_URL = env.VITE_AGENT_FACTORY_URL || "https://ddksru28u2t64.cloudfront.net";
 
 export const APPS: ArtikApp[] = [
   {
@@ -53,6 +54,18 @@ export const APPS: ArtikApp[] = [
     aliases: ["artiknotifier", "artik-notifier", "notifier"],
     url: NOTIFIER_URL,
     current: true,
+  },
+  {
+    id: "agentfactory",
+    name: "artikAgentFactory",
+    short: "Agent Factory",
+    icon: "◇",
+    accent: "text-indigo-400",
+    tagline: "Research that keeps working.",
+    description:
+      "Configurable background research agents — colleges, stocks, crypto, real estate, and custom topics — with scheduling, change detection, and alerts.",
+    aliases: ["artikagentfactory", "agent-factory", "agentfactory"],
+    url: AGENT_FACTORY_URL,
   },
 ];
 
