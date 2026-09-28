@@ -3,7 +3,9 @@ from types import SimpleNamespace as NS
 from unittest.mock import Mock
 
 import pytest
-from models import openai_create, anthropic_create
+from models import openai_create, anthropic_create, _compat
+
+ToolNotCalled = _compat.ToolNotCalled
 
 
 def test_astra_tool_round_trip_preserves_reasoning_and_call_ids():
@@ -60,12 +62,52 @@ def test_opus_5_forced_tool_keeps_non_thinking_contract():
     assert client.messages.create.call_args.kwargs["thinking"] == {"type": "adaptive"}
 
 
+def _replying(*blocks):
+    client = Mock()
+    client.messages.create.return_value = NS(content=list(blocks), stop_reason="end_turn")
+    return client
+
+
 def test_opus_5_5_is_never_sent_disabled_thinking():
     # Opus 5.5 returns 400 for thinking {"type": "disabled"} at every effort level.
     # A mock can't see that, so pin the contract here: the shim must leave it alone.
-    client = Mock()
+    client = _replying(NS(type="tool_use", name="emit", input={}))
     anthropic_create(client, model="claude-opus-5-5", tool_choice={"type": "tool", "name": "emit"})
     assert "thinking" not in client.messages.create.call_args.kwargs
+
+
+def test_forced_tool_on_opus_5_5_becomes_auto_plus_an_instruction():
+    # Opus 5.5 400s on a forced tool_choice; the shim asks for the tool in the prompt instead.
+    client = _replying(NS(type="tool_use", name="emit", input={"ok": True}))
+    msg = anthropic_create(client, model="claude-opus-5-5", max_tokens=1200, system="SYS",
+                           tools=[{"name": "emit"}], tool_choice={"type": "tool", "name": "emit"})
+    sent = client.messages.create.call_args.kwargs
+    assert sent["tool_choice"] == {"type": "auto"}
+    assert sent["system"].startswith("SYS") and "`emit`" in sent["system"]
+    assert sent["max_tokens"] >= 8000          # thinking would otherwise eat a 1,200 budget
+    assert msg.content[0].input == {"ok": True}
+
+
+def test_a_list_system_prompt_gets_a_block_and_the_callers_list_is_untouched():
+    system = [{"type": "text", "text": "SYS", "cache_control": {"type": "ephemeral"}}]
+    client = _replying(NS(type="tool_use", name="emit", input={}))
+    anthropic_create(client, model="claude-opus-5-5", system=system, tool_choice={"type": "tool", "name": "emit"})
+    sent = client.messages.create.call_args.kwargs["system"]
+    assert sent[0] == system[0] and "`emit`" in sent[-1]["text"] and len(system) == 1
+
+
+def test_opus_5_5_skipping_the_tool_raises_so_the_chain_falls_back():
+    # A text reply where a tool was required would break every caller; raising hands
+    # the request to Opus 5, which still honours a forced tool_choice.
+    client = _replying(NS(type="text", text="Here you go"))
+    with pytest.raises(ToolNotCalled, match="emit"):
+        anthropic_create(client, model="claude-opus-5-5", tool_choice={"type": "tool", "name": "emit"})
+
+
+def test_opus_5_still_gets_a_real_forced_tool_choice():
+    client = _replying(NS(type="tool_use", name="emit", input={}))
+    anthropic_create(client, model="claude-opus-5", tool_choice={"type": "tool", "name": "emit"})
+    assert client.messages.create.call_args.kwargs["tool_choice"] == {"type": "tool", "name": "emit"}
 
 
 def test_incomplete_astra_response_is_not_treated_as_success():

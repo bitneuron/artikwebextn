@@ -9,6 +9,10 @@ from app.services.model_config import chain, get_anthropic_api_key, with_fallbac
 from app.services.pipeline.prompts import extraction_system
 from app.templates.spec import TemplateSpec
 
+# Models that reject a forced tool_choice ("tool"/"any") with a 400.
+_NO_FORCED_TOOLS = ("claude-opus-5-5", "claude-fable-5-1")
+_EMIT_RULE = "\n\nRespond only by calling the `emit` tool, exactly once, with no other text."
+
 _FIXED_PROPERTIES = {
     "title": {"type": "string"},
     "summary": {"type": "string"},
@@ -63,15 +67,29 @@ def extract_structured(raw_findings: list[dict], template: TemplateSpec, objecti
     }
     user_content = json.dumps(user_payload)[:120_000]
 
-    msg = with_fallback(models, lambda _m: client.messages.create(
-        model=_m, max_tokens=8192,
-        # Exact match: Opus 5.5 400s on disabled thinking (and on forced tool_choice,
-        # so on 5.5 this call falls through to the claude-opus-5 rung below it).
-        **({"thinking": {"type": "disabled"}} if _m == "claude-opus-5" else {}),
-        system=extraction_system(template.system_prompt_fragment, template.result_categories),
-        tools=[tool], tool_choice={"type": "tool", "name": "emit"},
-        messages=[{"role": "user", "content": user_content}],
-    ))
+    system = extraction_system(template.system_prompt_fragment, template.result_categories)
+
+    def _call(_m):
+        # Opus 5.5 (and Fable 5.1) 400 on a forced tool_choice and on disabled thinking.
+        # Ask for `emit` in the prompt instead, and treat a reply without it as a failure,
+        # so with_fallback hands the request to claude-opus-5, which still forces the tool.
+        # Mirrors artikAgents/agents/shared/llm_compat.anthropic_create; kept local because
+        # this app has no import coupling to artikAgents.
+        forced = _m not in _NO_FORCED_TOOLS
+        msg = client.messages.create(
+            # 16k, not 8k: on 5.5 thinking shares this budget with the findings. A cap, not a cost.
+            model=_m, max_tokens=16000,
+            **({"thinking": {"type": "disabled"}} if _m == "claude-opus-5" else {}),
+            system=system if forced else system + _EMIT_RULE,
+            tools=[tool],
+            tool_choice={"type": "tool", "name": "emit"} if forced else {"type": "auto"},
+            messages=[{"role": "user", "content": user_content}],
+        )
+        if not any(getattr(b, "type", "") == "tool_use" for b in msg.content):
+            raise RuntimeError(f"{_m} replied without calling emit (stop_reason={msg.stop_reason})")
+        return msg
+
+    msg = with_fallback(models, _call)
     for block in msg.content:
         if getattr(block, "type", "") == "tool_use":
             findings = (block.input or {}).get("findings", [])
