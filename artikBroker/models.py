@@ -24,7 +24,6 @@ _DEFAULT = {"primary": "openai",
             "openai": {"data": "gpt-6-astra", "chat": "gpt-6-astra", "vision": "gpt-6-astra",
                        "fallback": "gpt-5", "fast": "gpt-6-astra", "fast_fallback": "gpt-5-mini"},
             "selectable": [{"id": "claude-opus-5-5", "label": "Claude Opus 5.5", "provider": "anthropic"},
-                           {"id": "claude-fable-5-1", "label": "Fable 5.1", "provider": "anthropic"},
                            {"id": "gpt-6-astra", "label": "GPT Astra", "provider": "openai"}]}
 
 
@@ -145,7 +144,10 @@ SELECTABLE = [
 
 _CHOICE_ALIASES = {"opus": "claude-opus-5-5", "claude": "claude-opus-5-5",
                    "claude-opus-5": "claude-opus-5-5",
-                   "fable": "claude-fable-5-1",
+                   # Fable is retired from the picker on cost. Both its short alias and its
+                   # full id still resolve, so a saved or in-flight Fable pin lands on Opus
+                   # 5.5 instead of degrading to "unknown" and silently losing the pin.
+                   "fable": "claude-opus-5-5", "claude-fable-5-1": "claude-opus-5-5",
                    "astra": "gpt-6-astra", "gpt": "gpt-6-astra", "openai": "gpt-6-astra"}
 
 

@@ -140,12 +140,16 @@ agents with `save_*` tools persist memory back into their KB across sessions.
   "send everything one way" switch, and it must not silently undo an accuracy assignment.
   Code: `models.task_provider()`, `models.cascade(..., task=...)`; read it at `GET /api/config/models`.
 - **A user may pin ONE model for ONE Copilot question.** The Copilot header has a Model picker
-  (Auto / Claude Opus 5 / Fable 5.1 / GPT Astra, from `selectable` in `models.json`). A pin leads
+  (Auto / Claude Opus 5.5 / GPT Astra, from `selectable` in `models.json`). A pin leads
   that single request — the rest of its provider chain and then the other provider stay behind it,
   so a pin changes order, never availability, and it never rewrites `tasks`. An unknown id degrades
   to the normal policy instead of being forwarded. The reply carries the model that ACTUALLY ran
   (`model`/`model_label`/`requested_model`) and the badge says "(fallback from X)" when they differ.
-  Fable rejects a forced `tool_choice`, so it answers in plain markdown shaped into the same reply.
+  **Fable 5.1 was retired from the picker on cost (2026-09-27).** It sat in no default chain, so it
+  only ever ran when a user pinned it; `_CHOICE_ALIASES` now routes both `fable` and
+  `claude-fable-5-1` to Opus 5.5 so a saved pin degrades to a model rather than to nothing. The
+  plain-markdown path it needed stays, keyed off the 400 itself (`app._forced_tools_unsupported()`),
+  not off a model name — any model that rejects a forced `tool_choice` still answers in prose.
   Code: `models.resolve_choice()`, `models.model_chain()`, `models.call_model()`, `cascade(..., pin=)`.
 - **The Copilot can research a saved snapshot.** Its Snapshot picker (admin-only, like every
   `/api/portfolio` route) loads a broker/Excel snapshot through `/api/portfolio?key=…`, so holdings

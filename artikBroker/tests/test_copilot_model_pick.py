@@ -16,8 +16,8 @@ import models
 
 def test_the_three_offered_models_are_the_ones_the_ui_shows():
     assert [m["id"] for m in models.SELECTABLE] == [
-        "claude-opus-5-5", "claude-fable-5-1", "gpt-6-astra"]
-    assert [m["provider"] for m in models.SELECTABLE] == ["anthropic", "anthropic", "openai"]
+        "claude-opus-5-5", "gpt-6-astra"]
+    assert [m["provider"] for m in models.SELECTABLE] == ["anthropic", "openai"]
 
 
 def test_info_exposes_the_list_to_the_picker():
@@ -29,7 +29,8 @@ def test_info_exposes_the_list_to_the_picker():
 def test_ids_and_short_aliases_both_resolve():
     for raw, want in (("claude-opus-5-5", "claude-opus-5-5"), ("opus", "claude-opus-5-5"),
                       ("claude-opus-5", "claude-opus-5-5"),   # the superseded id still resolves
-                      ("fable", "claude-fable-5-1"), ("CLAUDE-FABLE-5-1", "claude-fable-5-1"),
+                      ("fable", "claude-opus-5-5"),            # retired, routed not dropped
+                      ("CLAUDE-FABLE-5-1", "claude-opus-5-5"),
                       ("astra", "gpt-6-astra"), ("gpt-6-astra", "gpt-6-astra")):
         assert models.resolve_choice(raw)["id"] == want
 
@@ -43,9 +44,9 @@ def test_auto_blank_and_unknown_all_mean_no_pick():
 # ── what a pick does to the chain ────────────────────────────────────────────
 
 def test_the_picked_model_leads_and_its_provider_chain_stays_behind_it():
-    chain = models.model_chain("fable")
-    assert chain[0] == "claude-fable-5-1"
-    assert len(chain) > 1 and chain[1:] == [m for m in models.CLAUDE if m != "claude-fable-5-1"]
+    chain = models.model_chain("astra")
+    assert chain[0] == "gpt-6-astra"
+    assert len(chain) > 1 and chain[1:] == [m for m in models.GPT if m != "gpt-6-astra"]
 
 
 def test_no_pick_means_no_chain_override():
@@ -124,7 +125,7 @@ def test_snapshot_context_is_admin_only(monkeypatch):
     assert app._is_admin(_req(None)) is True
 
 
-# ── a model that refuses forced tool use (Fable) ─────────────────────────────
+# ── a model that refuses forced tool use ─────────────────────────────────────
 
 class _Boom(Exception):
     pass
@@ -137,7 +138,7 @@ def test_only_the_tool_choice_400_triggers_the_plain_text_retry():
     assert app._forced_tools_unsupported(Exception("tool_choice was odd")) is False
 
 
-def test_fable_answers_in_plain_text_and_keeps_the_reply_shape(monkeypatch):
+def test_a_model_refusing_forced_tools_answers_in_plain_text_and_keeps_the_shape(monkeypatch):
     calls = []
 
     def fake_create(_client, **kw):
@@ -151,11 +152,11 @@ def test_fable_answers_in_plain_text_and_keeps_the_reply_shape(monkeypatch):
                         types.SimpleNamespace(Anthropic=lambda api_key=None: object()))
     used = {}
     out = app._copilot_anthropic([{"role": "user", "content": "hi"}], "SYS", "key",
-                                 chain=["claude-fable-5-1"], used=used)
+                                 chain=["claude-opus-5-5"], used=used)
     assert out["answer"] == "NVDA leads."
     assert out["needs_clarification"] is False
     assert out["mode"] == ""            # the endpoint supplies the default, nothing is claimed
-    assert used["model"] == "claude-fable-5-1"
+    assert used["model"] == "claude-opus-5-5"
     # The retry keeps the same system prompt plus the plain-text instruction, and no tools.
     assert "tools" not in calls[1] and calls[1]["system"].startswith("SYS")
     assert "source of truth" in calls[1]["system"]
@@ -166,7 +167,7 @@ def test_a_real_provider_error_still_falls_down_the_chain(monkeypatch):
 
     def fake_create(_client, **kw):
         seen.append(kw["model"])
-        if kw["model"] == "claude-fable-5-1":
+        if kw["model"] == "claude-opus-5-5":
             raise _Boom("overloaded_error")
         return types.SimpleNamespace(content=[types.SimpleNamespace(
             type="tool_use", input={"answer": "ok", "mode": "analysis"})])
@@ -176,10 +177,10 @@ def test_a_real_provider_error_still_falls_down_the_chain(monkeypatch):
                         types.SimpleNamespace(Anthropic=lambda api_key=None: object()))
     used = {}
     out = app._copilot_anthropic([{"role": "user", "content": "hi"}], "SYS", "key",
-                                 chain=["claude-fable-5-1", "claude-opus-5-5"], used=used)
+                                 chain=["claude-opus-5-5", "claude-opus-5"], used=used)
     assert out["answer"] == "ok"
-    assert seen == ["claude-fable-5-1", "claude-opus-5-5"]
-    assert used["model"] == "claude-opus-5-5"   # the badge must name the model that answered
+    assert seen == ["claude-opus-5-5", "claude-opus-5"]
+    assert used["model"] == "claude-opus-5"   # the badge must name the model that answered
 
 
 # ── oversized contexts ───────────────────────────────────────────────────────
