@@ -24,7 +24,10 @@ _CONFIG_PATH = (_REPO_ROOT / "artikAgents" / "agents" / "shared" / "models.json"
 _ENV_PATH = (_REPO_ROOT / "artikAgents" / "agents" / ".env") if _REPO_ROOT else None
 
 _FALLBACK = {
-    "anthropic": {"default": "claude-opus-5-5", "synthesis": "claude-opus-5-5", "research": "claude-opus-5-5"},
+    # `fallback` matters in production: the image carries no models.json, so this dict IS
+    # the config there, and chain() without a fallback rung makes one 400 a hard failure.
+    "anthropic": {"default": "claude-opus-5-5", "synthesis": "claude-opus-5-5", "research": "claude-opus-5-5",
+                  "fallback": "claude-opus-5"},
 }
 
 _ENV_OVERRIDES = {

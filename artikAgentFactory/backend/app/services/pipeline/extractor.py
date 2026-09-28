@@ -65,7 +65,9 @@ def extract_structured(raw_findings: list[dict], template: TemplateSpec, objecti
 
     msg = with_fallback(models, lambda _m: client.messages.create(
         model=_m, max_tokens=8192,
-        **({"thinking": {"type": "disabled"}} if str(_m or "").startswith("claude-opus-5") else {}),
+        # Exact match: Opus 5.5 400s on disabled thinking (and on forced tool_choice,
+        # so on 5.5 this call falls through to the claude-opus-5 rung below it).
+        **({"thinking": {"type": "disabled"}} if _m == "claude-opus-5" else {}),
         system=extraction_system(template.system_prompt_fragment, template.result_categories),
         tools=[tool], tool_choice={"type": "tool", "name": "emit"},
         messages=[{"role": "user", "content": user_content}],

@@ -52,12 +52,20 @@ def test_astra_text_uses_supported_reasoning():
     assert "temperature" not in args
 
 
-def test_opus_forced_tool_keeps_non_thinking_contract():
+def test_opus_5_forced_tool_keeps_non_thinking_contract():
+    client = Mock()
+    anthropic_create(client, model="claude-opus-5", tool_choice={"type": "tool", "name": "emit"})
+    assert client.messages.create.call_args.kwargs["thinking"] == {"type": "disabled"}
+    anthropic_create(client, model="claude-opus-5", thinking={"type": "adaptive"})
+    assert client.messages.create.call_args.kwargs["thinking"] == {"type": "adaptive"}
+
+
+def test_opus_5_5_is_never_sent_disabled_thinking():
+    # Opus 5.5 returns 400 for thinking {"type": "disabled"} at every effort level.
+    # A mock can't see that, so pin the contract here: the shim must leave it alone.
     client = Mock()
     anthropic_create(client, model="claude-opus-5-5", tool_choice={"type": "tool", "name": "emit"})
-    assert client.messages.create.call_args.kwargs["thinking"] == {"type": "disabled"}
-    anthropic_create(client, model="claude-opus-5-5", thinking={"type": "adaptive"})
-    assert client.messages.create.call_args.kwargs["thinking"] == {"type": "adaptive"}
+    assert "thinking" not in client.messages.create.call_args.kwargs
 
 
 def test_incomplete_astra_response_is_not_treated_as_success():
