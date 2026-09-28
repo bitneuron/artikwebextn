@@ -111,7 +111,13 @@ jobs:
       - run: pip install -r requirements.txt
       - run: npx --yes cdk@2 synth --quiet
         env:
-          CDK_DEFAULT_ACCOUNT: "000000000000" # placeholder — synth needs no real account
+          # NOT a placeholder: the VPC needs an availability-zones lookup, whose cache key
+          # in the committed cdk.context.json is account-scoped
+          # ("availability-zones:account=515966528039:region=us-west-2"). A dummy account
+          # misses that cache, so synth tried a live AWS call and failed with
+          # "no credentials have been configured". The real id is already in
+          # cdk.context.json, so naming it here reveals nothing new and keeps synth offline.
+          CDK_DEFAULT_ACCOUNT: "515966528039"
           CDK_DEFAULT_REGION: us-west-2
 
   docker-build:
