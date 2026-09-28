@@ -54,9 +54,9 @@ def test_astra_text_uses_supported_reasoning():
 
 def test_opus_forced_tool_keeps_non_thinking_contract():
     client = Mock()
-    anthropic_create(client, model="claude-opus-5", tool_choice={"type": "tool", "name": "emit"})
+    anthropic_create(client, model="claude-opus-5-5", tool_choice={"type": "tool", "name": "emit"})
     assert client.messages.create.call_args.kwargs["thinking"] == {"type": "disabled"}
-    anthropic_create(client, model="claude-opus-5", thinking={"type": "adaptive"})
+    anthropic_create(client, model="claude-opus-5-5", thinking={"type": "adaptive"})
     assert client.messages.create.call_args.kwargs["thinking"] == {"type": "adaptive"}
 
 

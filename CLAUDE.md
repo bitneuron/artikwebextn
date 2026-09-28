@@ -64,7 +64,8 @@ in the superproject.
 
 ## Commands
 
-There is **no test suite** in this repo (the only `test_*.py` files are inside `artikAPIs/venv`).
+Tests: `cd artikBroker && ../artikAPIs/venv/bin/python -m pytest tests -q`, plus
+`artikAPIs/venv/bin/python -m pytest artikAgents/agents/stock_analysis_agent/tests -q`.
 
 | Task | Command |
 |------|---------|
@@ -108,6 +109,17 @@ Unified FastAPI backend for artikTools and artikAgents. `main.py` mounts routers
 e.g. `stock_analysis`, `news_intelligence`, `financier`, `plaid`, `auth`, `notes`); business logic
 lives in `app/services/`. JSON-file storage. Exposes model config to frontends at
 `GET /api/config/models`. Swagger at `/docs`.
+
+### Stock Analysis Agent (`artikAgents/agents/stock_analysis_agent/`)
+Managed from the Broker's 🤖 Agents tab, like the News Collector (template `stock_analysis_agent`,
+agent_type "Equity Analysis"). Each day it discovers the names the web is recommending (Yahoo screeners,
+Google News analyst actions, CNBC/MarketWatch), adds the watchlist, and scores everything with
+`score_ticker_live`. **The engine score alone sets the verdict**: BUY ≥ 75, HOLD ≥ 50, SELL < 50 (the same
+bands as `app._status()`). Street consensus and web mentions are shown as agree/disagree context and never
+change a verdict; the news overlay moves it only when `verdict_uses_overlay` is on. An unscorable ticker is
+`NO_SCORE`, never an estimate. The Broker side lives in `stock_recs.py` and `agent_runner._analysis_worker`,
+with a durable copy of each run in `app_kv`. Tests: `artikBroker/tests/test_stock_analysis_agent.py` and
+`stock_analysis_agent/tests/`.
 
 ### CLI agents (`artikAgents/agents/`)
 Python Claude-powered agents (stock_broker, company_research, macro_research, news_intelligence,
@@ -169,7 +181,7 @@ agents with `save_*` tools persist memory back into their KB across sessions.
   Python reads it via `shared/model_config.py`; artikAPIs via `app/model_config.py`; React via
   `src/config/models.js`. The lens-extension keeps its own constants (can't import). Env vars
   (`ANTHROPIC_MODEL`, `OPENAI_MODEL`, `OPENAI_VISION_MODEL`, `OPENAI_CHAT_MODEL`) override.
-  Current defaults: anthropic `claude-opus-5`, openai data/chat `gpt-6-astra`, vision `gpt-6-astra`.
+  Current defaults: anthropic `claude-opus-5-5`, openai data/chat `gpt-6-astra`, vision `gpt-6-astra`.
 - **GPT-5 gotcha:** chat.completions needs `max_completion_tokens` (NOT `max_tokens`), rejects
   non-default `temperature` (drop it), and use `reasoning_effort:"minimal"` so reasoning tokens
   don't eat the answer budget.

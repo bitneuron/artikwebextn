@@ -18,12 +18,12 @@ _HERE = Path(__file__).resolve().parent
 _DEFAULT = {"primary": "openai",
             "tasks": {"extraction": "anthropic", "structured": "anthropic",
                       "reports": "openai", "summaries": "openai", "questions": "openai"},
-            "anthropic": {"default": "claude-opus-5", "synthesis": "claude-opus-5",
-                          "fallback": "claude-opus-4-8", "fast": "claude-haiku-4-5-20251001",
+            "anthropic": {"default": "claude-opus-5-5", "synthesis": "claude-opus-5-5",
+                          "fallback": "claude-opus-5", "fast": "claude-haiku-4-5-20251001",
                           "fast_fallback": "claude-haiku-4-5-20251001"},
             "openai": {"data": "gpt-6-astra", "chat": "gpt-6-astra", "vision": "gpt-6-astra",
                        "fallback": "gpt-5", "fast": "gpt-6-astra", "fast_fallback": "gpt-5-mini"},
-            "selectable": [{"id": "claude-opus-5", "label": "Claude Opus 5", "provider": "anthropic"},
+            "selectable": [{"id": "claude-opus-5-5", "label": "Claude Opus 5.5", "provider": "anthropic"},
                            {"id": "claude-fable-5-1", "label": "Fable 5.1", "provider": "anthropic"},
                            {"id": "gpt-6-astra", "label": "GPT Astra", "provider": "openai"}]}
 
@@ -49,7 +49,7 @@ _OA = _M.get("openai", {})
 # balance degrades instead of failing. ARTIK_PRIMARY_MODEL overrides the file.
 _ALIASES = {"openai": "openai", "astra": "openai", "gpt": "openai", "gpt-6-astra": "openai",
             "anthropic": "anthropic", "claude": "anthropic", "opus": "anthropic",
-            "claude-opus-5": "anthropic"}
+            "claude-opus-5-5": "anthropic", "claude-opus-5": "anthropic"}
 
 
 def _primary(raw) -> str:
@@ -97,11 +97,11 @@ def _dedupe(xs):
 
 
 # ── Capable tier (reasoning: AI search, copilot, single-ticker analysis) ──────
-# Explicit environment overrides win; all Claude workloads default to Opus 5.
+# Explicit environment overrides win; all Claude workloads default to Opus 5.5.
 CLAUDE = _dedupe([
     os.environ.get("ANTHROPIC_MODEL"),
     _AN.get("synthesis"), _AN.get("default"),
-    "claude-opus-5",
+    "claude-opus-5-5",
     _AN.get("fallback"),          # previous version, tried only if the flagship errors
 ])
 GPT = _dedupe([
@@ -119,7 +119,7 @@ CLAUDE_FAST = _dedupe([
     os.environ.get("ANTHROPIC_FAST_MODEL"),
     _AN.get("fast"),
     _AN.get("fast_fallback"),
-    _AN.get("default"), "claude-opus-5",
+    _AN.get("default"), "claude-opus-5-5",
 ])
 GPT_FAST = _dedupe([
     os.environ.get("OPENAI_FAST_MODEL"),
@@ -143,7 +143,8 @@ SELECTABLE = [
     if isinstance(m, dict) and m.get("id")
 ]
 
-_CHOICE_ALIASES = {"opus": "claude-opus-5", "claude": "claude-opus-5",
+_CHOICE_ALIASES = {"opus": "claude-opus-5-5", "claude": "claude-opus-5-5",
+                   "claude-opus-5": "claude-opus-5-5",
                    "fable": "claude-fable-5-1",
                    "astra": "gpt-6-astra", "gpt": "gpt-6-astra", "openai": "gpt-6-astra"}
 

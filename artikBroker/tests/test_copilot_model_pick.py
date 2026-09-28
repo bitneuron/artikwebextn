@@ -16,7 +16,7 @@ import models
 
 def test_the_three_offered_models_are_the_ones_the_ui_shows():
     assert [m["id"] for m in models.SELECTABLE] == [
-        "claude-opus-5", "claude-fable-5-1", "gpt-6-astra"]
+        "claude-opus-5-5", "claude-fable-5-1", "gpt-6-astra"]
     assert [m["provider"] for m in models.SELECTABLE] == ["anthropic", "anthropic", "openai"]
 
 
@@ -27,7 +27,8 @@ def test_info_exposes_the_list_to_the_picker():
 # ── resolving a pick ─────────────────────────────────────────────────────────
 
 def test_ids_and_short_aliases_both_resolve():
-    for raw, want in (("claude-opus-5", "claude-opus-5"), ("opus", "claude-opus-5"),
+    for raw, want in (("claude-opus-5-5", "claude-opus-5-5"), ("opus", "claude-opus-5-5"),
+                      ("claude-opus-5", "claude-opus-5-5"),   # the superseded id still resolves
                       ("fable", "claude-fable-5-1"), ("CLAUDE-FABLE-5-1", "claude-fable-5-1"),
                       ("astra", "gpt-6-astra"), ("gpt-6-astra", "gpt-6-astra")):
         assert models.resolve_choice(raw)["id"] == want
@@ -175,10 +176,10 @@ def test_a_real_provider_error_still_falls_down_the_chain(monkeypatch):
                         types.SimpleNamespace(Anthropic=lambda api_key=None: object()))
     used = {}
     out = app._copilot_anthropic([{"role": "user", "content": "hi"}], "SYS", "key",
-                                 chain=["claude-fable-5-1", "claude-opus-5"], used=used)
+                                 chain=["claude-fable-5-1", "claude-opus-5-5"], used=used)
     assert out["answer"] == "ok"
-    assert seen == ["claude-fable-5-1", "claude-opus-5"]
-    assert used["model"] == "claude-opus-5"   # the badge must name the model that answered
+    assert seen == ["claude-fable-5-1", "claude-opus-5-5"]
+    assert used["model"] == "claude-opus-5-5"   # the badge must name the model that answered
 
 
 # ── oversized contexts ───────────────────────────────────────────────────────

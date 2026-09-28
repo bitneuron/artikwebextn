@@ -1,6 +1,6 @@
 """ArtikResearch multi-agent layer.
 
-Each agent is a focused function that calls the shared LLM (Claude → GPT-5 → Gemini) with a
+Each agent is a focused function that calls the shared LLM (Claude → GPT) with a
 narrow prompt + JSON schema, returning structured output. Iteration 1 implements the agents
 that carry the core lifecycle:
 

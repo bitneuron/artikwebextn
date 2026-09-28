@@ -39,7 +39,7 @@ STANDARD_SECTIONS = ["Title", "Abstract", "Keywords", "Introduction", "Related W
 
 
 def _load_env_file() -> None:
-    """Dev convenience: pull ANTHROPIC/OPENAI/GEMINI keys from artikAgents/agents/.env."""
+    """Dev convenience: pull ANTHROPIC/OPENAI keys from artikAgents/agents/.env."""
     if os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("OPENAI_API_KEY"):
         return
     candidate = ROOT.parent / "artikAgents" / "agents" / ".env"
@@ -59,13 +59,12 @@ class Models:
     # Newest-first chains; env overrides win. Mirrors the artik model-config pattern.
     # Newest first, then the previous version so a brief unavailability degrades
     # instead of failing. Kept in step with artikAgents/agents/shared/models.json.
-    ANTHROPIC = [os.environ.get("ANTHROPIC_MODEL"), "claude-opus-5", "claude-opus-4-8"]
+    ANTHROPIC = [os.environ.get("ANTHROPIC_MODEL"), "claude-opus-5-5", "claude-opus-5"]
     OPENAI = [os.environ.get("OPENAI_MODEL"), "gpt-6-astra", "gpt-5"]
-    GEMINI = [os.environ.get("GEMINI_MODEL"), "gemini-2.0-flash"]
 
     @staticmethod
     def chain(provider: str) -> list[str]:
-        c = {"anthropic": Models.ANTHROPIC, "openai": Models.OPENAI, "gemini": Models.GEMINI}
+        c = {"anthropic": Models.ANTHROPIC, "openai": Models.OPENAI}
         return [m for m in c.get(provider, []) if m]
 
 

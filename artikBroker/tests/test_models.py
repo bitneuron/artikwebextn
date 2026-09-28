@@ -7,7 +7,7 @@ import models
 
 
 def test_chains_lead_with_the_flagship_and_keep_a_version_fallback():
-    assert models.CLAUDE[0] == "claude-opus-5"
+    assert models.CLAUDE[0] == "claude-opus-5-5"
     assert models.GPT[0] == "gpt-6-astra"
     # A single-entry chain gives with_fallback nothing to fall back to.
     assert len(models.CLAUDE) > 1 and len(models.GPT) > 1
